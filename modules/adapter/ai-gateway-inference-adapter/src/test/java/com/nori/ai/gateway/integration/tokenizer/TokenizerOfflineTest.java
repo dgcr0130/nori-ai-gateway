@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /** 런타임 다운로드 0: SDK 다운로드 경로는 오프라인 모드로 실패해야 하고, 계수기 적재 중 원격 연결 시도가 없어야 한다. */
 class TokenizerOfflineTest {
-    /** docs/gates/f1/stack-compat.md OTLP·DJL 절의 DJL tokenizers 0.40.0 JAR·native pin. */
+    /** docs/stack-compatibility.md OTLP·DJL 절의 DJL tokenizers 0.40.0 JAR·native pin. */
     static final String DJL_JAR_SHA256 = "569b1fa597e362ac11cd527e5deacd52cd827c8f5133a573572e2cd7051c5768";
     static final Map<String, String> NATIVE_SHA256 = Map.of(
         "native/lib/linux-aarch64/cpu/libtokenizers.so", "f78a889b3305953a5048c5809bb477d4feb3655456a26acb49a0326699672e39",

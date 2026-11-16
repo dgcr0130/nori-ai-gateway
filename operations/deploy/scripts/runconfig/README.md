@@ -2,7 +2,7 @@
 
 Linux bash에서 AI 레포 루트를 cwd로 사용합니다. Python 3.12, Helm, Git, sha256sum, mktemp가 필요합니다. 자격 명령에는 kubectl·OpenSSL, rollback 리허설에는 psql, 인벤토리에는 AWS CLI가 추가로 필요합니다. Python 의존은 별도 가상환경에서 `python3 -m pip install -r operations/deploy/scripts/requirements.txt`로 준비합니다. 전역 설치는 필요하지 않습니다. 테스트 도구 이미지와 실제 버전은 Dev report와 scratch 결과에 기록합니다.
 
-차트는 이 checkout 의 `operations/deploy/helm/ai-gateway/`(release `ai-gateway`)입니다. 운영 DB 는 공유 서버 192.168.0.150:15432 의 `nori_ai_gateway` 이며 차트·runconfig 로 만들지 않습니다. DB 접속 값은 runconfig 가 아니라 Secret `ai-gateway-config` 입니다(`docs/runbooks/aigw-runtime-credentials.md`).
+차트는 이 checkout 의 `operations/deploy/helm/ai-gateway/`(release `ai-gateway`)입니다. 운영 DB 는 공유 서버 192.168.0.150:15432 의 `nori_ai_gateway` 이며 차트·runconfig 로 만들지 않습니다. DB 접속 값은 runconfig 가 아니라 Secret `ai-gateway-config` 입니다(`docs/runbooks/runtime-credentials.md`).
 
 `verify.schema.json`은 JSON Schema 2020-12이며 `jsonschema`로 실제 검증합니다. 승인값은 `{ "value": 값, "approvalRef": "acceptance/approvals/...md" }` 구조입니다. `purpose`는 lint/deploy, `profile`은 main입니다. 공통 필수 키는 `pgImage.tag`, `pgImage.digest`(시험 컨테이너의 PostgreSQL major 18·pgvector 0.8.7 pin)이며 PVC 키는 없습니다. digest는 접두사 없는 소문자 64hex입니다. tag는 PG18 태그여야 합니다. 기본 이미지는 없습니다.
 

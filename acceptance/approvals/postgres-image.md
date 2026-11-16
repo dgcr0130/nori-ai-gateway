@@ -10,6 +10,6 @@ Status: BLOCKED
 
 2026-11-06 승인 A는 기존 `pg_read_all_data` 부여를 유지하고 검증 역할의 타 DB TCP/Unix socket **연결/유효 접근 0**을 HBA로 강제합니다. literal 타 DB SQL ACL 0을 주장하지 않습니다. `default_transaction_read_only=on`은 방어층이며 off 후 실제 쓰기 권한 거부(SQLSTATE 42501)를 별도 검사합니다. 기존 bootstrap SQL의 역할·확장·DB 권한 정책과 다른 DB PUBLIC ACL은 유지합니다.
 
-정본 HBA·release별 ConfigMap·읽기 전용 mount·기동 인자·checksum·실제 서버 규칙 검사는 [자격 runbook](../../docs/runbooks/aigw-runtime-credentials.md)에 연결됩니다. 로컬 시험은 실제 차트 HBA/args로 새 PGDATA 및 기존 볼륨을 기동하고 원본 HBA/서버 기본값·다른 역할 인증 보존, 역할 활성/삭제/재활성, 타 DB 연결 HBA 거부·쓰기 권한 거부·기동 음성·자원 정리를 검사합니다. 로컬 JSON의 성공을 `postgres-extension.json` 또는 운영 게이트 PASS로 바꾸지 않습니다.
+정본 HBA·release별 ConfigMap·읽기 전용 mount·기동 인자·checksum·실제 서버 규칙 검사는 [자격 runbook](../../docs/runbooks/runtime-credentials.md)에 연결됩니다. 로컬 시험은 실제 차트 HBA/args로 새 PGDATA 및 기존 볼륨을 기동하고 원본 HBA/서버 기본값·다른 역할 인증 보존, 역할 활성/삭제/재활성, 타 DB 연결 HBA 거부·쓰기 권한 거부·기동 음성·자원 정리를 검사합니다. 로컬 JSON의 성공을 `postgres-extension.json` 또는 운영 게이트 PASS로 바꾸지 않습니다.
 
 이번 P06 최종 로컬 증거는 [p06-hba-local-approved-20261106-r4.json](../results/gateway-foundation/deploy-checks/p06-hba-local-approved-20261106-r4.json)입니다. 실제 bash 진입점에서 전체 보안 회귀와 정리를 통과했습니다. 부모 독립 검증 대기이며 P06 전체 완료·운영 게이트 PASS·P07 착수를 뜻하지 않습니다.

@@ -1,4 +1,8 @@
-# P04 G-STACK — 차단 보고 (2026-11-05)
+# 기술 스택 호환성 기록
+
+Spring Boot·Spring AI·OpenTelemetry·DJL tokenizer 등 고정 스택의 호환 확인 기록입니다(시간순). 당시 경로(`docs/gates/f1/…`, `gateway-eval` 등)는 기록 그대로 두며, 현재 위치는 중앙 SDD `005-ai-gateway/spec-plan.md`의 경로 대응표를 따릅니다. 런타임 classpath 목록은 `acceptance/results/gateway-foundation/runtime-classpath.txt`이고 `:apps:ai-gateway-app:syncRuntimeClasspathEvidence`가 갱신합니다.
+
+## P04 G-STACK — 차단 보고 (2026-11-05)
 
 P04 상태: BLOCKED / 구현 미완료 / 검증 미완료. P05 미착수.
 

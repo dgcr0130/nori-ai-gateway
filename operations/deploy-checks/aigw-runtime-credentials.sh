@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 런타임 자격 check(Plan U6 ③): Secret ai-gateway-config 의 존재와 키 이름만 확인한다(값 조회·출력 0). DB 역할 Secret provision·회전은 없다 —
-# 운영 DB 는 공유 서버의 단일 계정이고 계정 값은 운영자가 ai-gateway-config 에 둔다(docs/runbooks/aigw-runtime-credentials.md).
+# 운영 DB 는 공유 서버의 단일 계정이고 계정 값은 운영자가 ai-gateway-config 에 둔다(docs/runbooks/runtime-credentials.md).
 set -euo pipefail
 set +x
 export PYTHONDONTWRITEBYTECODE=1

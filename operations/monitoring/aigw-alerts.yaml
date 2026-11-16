@@ -1,5 +1,5 @@
 # AI Gateway 경보 규칙 후보 (Plan §11.6). G-ALERT(경보 전달 경로·rule 형식·수신처) 미확인 상태의 후보이며 배포·수용 PASS가 아니다.
-# 형식 근거: nori-tc-exec docs/observability/03-alert-policy.md(Prometheus rule + Alertmanager 1차안). 확정 형식은 docs/gates/f1/alerting.md 의 G-ALERT 결과를 따른다.
+# 형식 근거: nori-tc-exec docs/observability/03-alert-policy.md(Prometheus rule + Alertmanager 1차안). 확정 형식은 docs/deployment-prerequisites.md 의 G-ALERT 결과를 따른다.
 # 이 파일은 P14가 실제로 내보내는 신호의 규칙만 담는다. 다른 경보의 신호 소유와 상태는 alerting.md 표를 본다.
 groups:
   - name: aigw-retention

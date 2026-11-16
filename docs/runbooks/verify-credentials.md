@@ -13,22 +13,22 @@
 | `ai-gateway-config` 의 `service-tokens.json` | `{"<sha256 hex>":"TC"}` | Gateway |
 | `ai-gateway-config` 의 `hook-token-sha256` | hook 토큰 해시 | Gateway |
 
-`ai-gateway-config` 는 운영자가 먼저 만든다(`aigw-runtime-credentials.md`). 이 스크립트는 그 Secret 을 만들거나 지우지 않고 위 세 키만 `kubectl patch --type merge --patch-file /dev/stdin` 으로 바꾼다(DB 설정·계정·GitLab·SeaweedFS 키 불변, `kubectl apply` 의 last-applied annotation 에 값이 복제되지 않음). 수용 oracle 의 DB 자격은 앱과 같은 단일 계정(`AI_GATEWAY_DB_USER`·`AI_GATEWAY_DB_PASSWORD` 키 — 차트의 수용 Job 이 env·파일로 받음)이라 이 스크립트가 다루는 DB 역할·Secret 은 없다(Plan §11.7 2026-11-10).
+`ai-gateway-config` 는 운영자가 먼저 만든다(`runtime-credentials.md`). 이 스크립트는 그 Secret 을 만들거나 지우지 않고 위 세 키만 `kubectl patch --type merge --patch-file /dev/stdin` 으로 바꾼다(DB 설정·계정·GitLab·SeaweedFS 키 불변, `kubectl apply` 의 last-applied annotation 에 값이 복제되지 않음). 수용 oracle 의 DB 자격은 앱과 같은 단일 계정(`AI_GATEWAY_DB_USER`·`AI_GATEWAY_DB_PASSWORD` 키 — 차트의 수용 Job 이 env·파일로 받음)이라 이 스크립트가 다루는 DB 역할·Secret 은 없다(Plan §11.7 2026-11-10).
 
 값은 스크립트 메모리와 `kubectl apply -f -`·`kubectl patch --patch-file /dev/stdin` 의 stdin 으로만 다닌다. 출력·증거·로그에는 Secret 이름·항목 상태·고정 사유 코드만 남는다. 값을 확인하려고 `kubectl get secret -o yaml|json` 을 원문으로 출력하지 않는다.
 
 ## 명령
 
 ```bash
-bash operations/gates/aigw-verify-credentials.sh provision --stage F1   # F1..F4
-bash operations/gates/aigw-verify-credentials.sh check --stage F1
-bash operations/gates/aigw-verify-credentials.sh rotate --stage F1
-bash operations/gates/aigw-verify-credentials.sh cleanup
+bash operations/deploy-checks/aigw-verify-credentials.sh provision --stage F1   # F1..F4
+bash operations/deploy-checks/aigw-verify-credentials.sh check --stage F1
+bash operations/deploy-checks/aigw-verify-credentials.sh rotate --stage F1
+bash operations/deploy-checks/aigw-verify-credentials.sh cleanup
 ```
 
 ### check
 
-항목(`actor-signer`·`service-token`·`hook-token`, F3·F4 는 `fixture-writer` 추가)마다 stdout 에 `<항목> MATCH|MISSING`, stderr 에 MISSING 사유 1줄을 쓴다. 사유는 `SECRET_ABSENT:<Secret>`·`KID_NOT_TEST_PREFIX`·`JWKS_HAS_PRIVATE_MEMBER`·`PUBLIC_KEY_MISMATCH`·`HASH_MISMATCH`·`FORMAT_INVALID` 중 하나다. 증거는 `evidence/<stage>/gates/verify-credentials-check-<UTC>.json`(items·missingReasons)에 남는다.
+항목(`actor-signer`·`service-token`·`hook-token`, F3·F4 는 `fixture-writer` 추가)마다 stdout 에 `<항목> MATCH|MISSING`, stderr 에 MISSING 사유 1줄을 쓴다. 사유는 `SECRET_ABSENT:<Secret>`·`KID_NOT_TEST_PREFIX`·`JWKS_HAS_PRIVATE_MEMBER`·`PUBLIC_KEY_MISMATCH`·`HASH_MISMATCH`·`FORMAT_INVALID` 중 하나다. 증거는 `acceptance/results/<단계 폴더>/deploy-checks/verify-credentials-check-<UTC>.json`(items·missingReasons)에 남는다.
 
 - exit 0 = 전부 MATCH, 12 = 하나라도 MISSING.
 - Secret 조회 오류는 부재가 아니다 → `SECRET_QUERY_FAILED:<이름들>`·exit 1(증거 미기록).
@@ -64,5 +64,5 @@ bash operations/gates/aigw-verify-credentials.sh cleanup
 ## 로컬 확인
 
 ```bash
-bash operations/gates/aigw-verify-credentials-selftest.sh   # stub kubectl, 실제 자격·클러스터·DB 0
+bash operations/deploy-checks/aigw-verify-credentials-selftest.sh   # stub kubectl, 실제 자격·클러스터·DB 0
 ```
