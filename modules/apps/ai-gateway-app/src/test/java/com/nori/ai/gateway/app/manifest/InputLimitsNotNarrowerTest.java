@@ -16,7 +16,7 @@ class InputLimitsNotNarrowerTest {
     private final InputValidator validator = new InputValidator();
     private JsonNode args(String q) { return SchemaContracts.JSON.createObjectNode().put("eqp", "설비").put("q", q); }
     @Test void allActualManifestLimitsMatchProtectedConfirmedFieldsAndSchemas() throws Exception {
-        var protectedLimits=SchemaContracts.parse(Files.readString(ROOT.resolve("eval/f0/v2/arg-limits-v2.json"))).get("fields");
+        var protectedLimits=SchemaContracts.parse(Files.readString(ROOT.resolve("acceptance/question-sets/argument-limits-v2.json"))).get("fields");
         assertThat(manifests).hasSize(10);
         for (var manifest:manifests) {
             assertThat(manifest.riskLevel()).isEqualTo(RiskLevel.READ);assertThat(manifest.sideEffects()).isEqualTo(SideEffects.NONE);

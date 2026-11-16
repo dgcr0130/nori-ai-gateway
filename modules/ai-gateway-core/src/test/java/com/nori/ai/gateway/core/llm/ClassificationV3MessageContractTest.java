@@ -23,9 +23,9 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * 고정 입력(F0 v2 골든 질문·경계 케이스의 질문과 Context)에 대한 제품 분류 wire v3 메시지 조립 결과를 core 시험 자원의
- * 분류 wire v3 메시지 golden(messagesSha256)과 대조한다(Plan §16.3 R0 "v2 결속 WIP 시험 처리"). v2 바이트 대조는 gateway-eval
- * F0V4RegistrationDraftTest 의 F0 이력 회귀에만 남기며, 제품 코드는 gateway-eval 을 의존하지 않는다.
- * 재시도 요지 코드는 F0 ClassificationJudge.RETRY_ERROR_CODES 와 공통인 코드만 쓴다(Path A 전용 STEPS_INVALID 제외, 새 코드 0).
+ * 분류 wire v3 메시지 golden(messagesSha256)과 대조한다(Plan §16.3 R0 "v2 결속 WIP 시험 처리"). v2 바이트는 추론 진단 기록
+ * (acceptance/history/inference-diagnosis)에만 남기며, 제품 코드는 수용 기준 점검 CLI(ai-gateway-acceptance-cli)를 의존하지 않는다.
+ * 재시도 요지 코드는 은퇴한 추론 진단 하네스의 ClassificationJudge.RETRY_ERROR_CODES 와 공통인 코드만 쓴다(Path A 전용 STEPS_INVALID 제외, 새 코드 0).
  */
 class ClassificationV3MessageContractTest {
     private static final Path ROOT = Path.of(System.getProperty("aigw.rootDir"));
@@ -73,15 +73,15 @@ class ClassificationV3MessageContractTest {
     /** 고정 입력 전체의 실제 조립 결과(id → messagesSha256). */
     static Map<String,String> assembled() throws Exception {
         var service = new ClassificationService(new ScriptedClient(), TokenBudgetPolicy.current(), CODEPOINTS, expiry(new MutableClock()), LlmCallObserver.NONE, attempt -> {},
-            Files.readString(PROMPT, StandardCharsets.UTF_8), registry(json(ROOT.resolve("eval/golden/tc-registry-fixture-v2.json"))));
+            Files.readString(PROMPT, StandardCharsets.UTF_8), registry(json(ROOT.resolve("acceptance/question-sets/tc-registry-v2.json"))));
         Map<String,String> actual = new LinkedHashMap<>();
-        for (JsonNode golden : jsonl(ROOT.resolve("eval/golden/tc-f0-v2.jsonl"))) {
+        for (JsonNode golden : jsonl(ROOT.resolve("acceptance/question-sets/tc-questions-v2.jsonl"))) {
             String id = golden.get("id").asString(), question = golden.get("question").asString();
             var messages = service.messages(question, ClassificationService.modelContext(input(question, golden.get("context"))), QRefContext.extract(question));
             actual.put("golden/" + id + "/first", sha(messages));
             if (id.equals("G01")) for (String code : RETRY_CODES) actual.put("golden/G01/retry/" + code, sha(ClassificationService.retry(messages, code)));
         }
-        for (JsonNode boundary : jsonl(ROOT.resolve("eval/f0/v2/output-boundary-cases.jsonl"))) {
+        for (JsonNode boundary : jsonl(ROOT.resolve("acceptance/question-sets/output-boundary-cases-v2.jsonl"))) {
             String question = boundary.get("question").asString();
             actual.put("boundary/" + boundary.get("caseId").asString() + "/first",
                 sha(service.messages(question, ClassificationService.modelContext(input(question, boundary.get("context"))), QRefContext.extract(question))));

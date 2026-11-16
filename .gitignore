@@ -2,10 +2,6 @@
 **/build/
 .idea/
 *.iml
-eval/f0/results/
 __pycache__/
 *.pyc
-eval/f0/chat-template/
-evidence/F0/
-docs/gates/f0/share-window-*.json
-docs/gates/f0/p03-run-*.md
+acceptance/results/inference-diagnosis/

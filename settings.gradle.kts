@@ -12,7 +12,6 @@
  * 디렉터리 규약(nori-wm-ui-backend 와 같음, Plan §3.2 2026-11-10 모듈 경로 정렬·U3)
  * - 제품 Gradle 모듈의 물리 위치는 modules/ 아래이고 논리 경로(:ai-gateway-core, :adapter:*, :apps:*)는 projectDir 로 매핑한다.
  * - 모듈 간 내부 의존은 project(":...") 논리 경로로 참조한다.
- * - :gateway-eval 은 예외로 루트 gateway-eval/ 에 그대로 둔다(F0 사전등록 문서·HarnessDigest 입력 경로).
  */
 
 pluginManagement {
@@ -83,21 +82,16 @@ plugins {
 }
 
 rootProject.name = "nori-ai-gateway"
-/* ===================================================
- * 1. F0 하네스·Eval CLI (이동 예외)
- * =================================================== */
-
-include(":gateway-eval")
 
 /* ===================================================
- * 2. Core Module
+ * 1. Core Module
  * =================================================== */
 
 include(":ai-gateway-core")
 project(":ai-gateway-core").projectDir = file("modules/ai-gateway-core")
 
 /* ===================================================
- * 3. Adapter Modules
+ * 2. Adapter Modules
  * =================================================== */
 
 include(":adapter:ai-gateway-db-adapter")
@@ -117,7 +111,7 @@ include(":adapter:ai-gateway-tc-mock-adapter")
 project(":adapter:ai-gateway-tc-mock-adapter").projectDir = file("modules/adapter/ai-gateway-tc-mock-adapter")
 
 /* ===================================================
- * 4. Application Modules (단일 조립 루트 앱 + 배포 수용 하네스)
+ * 3. Application Modules (단일 조립 루트 앱 + 배포 수용 하네스 + 수용 기준 점검 CLI)
  * =================================================== */
 
 include(":apps:ai-gateway-app")
@@ -125,3 +119,5 @@ project(":apps").projectDir = file("modules/apps")
 project(":apps:ai-gateway-app").projectDir = file("modules/apps/ai-gateway-app")
 include(":apps:ai-gateway-acceptance-app")
 project(":apps:ai-gateway-acceptance-app").projectDir = file("modules/apps/ai-gateway-acceptance-app")
+include(":apps:ai-gateway-acceptance-cli")
+project(":apps:ai-gateway-acceptance-cli").projectDir = file("modules/apps/ai-gateway-acceptance-cli")

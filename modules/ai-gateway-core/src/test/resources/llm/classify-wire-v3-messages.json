@@ -2,7 +2,7 @@
   "schema" : "classify-wire-v3-messages-v1",
   "prompt" : "modules/apps/ai-gateway-app/src/main/resources/prompts/classify-v3.txt",
   "promptSha256" : "13aa84c8c909a2e22ad5cf3c17f5c702667e07c33c209b8a162d132ebcf56115",
-  "inputs" : "eval/golden/tc-f0-v2.jsonl 질문·Context, eval/f0/v2/output-boundary-cases.jsonl 질문·Context, eval/golden/tc-registry-fixture-v2.json Registry",
+  "inputs" : "acceptance/question-sets/tc-questions-v2.jsonl 질문·Context, acceptance/question-sets/output-boundary-cases-v2.jsonl 질문·Context, acceptance/question-sets/tc-registry-v2.json Registry",
   "rows" : [ {
     "id" : "golden/G01/first",
     "messagesSha256" : "0e80ecea115bb352f07cebc59c53e03ff6a811cf2a1d697f583ae5447bd3a1a3"

@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class HfTokenizerCounter implements AutoCloseable {
     static final String RESOURCE = "tokenizer/qwen3-4b-thinking-2507.tokenizer.json";
-    /** Qwen/Qwen3-4B-Thinking-2507 revision 768f209d 공식 tokenizer.json(eval/f0/tokenizer pin 과 같은 바이트). */
+    /** Qwen/Qwen3-4B-Thinking-2507 revision 768f209d 공식 tokenizer.json(inference-adapter src/integrationTest/resources/tokenizer/official pin 과 같은 바이트). */
     public static final String TOKENIZER_SHA256 = "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4";
     static final String OFFLINE_PROPERTY = "ai.djl.offline";
     private static final Map<String, String> OPTIONS = Map.of("addSpecialTokens", "false", "truncation", "false", "padding", "false");

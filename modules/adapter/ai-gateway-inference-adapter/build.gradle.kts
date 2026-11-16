@@ -29,9 +29,9 @@ sourceSets.test {
 
 tasks.named<Test>("integrationTest") {
     systemProperty("ai.djl.offline", "true")
-    val tokenizer = rootProject.file("eval/f0/tokenizer/qwen3-4b-thinking-2507.tokenizer.json")
+    val tokenizer = file("src/integrationTest/resources/tokenizer/official/qwen3-4b-thinking-2507.tokenizer.json")
     inputs.file(tokenizer)
     systemProperty("aigw.tokenizerFile", tokenizer.absolutePath)
     systemProperty("aigw.harness.classpath", sourceSets["integrationTest"].runtimeClasspath.asPath)
-    systemProperty("aigw.tokenizerSha256", rootProject.file("eval/f0/tokenizer/qwen3-4b-thinking-2507.tokenizer.json.sha256").readText().trim().substringBefore(' '))
+    systemProperty("aigw.tokenizerSha256", file("src/integrationTest/resources/tokenizer/official/qwen3-4b-thinking-2507.tokenizer.json.sha256").readText().trim().substringBefore(' '))
 }

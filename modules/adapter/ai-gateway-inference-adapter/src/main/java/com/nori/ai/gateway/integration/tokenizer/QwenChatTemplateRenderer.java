@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * P03 v4 에서 캡처한 Ollama Go template(qwen3:4b = Qwen3-4B-Thinking-2507, {@link #TEMPLATE_SHA256})이 만드는 렌더 문자열을 재현한다.
- * 검토 근거는 docs/gates/f0/template-review-v4.md 이며 정확성은 P03 golden(서버 prompt_tokens)으로만 확인한다.
+ * 검토 근거는 acceptance/history/inference-diagnosis/records/template-review-v4.md 이며 정확성은 P03 golden(서버 prompt_tokens)으로만 확인한다.
  * Ollama collate 는 연속한 같은 역할을 "\n\n" 으로 합치고, system 내용 뒤에 빈 줄을 두며, 생성 접두부가 "&lt;think&gt;\n" 을 연다.
  * 검토 범위 밖(첫 위치가 아닌 system, 마지막이 user 가 아님, Ollama think 필터가 바꿀 수 있는 assistant 내용)은 렌더하지 않는다.
  */

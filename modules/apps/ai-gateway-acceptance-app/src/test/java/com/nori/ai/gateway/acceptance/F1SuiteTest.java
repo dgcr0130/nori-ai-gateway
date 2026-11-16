@@ -30,7 +30,7 @@ class F1SuiteTest {
     @Test void productionLauncherDiscoversExactlyTheCatalogThirtyFiveAtomicLeaves()throws Exception {
         var request=LauncherDiscoveryRequestBuilder.request().selectors(selectPackage(AcceptanceMain.SUITE_PACKAGE)).filters(TagFilter.includeTags("suite-F1")).build();var plan=LauncherFactory.create().discover(request);
         var tests=plan.getRoots().stream().flatMap(root->plan.getDescendants(root).stream()).filter(org.junit.platform.launcher.TestIdentifier::isTest).toList();assertThat(tests).hasSize(35);
-        var expected=CanonicalJson.MAPPER.readTree(Files.readString(Path.of(System.getProperty("aigw.rootDir"),"gateway-eval/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json"))).path("producerIndex").path("F1");var actual=new TreeSet<String>();
+        var expected=CanonicalJson.MAPPER.readTree(Files.readString(Path.of(System.getProperty("aigw.rootDir"),"modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json"))).path("producerIndex").path("F1");var actual=new TreeSet<String>();
         for(var test:tests){var tags=test.getTags().stream().map(org.junit.platform.engine.TestTag::getName).toList();assertThat(tags).contains("suite-F1","stage-F1","label-MOCK_API");var leaves=tags.stream().filter(tag->tag.matches("(AC|ISO)-[0-9]{2}.*")).toList();assertThat(leaves).hasSize(1);assertThat(actual.add(leaves.getFirst())).isTrue();}
         assertThat(actual).containsExactlyInAnyOrderElementsOf(java.util.stream.StreamSupport.stream(expected.spliterator(),false).map(node->node.asText()).toList());
     }

@@ -10,7 +10,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.*;
 
 /**
- * 증거 레코드의 RFC 8785 정규 JSON·SHA-256. {@code gateway-acceptance} 는 {@code gateway-eval} 에 의존할 수 없으므로(§3.2)
+ * 증거 레코드의 RFC 8785 정규 JSON·SHA-256. {@code gateway-acceptance} 는 {@code ai-gateway-acceptance-cli} 에 의존할 수 없으므로(§3.2)
  * eval {@code io.Json} 과 같은 규칙을 자체 구현하며 {@code EvidenceBlockWriterTest} 가 두 구현의 일치를 고정한다.
  */
 public final class CanonicalJson {

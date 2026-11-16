@@ -65,7 +65,7 @@ var aigwExplicitSpec: File? = null
 fun specFile(): File? = aigwExplicitSpec ?: providers.gradleProperty("aigw.specPath").orNull
     ?.let { rootProject.file(it) }
     ?: providers.environmentVariable("AIGW_SPEC_FILE").orNull?.let { rootProject.file(it) }
-fun catalogFile(): File = rootProject.file("gateway-eval/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json")
+fun catalogFile(): File = rootProject.file("modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json")
 fun classpathItem(file: File): Any = if (file.isDirectory) file.walkTopDown().filter { it.isFile }
     .map { file.toPath().relativize(it.toPath()).toString().replace('\\', '/') to fileSha(it) }
     .sortedBy { it.first }.map { listOf(it.first, it.second) }.toList() else fileSha(file)
@@ -76,7 +76,7 @@ fun aigwInputComponents(test: Test): Map<String, Any?> {
     return mapOf(
         "classpath" to test.classpath.files.map { classpathItem(it) },
         "specSha" to (specFile()?.let { fileSha(it) } ?: "MISSING"),
-        "baselineSha256" to fileSha(rootProject.file("docs/gates/spec-baseline.md")),
+        "baselineSha256" to fileSha(rootProject.file("acceptance/spec-baseline.md")),
         "catalogSha256" to fileSha(catalogFile()),
         "includeTags" to (providers.gradleProperty("includeTags").orNull ?: "").split(',').filter { it.isNotBlank() }.sorted(),
         "testFilters" to (test.filter.includePatterns + (test.filter as org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter).commandLineIncludePatterns).sorted(),
@@ -95,7 +95,7 @@ subprojects {
     dependencies {
         add("implementation", platform(rootProject.libs.spring.boot.bom))
         add("testRuntimeOnly", "org.junit.platform:junit-platform-reporting")
-        if (project.path != ":gateway-eval") {
+        if (project.path != ":apps:ai-gateway-acceptance-cli") {
             add("testImplementation", rootProject.libs.junit.jupiter)
             add("testImplementation", rootProject.libs.assertj)
             add("testImplementation", enforcedPlatform(rootProject.libs.testcontainers.bom))
@@ -124,14 +124,14 @@ subprojects {
         filter.isFailOnNoMatchingTests = true
         systemProperty("junit.platform.reporting.open.xml.enabled", "true")
         systemProperty("aigw.rootDir", rootDir.absolutePath)
-        if (project.path == ":gateway-eval") systemProperty("aigw.evalClasspath", project.extensions.getByType<SourceSetContainer>()["main"].runtimeClasspath.asPath)
+        if (project.path == ":apps:ai-gateway-acceptance-cli") systemProperty("aigw.evalClasspath", project.extensions.getByType<SourceSetContainer>()["main"].runtimeClasspath.asPath)
         val otr = layout.buildDirectory.dir("aigw-otr/$name")
         val evidence = layout.buildDirectory.file("aigw-evidence/$name/leaf-results.json")
         jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Djunit.platform.reporting.output.dir=${otr.get().asFile.absolutePath}") })
         outputs.dir(otr)
         // 파일 경로가 같아도 내용 변경은 반드시 새 측정으로 이어져야 합니다.
         inputs.property("aigw.specSha", provider { specFile()?.let { fileSha(it) } ?: "MISSING" })
-        inputs.property("aigw.baselineSha", provider { fileSha(rootProject.file("docs/gates/spec-baseline.md")) })
+        inputs.property("aigw.baselineSha", provider { fileSha(rootProject.file("acceptance/spec-baseline.md")) })
         inputs.property("aigw.catalogSha", provider { fileSha(catalogFile()) })
         inputs.property("aigw.policyInputs", provider { json(aigwInputComponents(testTask).filterKeys { it != "classpath" }) })
         doFirst {
@@ -159,7 +159,7 @@ subprojects {
             mainClass = "com.nori.ai.gateway.eval.EvalCli"
             val app = rootProject.findProject(":apps:ai-gateway-app")
             if (app != null) dependsOn(":apps:ai-gateway-app:writeRuntimeClasspath")
-            val eval = rootProject.findProject(":gateway-eval")
+            val eval = rootProject.findProject(":apps:ai-gateway-acceptance-cli")
             if (eval != null) {
                 classpath = eval.extensions.getByType<SourceSetContainer>()["main"].runtimeClasspath
             } else {
@@ -177,7 +177,7 @@ subprojects {
                 }
                 val arguments = mutableListOf("leaf-extract", "--otr-dir", otr.get().asFile.absolutePath,
                     "--task", testTask.path, "--module", project.path,
-                    "--baseline", rootProject.file("docs/gates/spec-baseline.md").absolutePath,
+                    "--baseline", rootProject.file("acceptance/spec-baseline.md").absolutePath,
                     "--catalog", catalogFile().absolutePath,
                     "--out", evidence.get().asFile.absolutePath,
                     "--current-fingerprint", aigwInputFingerprint(testTask))
@@ -193,7 +193,7 @@ subprojects {
 }
 
 gradle.taskGraph.whenReady {
-    val requiredFile = rootProject.file("ci/integration-required.txt")
+    val requiredFile = rootProject.file("acceptance/required-integration-tests.txt")
     val registeredModules = if (requiredFile.isFile) requiredFile.readLines().filter { !it.startsWith("#") && it.isNotBlank() }.map { it.substringBefore(' ').substringBefore('|') }.toSet() else emptySet()
     // 직접 경로와 루트 비한정 selector는 서로 다른 필수 대상 규칙을 가집니다.
     gradle.startParameter.taskRequests.flatMap { it.args }.filter { !it.startsWith("-") }.forEach { selector ->
@@ -205,7 +205,7 @@ gradle.taskGraph.whenReady {
     }
 }
 
-project(":gateway-eval") {
+project(":apps:ai-gateway-acceptance-cli") {
     pluginManager.withPlugin("application") {
     tasks.named<JavaExec>("run") {
         dependsOn(provider {

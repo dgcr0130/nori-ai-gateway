@@ -117,11 +117,11 @@ val writeRuntimeClasspath by tasks.registering(WriteRuntimeClasspath::class) {
 }
 tasks.named<Test>("test") {
     dependsOn(writeRuntimeClasspath)
-    dependsOn(":gateway-eval:classes")
+    dependsOn(":apps:ai-gateway-acceptance-cli:classes")
     inputs.file(writeRuntimeClasspath.flatMap { it.outputFile })
     systemProperty("aigw.runtimeClasspathFile", writeRuntimeClasspath.get().outputFile.get().asFile.absolutePath)
 }
 tasks.register<Copy>("syncRuntimeClasspathEvidence") {
     from(writeRuntimeClasspath.flatMap { it.outputFile })
-    into(rootProject.layout.projectDirectory.dir("docs/gates/f1"))
+    into(rootProject.layout.projectDirectory.dir("acceptance/results/gateway-foundation"))
 }

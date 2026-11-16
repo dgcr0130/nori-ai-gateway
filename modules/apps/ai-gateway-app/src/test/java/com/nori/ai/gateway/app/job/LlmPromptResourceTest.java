@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * 운영 분류 프롬프트가 분류 wire v3 등록 바이트(classify-v3)이고 시스템 참고 정보가 등록 fixture v2 와 같음을 고정한다(변경은 버전 증가·Audit 대상).
- * v2 바이트 회귀는 gateway-eval F0V4RegistrationDraftTest 에서만 유지하며 운영 classpath 에 classify-v2 를 두지 않는다(Plan §16.3 R0 "v2 결속 WIP 시험 처리").
+ * v2 바이트는 추론 진단 기록(acceptance/history/inference-diagnosis)에만 남기며 운영 classpath 에 classify-v2 를 두지 않는다(Plan §16.3 R0 "v2 결속 WIP 시험 처리").
  */
 class LlmPromptResourceTest {
     private static final Path ROOT = Path.of(System.getProperty("aigw.rootDir"));
@@ -28,7 +28,7 @@ class LlmPromptResourceTest {
         assertThat(text).contains("\"n\":근거 코드 배열", "\"a\":\"B|D\"", "{{REGISTRY}}").doesNotContain("\r");
         assertThat(LlmPromptResourceTest.class.getClassLoader().getResource("prompts/classify-v2.txt")).as("운영 classpath 의 v2 프롬프트").isNull();
         var systems = SchemaContracts.JSON.readTree(new String(resource("prompts/classify-registry-systems-v2.json"), java.nio.charset.StandardCharsets.UTF_8)).get("systems");
-        var fixture = SchemaContracts.JSON.readTree(Files.readString(ROOT.resolve("eval/golden/tc-registry-fixture-v2.json"))).get("systems");
+        var fixture = SchemaContracts.JSON.readTree(Files.readString(ROOT.resolve("acceptance/question-sets/tc-registry-v2.json"))).get("systems");
         assertThat(systems.size()).isEqualTo(fixture.size());
         for (int i = 0; i < fixture.size(); i++)
             for (String field : java.util.List.of("system", "aliases", "ownedAreas")) assertThat(systems.get(i).get(field)).as(field).isEqualTo(fixture.get(i).get(field));

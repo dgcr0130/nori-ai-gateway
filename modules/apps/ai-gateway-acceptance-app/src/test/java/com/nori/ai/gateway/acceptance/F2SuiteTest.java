@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.*;
 /** 배포 launcher 가 정본 catalog 의 F2·F2-OUTAGE leaf 를 정확히 발견하고, 태그(suite·stage·label·단계)가 catalog component 와 gate 라벨 규칙에 맞는지 고정한다. */
 class F2SuiteTest {
     static JsonNode catalog() throws Exception {
-        return CanonicalJson.MAPPER.readTree(Files.readString(Path.of(System.getProperty("aigw.rootDir"), "gateway-eval/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json")));
+        return CanonicalJson.MAPPER.readTree(Files.readString(Path.of(System.getProperty("aigw.rootDir"), "modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json")));
     }
     static List<TestIdentifier> discover(String expression) {
         var plan = LauncherFactory.create().discover(LauncherDiscoveryRequestBuilder.request().selectors(selectPackage(AcceptanceMain.SUITE_PACKAGE)).filters(TagFilter.includeTags(expression)).build());

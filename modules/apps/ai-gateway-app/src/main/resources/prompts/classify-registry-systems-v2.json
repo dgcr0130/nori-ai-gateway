@@ -1,6 +1,6 @@
 {
   "schema": "classify-registry-systems-v2",
-  "source": "eval/golden/tc-registry-fixture-v2.json systems (F0 v2 등록 입력, SPEC §16 1차 시스템 소유 영역)",
+  "source": "acceptance/question-sets/tc-registry-v2.json systems (F0 v2 등록 입력, SPEC §16 1차 시스템 소유 영역)",
   "systems": [
     {
       "system": "TC",

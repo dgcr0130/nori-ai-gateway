@@ -17,9 +17,9 @@ default:
   before_script:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
     - 'test -n "$AIGW_APPROVED_SPEC_SHA"'
-    - 'bash ./gradlew :gateway-eval:run --args="spec-input fetch --api-url $CI_API_V4_URL --project-id $CI_PROJECT_ID --sha $AIGW_APPROVED_SPEC_SHA --baseline docs/gates/spec-baseline.md --out-dir build/spec-input --auth-header JOB-TOKEN --token-env CI_JOB_TOKEN" --no-daemon'
+    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="spec-input fetch --api-url $CI_API_V4_URL --project-id $CI_PROJECT_ID --sha $AIGW_APPROVED_SPEC_SHA --baseline acceptance/spec-baseline.md --out-dir build/spec-input --auth-header JOB-TOKEN --token-env CI_JOB_TOKEN" --no-daemon'
     - 'export AIGW_SPEC_FILE="$CI_PROJECT_DIR/build/spec-input/$AIGW_APPROVED_SPEC_SHA/spec.md"'
-    - 'bash ./gradlew :gateway-eval:run --args="spec-guard --spec $AIGW_SPEC_FILE --baseline docs/gates/spec-baseline.md" --no-daemon'
+    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="spec-guard --spec $AIGW_SPEC_FILE --baseline acceptance/spec-baseline.md" --no-daemon'
 
 test:
   extends: .aigw-spec-input
@@ -32,8 +32,8 @@ helm-validate:
   stage: check
   dependencies: []
   script:
-    - test -f operations/deploy/aigw-helm.sh
-    - bash operations/deploy/aigw-helm.sh --release ai-gateway --mode lint --runconfig operations/runconfig/fixtures/lint-verify.json --image-digests operations/runconfig/fixtures/lint-image-digests.json --suite none
+    - test -f operations/deploy/scripts/aigw-helm.sh
+    - bash operations/deploy/scripts/aigw-helm.sh --release ai-gateway --mode lint --runconfig operations/deploy/scripts/runconfig/fixtures/lint-verify.json --image-digests operations/deploy/scripts/runconfig/fixtures/lint-image-digests.json --suite none
   artifacts:
     paths: [build/helm-validation/]
 
@@ -61,7 +61,7 @@ integration-test:
   script:
     - test -n "$AIGW_IT_RUNNER_TAG"
     - bash ./gradlew integrationTest -Paigw.requireDocker=true --no-daemon
-    - 'bash ./gradlew :gateway-eval:run --args="test-evidence verify --selector integrationTest --required ci/integration-required.txt --require-docker --expect-build-identity build/package/build-identity.json" --no-daemon'
+    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="test-evidence verify --selector integrationTest --required acceptance/required-integration-tests.txt --require-docker --expect-build-identity build/package/build-identity.json" --no-daemon'
   artifacts:
     when: always
     paths: ['**/build/aigw-evidence/**']
@@ -75,7 +75,7 @@ integration-evidence:
   script:
     - 'test "$CI_API_V4_URL" = "https://gitlab.noricloud.org/api/v4"'
     - 'printf ''header = "JOB-TOKEN: %s"\n'' "$CI_JOB_TOKEN" | curl --config - --fail --silent --show-error --proto "=https" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aigw-it-evidence/$CI_COMMIT_SHA/it-evidence.tgz" --output it-evidence.tgz'
-    - 'bash ./gradlew :gateway-eval:run --args="ci-evidence verify --sha $CI_COMMIT_SHA --bundle it-evidence.tgz --required ci/integration-required.txt --spec $AIGW_SPEC_FILE --baseline docs/gates/spec-baseline.md --expect-build-identity build/package/build-identity.json" --no-daemon'
+    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="ci-evidence verify --sha $CI_COMMIT_SHA --bundle it-evidence.tgz --required acceptance/required-integration-tests.txt --spec $AIGW_SPEC_FILE --baseline acceptance/spec-baseline.md --expect-build-identity build/package/build-identity.json" --no-daemon'
 
 integration-mode-guard:
   stage: verify
@@ -177,8 +177,8 @@ deploy-verify:
   dependencies: [scan-image]
   allow_failure: false
   script:
-    - test -f operations/deploy/aigw-helm.sh
-    - 'bash operations/deploy/aigw-helm.sh --release ai-gateway --mode deploy --runconfig "$AIGW_RUNCONFIG" --image-digests image-digests.json --suite none'
+    - test -f operations/deploy/scripts/aigw-helm.sh
+    - 'bash operations/deploy/scripts/aigw-helm.sh --release ai-gateway --mode deploy --runconfig "$AIGW_RUNCONFIG" --image-digests image-digests.json --suite none'
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual

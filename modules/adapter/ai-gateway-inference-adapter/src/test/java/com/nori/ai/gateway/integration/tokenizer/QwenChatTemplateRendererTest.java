@@ -6,7 +6,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
-/** docs/gates/f0/template-review-v4.md 의 렌더 공식(실제 Go 엔진 대조) 그대로의 문자열인지 확인한다. 정확성의 최종 기준은 golden 이다. */
+/** acceptance/history/inference-diagnosis/records/template-review-v4.md 의 렌더 공식(실제 Go 엔진 대조) 그대로의 문자열인지 확인한다. 정확성의 최종 기준은 golden 이다. */
 class QwenChatTemplateRendererTest {
     private final QwenChatTemplateRenderer renderer = new QwenChatTemplateRenderer();
     private static ChatMessage m(Role role, String content) { return new ChatMessage(role, content); }
