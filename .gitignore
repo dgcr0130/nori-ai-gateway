@@ -5,3 +5,4 @@
 __pycache__/
 *.pyc
 acceptance/results/inference-diagnosis/
+**/.claude/progress/
