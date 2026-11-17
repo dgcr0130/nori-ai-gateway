@@ -24,12 +24,12 @@ class LlmScriptedTransportIT extends LlmStubSupport {
     @Test void onlyTheArmedJobIsScriptedWhileAnUnboundConcurrentJobUsesTheLiveEndpoint() throws Exception {
         var chats = new AtomicInteger();
         stub.respond(request -> request.path().equals("/v1/chat/completions")
-            ? (chats.getAndIncrement() == 0 ? chat(wire("GQ", null, null, null, null), 100_000) : chat("라이브 서술이다.", 100_000))
+            ? (chats.getAndIncrement() == 0 ? chat(wire("GQ", null, null, null, null), OllamaEndpointStub.promptTokens(request)) : chat("라이브 서술이다.", OllamaEndpointStub.promptTokens(request)))
             : OllamaEndpointStub.healthy(request));
         pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD, "*");
         String body = "{\"actorSub\":\"actor\",\"requestKey\":\"armed-http\",\"scenario\":{\"taskType\":\"GENERAL_QUERY\",\"llmScript\":["
-            + "{\"callType\":\"CLASSIFY\",\"content\":" + json.writeValueAsString(wire("GQ", null, null, null, null)) + ",\"finishReason\":\"stop\",\"usage\":{\"completionTokens\":30}},"
-            + "{\"callType\":\"COMPOSER\",\"content\":\"스크립트 서술이다.\",\"finishReason\":\"stop\",\"usage\":{\"completionTokens\":10}}],"
+            + "{\"callType\":\"CLASSIFY\",\"content\":" + json.writeValueAsString(wire("GQ", null, null, null, null)) + ",\"finishReason\":\"stop\",\"usage\":{\"completionTokens\":" + Math.max(30,answerTokens(wire("GQ", null, null, null, null))) + "}},"
+            + "{\"callType\":\"COMPOSER\",\"content\":\"스크립트 서술이다.\",\"finishReason\":\"stop\",\"usage\":{\"completionTokens\":" + Math.max(10,answerTokens("스크립트 서술이다.")) + "}}],"
             + "\"promptWatch\":{\"sentinels\":[\"ARMEDQZ\",\"LIVEQZ\"]}}}";
         assertThat(hook("/__test/arm", "POST", body, hookToken).statusCode()).isEqualTo(204);
         var armed = admitUnarmed("armed-http", "ARMEDQZ 무엇을 물을 수 있나", Map.of(), null);

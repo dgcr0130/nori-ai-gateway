@@ -13,7 +13,7 @@ import org.opentest4j.TestAbortedException;
 
 /** F2 suite 진입점. 배포 입력(F1 과 같은 env·Secret 파일)만 소비하고 로컬 fixture 나 임시 자격으로 fallback 하지 않는다. */
 public final class F2Runtime {
-    static final Set<String> READINESS = Set.of("AC-33-LOADING", "AC-33-PERSIST", "AC-33-CTX", "AC-33-DIGEST", "AC-44");
+    static final Set<String> READINESS = Set.of("AC-33-LOADING", "AC-33-PERSIST", "AC-44");
     private F2Runtime() {}
 
     public static void run(String leaf) {

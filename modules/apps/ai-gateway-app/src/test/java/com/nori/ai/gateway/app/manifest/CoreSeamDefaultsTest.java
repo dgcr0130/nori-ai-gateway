@@ -7,7 +7,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import static org.assertj.core.api.Assertions.*;
 
 class CoreSeamDefaultsTest {
-    private ApplicationContextRunner runner(java.time.Clock clock) {return new ApplicationContextRunner().withUserConfiguration(CoreBeansConfiguration.class,com.nori.ai.gateway.tcmock.TcMockModuleConfiguration.class)
+    private ApplicationContextRunner runner(java.time.Clock clock) {return new ApplicationContextRunner().withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("llm-fixture", com.nori.ai.gateway.integration.testing.InferenceFixtures.properties()))).withUserConfiguration(CoreBeansConfiguration.class,com.nori.ai.gateway.tcmock.TcMockModuleConfiguration.class)
         .withBean(java.time.Clock.class,()->clock)
         .withBean(com.nori.ai.gateway.core.budget.PromptTokenCounting.class,()->messages->{throw new AssertionError("빈 등록 시험에서 실제 계수가 발생했습니다");})
         .withBean(com.nori.ai.gateway.core.cache.ToolResultCache.Store.class,()->org.mockito.Mockito.mock(com.nori.ai.gateway.core.cache.ToolResultCache.Store.class))

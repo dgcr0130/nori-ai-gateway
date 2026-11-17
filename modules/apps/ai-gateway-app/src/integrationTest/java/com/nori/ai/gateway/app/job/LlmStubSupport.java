@@ -26,8 +26,7 @@ abstract class LlmStubSupport extends P09QueueSupport {
 
     @Override protected Map<String,Object> extraApplicationProperties() {
         var properties = new HashMap<String,Object>(super.extraApplicationProperties());
-        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.inference.baseUrl", stub.baseUrl(),
-            "ai.gateway.inference.generationModelDigest", OllamaEndpointStub.EXPECTED_DIGEST));
+        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
         return properties;
     }
     @Override protected Class<?>[] extraSources() { return new Class<?>[]{HarnessObservationsEndpoint.class, WorkflowSourceFixture.class}; }
@@ -37,12 +36,12 @@ abstract class LlmStubSupport extends P09QueueSupport {
             original.pdg(), original.issuedAt(), original.expiresAt(), original.requestId());
     }
     @Override protected Map<String,Object> claims(String actor, String delegation) { var values = new HashMap<>(super.claims(actor, delegation)); values.put("perm", perms.stream().sorted().toList()); return values; }
-    @BeforeEach void inferenceReady() throws Exception { await(() -> context.getBean(InferenceReadinessService.class).ready()); }
+    @BeforeEach void inferenceReady() throws Exception { await(() -> context.getBean(InferenceReadinessService.class).ready()); context.getBean(InferenceReadinessService.class).stop(); stub.clear(); }
     @AfterEach void closeStub() { stub.close(); }
 
     protected LlmScriptRegistry scripts() { return context.getBean(LlmScriptRegistry.class); }
-    protected static TestHookRegistry.LlmReply classify(String wire) { return new TestHookRegistry.LlmReply(CallType.CLASSIFY, wire, "stop", null, 40); }
-    protected static TestHookRegistry.LlmReply compose(String text) { return new TestHookRegistry.LlmReply(CallType.COMPOSER, text, "stop", null, 30); }
+    protected static TestHookRegistry.LlmReply classify(String wire) { return new TestHookRegistry.LlmReply(CallType.CLASSIFY, wire, "stop", null, Math.max(40, answerTokens(wire))); }
+    protected static TestHookRegistry.LlmReply compose(String text) { return new TestHookRegistry.LlmReply(CallType.COMPOSER, text, "stop", null, Math.max(30, answerTokens(text))); }
     /**
      * 분류 wire v3 고정 fixture(SPEC §28.3): {@code n} 은 기존 고정 workflow 경로를 그대로 쓰는 근거 — KQ=[N], LQ=[S], INC=[S,H,I](선택 git 단계 포함),
      * GQ·UNS=[] — 이고 {@code a}=B 다. 다른 근거·표현 길이는 {@link #wire(String,String,String,String,String,java.util.List,String)} 로 명시한다.
@@ -85,12 +84,16 @@ abstract class LlmStubSupport extends P09QueueSupport {
         var actual = new ArrayList<String>(); value.path("clarification").path("fields").forEach(field -> actual.add(field.asString()));
         assertThat(actual).containsExactlyElementsOf(fields);
     }
-    /** 로컬 Ollama 대역의 chat 응답(OpenAI wire). usage.prompt_tokens 는 Gateway 계수 이상이어야 잘림으로 보지 않는다. */
+    protected static int answerTokens(String content) {
+        try(var tokenizer=new com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter()) { return tokenizer.countText(content); }
+    }
+    /** 로컬 대역의 prompt 사용량은 실제 전송 목록의 계수와 같아야 합니다. 공개 본문보다 작은 completion을 만들지 않습니다. */
     protected static OllamaEndpointStub.Json chat(String content, int promptTokens) {
         var message = SchemaContracts.JSON.createObjectNode().put("role", "assistant").put("content", content);
         var body = SchemaContracts.JSON.createObjectNode().put("id", "chatcmpl-stub").put("object", "chat.completion").put("created", 1).put("model", "qwen3:4b");
         body.putArray("choices").addObject().put("index", 0).put("finish_reason", "stop").set("message", message);
-        body.putObject("usage").put("prompt_tokens", promptTokens).put("completion_tokens", 20).put("total_tokens", promptTokens + 20);
+        int completion=Math.max(20,answerTokens(content));
+        body.putObject("usage").put("prompt_tokens", promptTokens).put("completion_tokens", completion).put("total_tokens", promptTokens + completion);
         return new OllamaEndpointStub.Json(200, body.toString());
     }
 }

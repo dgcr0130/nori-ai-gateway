@@ -39,7 +39,7 @@ class LlmCallAuditIT extends LlmStubSupport {
             int input = tokens.path("inputTokens").asInt();
             // 고정 응답 usage.promptTokens 를 비우면 ScriptedChatTransport 가 같은 Gateway 계수를 돌려준다(서버 잘림 0 의 양성 대조).
             assertThat(tokens.path("promptTokens").asInt()).isEqualTo(input).isPositive();
-            assertThat(tokens.path("maxTokens").asInt()).isEqualTo(tokens.path("callType").asString().equals("CLASSIFY") ? 5_120 : 5_248);
+            assertThat(tokens.path("maxTokens").asInt()).isEqualTo(tokens.path("callType").asString().equals("CLASSIFY") ? 2_048 : 3_072);
             assertThat(json.readTree((String) row.get("versions")).path("model").asString()).isEqualTo("qwen3:4b");
             assertThat(json.readTree((String) row.get("timings")).path("latencyMs").isIntegralNumber()).isTrue();
             assertThat(row.get("request_id")).isEqualTo(accepted.get("request_id")); assertThat(row.get("trace_id")).isEqualTo(accepted.get("trace_id"));
@@ -61,7 +61,7 @@ class LlmCallAuditIT extends LlmStubSupport {
         assertThat(row).singleElement().satisfies(value -> {
             var tokens = json.readTree((String) value.get("tokens"));
             assertThat(tokens.path("callType").asString()).isEqualTo("CLASSIFY"); assertThat(tokens.path("sent").asBoolean()).isFalse();
-            assertThat(tokens.path("inputTokens").asInt()).isGreaterThan(3_072); assertThat(tokens.path("promptTokens").isNull()).isTrue();
+            assertThat(tokens.path("inputTokens").asInt()).isGreaterThan(5_120); assertThat(tokens.path("promptTokens").isNull()).isTrue();
             assertThat(value.get("status")).isEqualTo("FAILED"); assertThat(value.get("error_code")).isEqualTo("INPUT_BUDGET_EXCEEDED");
         });
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.CLASSIFY)).isZero();
@@ -81,7 +81,7 @@ class LlmCallAuditIT extends LlmStubSupport {
             assertThat(rows(job.jobId())).singleElement().satisfies(row -> {
                 var tokens = json.readTree((String) row.get("tokens"));
                 assertThat(tokens.path("callType").asString()).isEqualTo("CLASSIFY"); assertThat(tokens.path("sent").asBoolean()).isTrue();
-                assertThat(tokens.path("inputTokens").asInt()).isPositive().isLessThanOrEqualTo(3_072); assertThat(row.get("status")).isEqualTo("SUCCESS");
+                assertThat(tokens.path("inputTokens").asInt()).isPositive().isLessThanOrEqualTo(5_120); assertThat(row.get("status")).isEqualTo("SUCCESS");
             });
             // 축소 4단계(outputSchema 필수 필드만) 뒤의 모델 조회 결과 하나만으로도 Composer 입력 상한을 넘는다.
             var stored = json.readTree(jdbc().sql("SELECT payload::text FROM gw.tool_execution WHERE job_id=:id AND capability_id='tc.model.read'").param("id", job.jobId()).query(String.class).single());
@@ -89,7 +89,7 @@ class LlmCallAuditIT extends LlmStubSupport {
             var required = SchemaContracts.JSON.createArrayNode();
             for (var block : stored.path("result").path("blocks")) required.add(ComposerInputs.requiredOnly(block.path("content"), schema));
             assertThat(required.toString()).contains("STEP-320");
-            assertThat(context.getBean(PromptTokenCounting.class).count(List.of(new ChatMessage(ChatMessage.Role.USER, required.toString())))).isGreaterThan(2_816);
+            assertThat(context.getBean(PromptTokenCounting.class).count(List.of(new ChatMessage(ChatMessage.Role.USER, required.toString())))).isGreaterThan(4_608);
         } finally { store.select("default"); }
     }
 }

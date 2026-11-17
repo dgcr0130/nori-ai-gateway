@@ -38,10 +38,10 @@ class InferenceTransportContractTest {
     private void start(Function<OllamaStubServer.Received,OllamaStubServer.Reply> responder) {
         stub = new OllamaStubServer(responder);
         var configuration = new InferenceModelConfiguration();
-        var endpoint = new InferenceEndpointConfig(stub.baseUrl(), DIGEST);
+        var endpoint = new InferenceEndpointConfig(com.nori.ai.gateway.integration.testing.InferenceFixtures.settings(stub.baseUrl() + "/v1"));
         sdk = configuration.inferenceOpenAiClient(endpoint);
         var chat = configuration.openAiChatModel(sdk, endpoint, TokenBudgetPolicy.current());
-        client = new SpringAiOpenAiInferenceClient(configuration.springAiChatTransport(chat), configuration.openAiEmbeddingModel(sdk, endpoint),
+        client = new SpringAiOpenAiInferenceClient(configuration.springAiChatTransport(chat, com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer()), configuration.openAiEmbeddingModel(sdk, endpoint),
             new PreCallBudgetAssert(messages -> 50, TokenBudgetPolicy.current()), new TruncationDetector(), new GenerationSemaphore(1));
     }
     @AfterEach void close() { if (sdk != null) sdk.close(); if (stub != null) stub.close(); }
@@ -61,16 +61,16 @@ class InferenceTransportContractTest {
         var chatRequest = stub.received().getFirst();
         assertThat(chatRequest.method()).isEqualTo("POST");
         JsonNode body = MAPPER.readTree(chatRequest.body());
-        assertThat(Set.copyOf(iterator(body))).isEqualTo(Set.of("model", "messages", "max_tokens", "temperature"));
+        assertThat(Set.copyOf(iterator(body))).isEqualTo(Set.of("model", "messages", "max_tokens", "temperature", "stream"));
         assertThat(body.get("model").asText()).isEqualTo("qwen3:4b");
         assertThat(body.get("max_tokens").asInt()).isEqualTo(CLASSIFY_MAX);
         assertThat(body.get("temperature").asDouble()).isZero();
         assertThat(body.get("messages")).extracting(node -> node.get("role").asText()).containsExactly("system", "user");
-        assertThat(chatRequest.body()).doesNotContain("num_ctx", "\"options\"", "\"stream\"");
+        assertThat(chatRequest.body()).doesNotContain("num_ctx", "\"options\"");
         JsonNode embedding = MAPPER.readTree(stub.received().get(1).body());
         assertThat(Set.copyOf(iterator(embedding))).isEqualTo(Set.of("model", "input", "encoding_format"));
         assertThat(embedding.get("model").asText()).isEqualTo("bge-m3");
-        for (var request : stub.received()) assertThat(request.header("Authorization")).isEqualTo("Bearer " + InferenceModelConfiguration.NO_AUTH_PLACEHOLDER);
+        for (var request : stub.received()) assertThat(request.header("Authorization")).isNull();
     }
 
     @Test void serverErrorDisconnectAndEmptyChoicesProduceExactlyOneRequestPerAttempt() {
@@ -95,6 +95,17 @@ class InferenceTransportContractTest {
             failed -> assertThat(failed.reason()).isEqualTo(InferenceClient.FailureReason.TRANSPORT));
         assertThat(stub.count("/v1/embeddings")).isEqualTo(1);
         assertThat(stub.received()).extracting(OllamaStubServer.Received::path).containsOnly("/v1/chat/completions", "/v1/embeddings");
+    }
+
+    @Test void embeddingRejectsZeroDimensionNonFiniteValuesAndResponseCountMismatch() {
+        start(request -> new Json(200, EMBEDDING));
+        assertThat(client.embed(List.of("one"))).hasSize(1);
+        for (String body : List.of(EMBEDDING.replace("0.25,0.5,0.75", ""), EMBEDDING.replace("0.25", "1e39"), EMBEDDING.replace("0.25,0.5,0.75", "0.25,0.5"))) {
+            stub.respond(request -> new Json(200,body));
+            assertThatThrownBy(() -> client.embed(List.of("one"))).isInstanceOf(InferenceClient.EmbeddingFailed.class);
+        }
+        stub.respond(request -> new Json(200, EMBEDDING));
+        assertThatThrownBy(() -> client.embed(List.of("one","two"))).isInstanceOf(InferenceClient.EmbeddingFailed.class);
     }
 
     /** pool 을 쓰는 Spring AI 전송기에서 재전송 불가 본문이 OkHttp 연결 실패 자동 재시도를 막는지 대조군과 함께 확인한다. */

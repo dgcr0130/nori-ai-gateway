@@ -29,3 +29,29 @@ ai:
           - {service: tc-ui-backend, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
         repositories: []
         glossary: {}
+    llm:
+      baseUrl: http://192.168.0.160:11434/v1
+      generationModel: qwen3:4b
+      embeddingModel: bge-m3
+      temperature: 0.0
+      contextTokens: 8192
+      requestTimeout: 60s
+      generationConcurrency: 1
+      evidenceTokens: 3072
+      budgets:
+        classify: {inputTokens: 5120, answerTokens: 768, thinkingTokens: 1280, reserveTokens: 1024}
+        compose: {inputTokens: 4608, answerTokens: 1536, thinkingTokens: 1536, reserveTokens: 512}
+      tokenCounting:
+        mode: hf
+        tokenizerFile: ${AI_GATEWAY_TOKENIZER_FILE:modules/adapter/ai-gateway-inference-adapter/src/main/resources/tokenizer/qwen3-4b-thinking-2507.tokenizer.json}
+        sha256: aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+        template:
+          systemPrefix: "<|im_start|>system\n"
+          userPrefix: "<|im_start|>user\n"
+          assistantPrefix: "<|im_start|>assistant\n"
+          messageSuffix: "<|im_end|>\n"
+          sameRoleSeparator: "\n\n"
+          mergeSameRole: true
+          generationPrefix: "<|im_start|>assistant\n<think>\n"
+          systemContentSuffix: "\n\n"
+          contentSuffix: ""

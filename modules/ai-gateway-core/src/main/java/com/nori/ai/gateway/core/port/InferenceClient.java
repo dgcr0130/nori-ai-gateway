@@ -13,6 +13,9 @@ import java.util.Objects;
 public interface InferenceClient {
     /** {@code maxTokens} 는 그 호출 유형의 정책값(답변 상한 + 사고 상한)이다. */
     ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens);
+    default ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens, com.nori.ai.gateway.core.job.CancellationToken cancellation) {
+        return chat(type, messages, maxTokens);
+    }
 
     /** 입력 순서대로 벡터를 돌려준다. 실패는 {@link EmbeddingFailed} 다. */
     List<float[]> embed(List<String> inputs);

@@ -11,6 +11,7 @@ import com.nori.ai.gateway.core.job.InferenceMode;
 import com.nori.ai.gateway.core.job.JobContext;
 import com.nori.ai.gateway.core.job.JobRequestInput;
 import com.nori.ai.gateway.core.port.InferenceClient;
+import com.nori.ai.gateway.core.registry.SchemaContracts;
 import com.nori.ai.gateway.core.scope.ActorRef;
 import com.nori.ai.gateway.core.scope.OwnerSystem;
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
@@ -130,6 +131,23 @@ class ComposerServiceTest {
         audits.clear();
         service(new ScriptedClient(reply("x", "length"), reply("y", "length")), 2_816).compose(job(), input(List.of(), "{}"));
         assertThat(audits).hasSize(2).allSatisfy(audit -> { assertThat(audit.status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.FAILED); assertThat(audit.errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.LLM_UNAVAILABLE); });
+    }
+
+    @Test void exactEvidenceBudgetPassesAndOneTokenLessRejectsBeforeSendingWithoutTruncatingTheQuestion() {
+        var input=input(List.of(),"{}");
+        var draft=new PromptDraft("지시","boundSystem: TC",List.of(),List.of(),input.logSummary(),input.rawLogLines(),input.toolResults(),input.question());
+        var message=ComposerService.messages(draft,input.evidence(),input.coverage()).getLast().content();
+        int evidence=SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(SchemaContracts.JSON.readTree(message).path("data"))).length();
+        var initial=TokenBudgetPolicy.current();
+        for(int limit:new int[]{evidence,evidence-1}) {
+            var policy=new TokenBudgetPolicy(8192,limit,Map.of(CallType.CLASSIFY,initial.budget(CallType.CLASSIFY),CallType.PLAN,initial.budget(CallType.PLAN),CallType.COMPOSER,initial.budget(CallType.COMPOSER)));
+            var client=new ScriptedClient(reply("정상이다[e1]."));
+            var service=new ComposerService(client,new PromptReducer(counter,policy),policy,CODEPOINTS,expiry(clock),observer,audits::add,"지시");
+            var result=service.compose(job(),input);
+            assertThat(result.outcome()).isEqualTo(limit==evidence?ComposerOutcome.COMPOSED:ComposerOutcome.INPUT_BUDGET_EXCEEDED);
+            assertThat(client.sent).hasSize(limit==evidence?1:0);
+            if(!client.sent.isEmpty())assertThat(client.sent.getFirst().messages().getLast().content()).contains(input.question());
+        }
     }
 
     @Test void cancellationBeforeAssemblyMeansNoPromptCountAndNoCall() {

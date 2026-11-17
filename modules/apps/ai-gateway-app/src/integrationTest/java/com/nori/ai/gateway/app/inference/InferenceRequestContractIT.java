@@ -16,7 +16,7 @@ import com.nori.ai.gateway.core.port.InferenceClient.Completed;
 import com.nori.ai.gateway.core.port.InferenceClient.FailureReason;
 import com.nori.ai.gateway.integration.inference.ChatTransport;
 import com.nori.ai.gateway.integration.inference.InferenceReadinessService;
-import com.nori.ai.gateway.integration.inference.OllamaReadinessProbe;
+import com.nori.ai.gateway.integration.inference.OpenAiReadinessProbe;
 import com.nori.ai.gateway.integration.inference.SpringAiOpenAiInferenceClient;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
@@ -48,11 +48,11 @@ class InferenceRequestContractIT extends StackContextSupport {
     private final List<byte[]> otlp = new CopyOnWriteArrayList<>();
     private HttpServer otlpServer;
     private String baseUrl;
-    private String digest = EXPECTED_DIGEST;
+
 
     @BeforeEach void stubs() throws Exception {
-        stub = new OllamaEndpointStub(request -> request.path().equals("/v1/chat/completions") ? new Json(200, completion("답변", usagePrompt.get())) : healthy(request));
-        baseUrl = stub.baseUrl();
+        stub = new OllamaEndpointStub(request -> request.path().equals("/v1/chat/completions") && !isReadiness(request) ? new Json(200, completion("답변", usagePrompt.get())) : healthy(request));
+        baseUrl = stub.baseUrl() + "/v1";
         otlpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         otlpServer.createContext("/", exchange -> { try (exchange) { otlp.add(exchange.getRequestBody().readAllBytes()); exchange.sendResponseHeaders(200, -1); } });
         otlpServer.start();
@@ -62,9 +62,13 @@ class InferenceRequestContractIT extends StackContextSupport {
     @Override protected Map<String,Object> extraApplicationProperties() {
         var properties = new HashMap<String,Object>(Map.of("ai.gateway.inference.mode", "enabled",
             "ai.gateway.otlp.endpoint", "http://127.0.0.1:" + otlpServer.getAddress().getPort(), "ai.gateway.otlp.traces.enabled", true, "ai.gateway.otlp.logs.enabled", true));
-        if (baseUrl != null) properties.put("ai.gateway.inference.baseUrl", baseUrl);
-        if (digest != null) properties.put("ai.gateway.inference.generationModelDigest", digest);
+        if (baseUrl != null) properties.put("ai.gateway.llm.baseUrl", baseUrl);
         return properties;
+    }
+
+    private void awaitReadinessAndClear() {
+        var readiness=context.getBean(InferenceReadinessService.class);
+        readiness.stop();readiness.refresh();assertThat(readiness.ready()).isTrue();stub.clear();
     }
 
     private InferenceClient client() { return context.getBean(InferenceClient.class); }
@@ -82,13 +86,14 @@ class InferenceRequestContractIT extends StackContextSupport {
 
     @Test void budgetGuardStopsBeforeHttpAndTheExactContextBoundarySendsOnce() {
         start();
+        awaitReadinessAndClear();
         assertThat(context.getBean(InferenceClient.class)).isExactlyInstanceOf(SpringAiOpenAiInferenceClient.class);
-        assertThat(client().chat(CallType.CLASSIFY, messagesOf(3_073), max(CallType.CLASSIFY))).isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(3_073));
+        assertThat(client().chat(CallType.CLASSIFY, messagesOf(5_121), max(CallType.CLASSIFY))).isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(5_121));
         assertThat(stub.count("/v1/chat/completions")).as("분류 상한 초과 → 수신 0").isZero();
-        usagePrompt.set(3_072);
-        assertThat(client().chat(CallType.CLASSIFY, messagesOf(3_072), max(CallType.CLASSIFY))).as("3,072 + 5,120 = 8,192").isInstanceOf(Completed.class);
+        usagePrompt.set(5_120);
+        assertThat(client().chat(CallType.CLASSIFY, messagesOf(5_120), max(CallType.CLASSIFY))).as("5,120 + 2,048 + reserve 1,024 = 8,192").isInstanceOf(Completed.class);
         assertThat(stub.count("/v1/chat/completions")).isOne();
-        assertThat(client().chat(CallType.COMPOSER, messagesOf(2_817), max(CallType.COMPOSER))).as("2,817 + 5,248 = 8,065").isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(2_817));
+        assertThat(client().chat(CallType.COMPOSER, messagesOf(4_609), max(CallType.COMPOSER))).as("4,609 + 3,072 + reserve 512 = 8,193").isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(4_609));
         assertThat(stub.count("/v1/chat/completions")).isOne();
         // P18 시험 전용 정책(T_cmp=5,249·요청 5,377)을 실제 계수기·전송 빈과 함께 쓰는 Client 로 총합 검사를 확인한다(운영값 변경 0).
         var current = TokenBudgetPolicy.current();
@@ -96,10 +101,10 @@ class InferenceRequestContractIT extends StackContextSupport {
             CallType.COMPOSER, new TokenBudgetPolicy.CallBudget(2_816, 128, 5_249)));
         var fixtureClient = new SpringAiOpenAiInferenceClient(context.getBean(ChatTransport.class), context.getBean(OpenAiEmbeddingModel.class),
             new PreCallBudgetAssert(context.getBean(PromptTokenCounting.class), fixture), context.getBean(TruncationDetector.class), context.getBean(GenerationSemaphore.class));
-        assertThat(fixtureClient.chat(CallType.COMPOSER, messagesOf(2_816), 5_377)).as("2,816 + 5,377 = 8,193").isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(2_816));
+        assertThat(fixtureClient.chat(CallType.COMPOSER, messagesOf(2_815), 5_377)).as("2,815 + 5,377 + reserve 1 = 8,193").isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(2_815));
         assertThat(stub.count("/v1/chat/completions")).isOne();
-        usagePrompt.set(2_815);
-        assertThat(fixtureClient.chat(CallType.COMPOSER, messagesOf(2_815), 5_377)).as("2,815 + 5,377 = 8,192").isInstanceOf(Completed.class);
+        usagePrompt.set(2_814);
+        assertThat(fixtureClient.chat(CallType.COMPOSER, messagesOf(2_814), 5_377)).as("2,814 + 5,377 + reserve 1 = 8,192").isInstanceOf(Completed.class);
         assertThat(stub.count("/v1/chat/completions")).isEqualTo(2);
         usagePrompt.set(39);
         assertThat(client().chat(CallType.CLASSIFY, messagesOf(40), max(CallType.CLASSIFY))).as("usage.prompt_tokens < 계수 → 그 호출 실패")
@@ -107,28 +112,31 @@ class InferenceRequestContractIT extends StackContextSupport {
         assertThat(stub.count("/v1/chat/completions")).isEqualTo(3);
     }
 
-    @Test void wireUsesOnlyTheThreeExactPathsAllowedBodyKeysNoNumCtxAndThePlaceholderAuthorization() {
+    @Test void wireUsesOnlyTheThreeExactPathsAllowedBodyKeysNoNumCtxAndNoAuthorization() {
         start();
+        awaitReadinessAndClear();
         assertThat(client().chat(CallType.CLASSIFY, messagesOf(40), max(CallType.CLASSIFY))).isInstanceOf(Completed.class);
         assertThat(client().embed(List.of("probe"))).singleElement().satisfies(vector -> assertThat(vector).hasSize(3));
+
         context.getBean(InferenceReadinessService.class).refresh();
-        assertThat(stub.received()).extracting(Received::path).containsOnly("/api/ps", "/v1/chat/completions", "/v1/embeddings").contains("/api/ps", "/v1/chat/completions", "/v1/embeddings");
-        assertThat(stub.received()).allSatisfy(request -> assertThat(request.method()).isEqualTo(request.path().equals("/api/ps") ? "GET" : "POST"));
+        assertThat(stub.received()).extracting(Received::path).containsOnly("/v1/models", "/v1/chat/completions", "/v1/embeddings").contains("/v1/models", "/v1/chat/completions", "/v1/embeddings");
+        assertThat(stub.received()).allSatisfy(request -> assertThat(request.method()).isEqualTo(request.path().equals("/v1/models") ? "GET" : "POST"));
         var chat = stub.received().stream().filter(request -> request.path().equals("/v1/chat/completions")).findFirst().orElseThrow();
         JsonNode body = JSON.readTree(chat.body());
-        assertThat(Set.copyOf(body.propertyNames())).isEqualTo(Set.of("model", "messages", "max_tokens", "temperature"));
+        assertThat(Set.copyOf(body.propertyNames())).isEqualTo(Set.of("model", "messages", "max_tokens", "temperature", "stream"));
         assertThat(body.get("model").asString()).isEqualTo("qwen3:4b");
         assertThat(body.get("max_tokens").asInt()).isEqualTo(max(CallType.CLASSIFY));
-        assertThat(chat.body()).doesNotContain("num_ctx", "\"options\"", "\"stream\"");
+        assertThat(chat.body()).doesNotContain("num_ctx", "\"options\"");
         var embedding = stub.received().stream().filter(request -> request.path().equals("/v1/embeddings")).findFirst().orElseThrow();
         assertThat(Set.copyOf(JSON.readTree(embedding.body()).propertyNames())).isEqualTo(Set.of("model", "input", "encoding_format"));
-        for (var request : stub.received()) if (!request.path().equals("/api/ps"))
-            assertThat(request.header("Authorization")).as("Ollama 무인증 — SDK 강제 credential 의 비밀 아닌 고정 값").isEqualTo("Bearer aigw-no-auth");
+        for (var request : stub.received()) if (!request.path().equals("/v1/models"))
+            assertThat(request.header("Authorization")).as("자격 파일 생략 시 Authorization 없음").isNull();
     }
 
     @Test @ExtendWith(OutputCaptureExtension.class)
     void serverErrorDisconnectAndEmptyChoicesAreOneRequestPerAttemptAndLeakNoSentinel(CapturedOutput output) {
         start();
+        awaitReadinessAndClear();
         var messages = messagesOf(60);
         var outcomes = new ArrayList<InferenceClient.ChatOutcome>();
         inRequestSpan(() -> {
@@ -154,38 +162,32 @@ class InferenceRequestContractIT extends StackContextSupport {
         assertThat(output.getAll()).doesNotContain(PROMPT_SENTINEL, QUESTION_SENTINEL);
     }
 
-    @Test void readinessIgnoresBgeContextAndMapsUnauthorizedErrorsAndNonJsonToEndpointErrorNeverModelLoading() {
+    @Test void readinessMapsUnauthorizedErrorsAndNonJsonToEndpointErrorNeverModelLoading() {
         start();
+        awaitReadinessAndClear();
         var readiness = context.getBean(InferenceReadinessService.class);
-        stub.respond(request -> new Json(200, ps(generation(8192, EXPECTED_DIGEST), embedding(4096))));
-        assertThat(readiness.refresh().state()).as("bge-m3 context ≠ 8192 여도 READY").isEqualTo(OllamaReadinessProbe.State.READY);
         for (var reply : List.of(new Json(401, "{}"), new Json(403, "{}"), new Json(500, "{}"), new Json(200, "<html>not json</html>"))) {
             stub.respond(request -> reply);
             var snapshot = readiness.refresh();
-            assertThat(snapshot.state()).as(reply.toString()).isEqualTo(OllamaReadinessProbe.State.INFERENCE_UNAVAILABLE);
-            assertThat(snapshot.reason()).as(reply.toString()).isEqualTo(OllamaReadinessProbe.Reason.ENDPOINT_ERROR);
+            assertThat(snapshot.state()).as(reply.toString()).isEqualTo(OpenAiReadinessProbe.State.INFERENCE_UNAVAILABLE);
+            assertThat(snapshot.reason()).as(reply.toString()).isEqualTo(OpenAiReadinessProbe.Reason.ENDPOINT_ERROR);
         }
-        assertThat(stub.received()).extracting(Received::path).containsOnly("/api/ps");
+        assertThat(stub.received()).extracting(Received::path).containsOnly("/v1/models");
     }
 
-    @Test void startupRejectsBaseUrlPathV1TrailingSlashOrMissingAndMissingDigestWithoutContactingTheEndpoint() throws Exception {
+    @Test void startupRejectsMissingPrefixPortAndTrailingSlashWithoutContactingTheEndpoint() throws Exception {
         database = new com.nori.ai.gateway.persistence.testing.PgTestDatabase(System.getProperty("aigw.pgTestImage"), java.nio.file.Path.of(System.getProperty("aigw.rootDir"))).start();
         database.bootstrap(); database.migrate();
-        String stubUrl = stub.baseUrl();
-        for (String invalid : Arrays.asList(stubUrl + "/v1", stubUrl + "/", stubUrl + "/api", "http://127.0.0.1", null)) {
+        String stubUrl = stub.baseUrl() + "/v1";
+        for (String invalid : Arrays.asList(stub.baseUrl(), "http://127.0.0.1", stubUrl + "/")) {
             baseUrl = invalid;
             assertThatThrownBy(() -> startApplication()).as(String.valueOf(invalid)).hasRootCauseMessage("추론 endpoint 설정이 잘못되었습니다");
         }
         baseUrl = stubUrl;
-        for (String invalid : Arrays.asList(null, "sha256:" + EXPECTED_DIGEST, "A".repeat(64), "1".repeat(63))) {
-            digest = invalid;
-            assertThatThrownBy(() -> startApplication()).as(String.valueOf(invalid)).hasRootCauseMessage("추론 endpoint 설정이 잘못되었습니다");
-        }
         assertThat(stub.received()).as("기동 거부 경로의 추론 endpoint 수신 0").isEmpty();
-        digest = EXPECTED_DIGEST;
         startApplication();
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(10).toNanos();
         while (!context.getBean(InferenceReadinessService.class).ready() && System.nanoTime() < deadline) Thread.sleep(20);
-        assertThat(context.getBean(InferenceReadinessService.class).ready()).as("정상 값이면 기동 직후 /api/ps 로 READY").isTrue();
+        assertThat(context.getBean(InferenceReadinessService.class).ready()).as("정상 값이면 공통 최소 요청으로 READY").isTrue();
     }
 }

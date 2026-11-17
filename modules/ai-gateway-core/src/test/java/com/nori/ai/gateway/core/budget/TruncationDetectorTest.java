@@ -7,12 +7,12 @@ import static org.assertj.core.api.Assertions.*;
 class TruncationDetectorTest {
     private final TruncationDetector detector = new TruncationDetector();
 
-    @Test void usageBelowTheGatewayCountIsTruncationAndEqualOrAboveIsNot() {
+    @Test void usageMustEqualTheGatewayCount() {
         // P03 G-USAGE U1 계수 1,056 기준
         assertThat(detector.check(1_056, 1_056)).isEqualTo(Result.OK);
         assertThat(detector.check(1_056, 1_055)).isEqualTo(Result.TRUNCATED);
         assertThat(detector.check(1_056, 0)).isEqualTo(Result.TRUNCATED);
-        assertThat(detector.check(1_056, 1_057)).isEqualTo(Result.OK);
+        assertThat(detector.check(1_056, 1_057)).isEqualTo(Result.TRUNCATED);
     }
 
     @Test void rejectsImpossibleCounts() {

@@ -9,6 +9,7 @@ public final class GenerationSemaphore {
         semaphore = new Semaphore(permits,true);
     }
     public void acquire() throws InterruptedException { semaphore.acquire(); }
+    public boolean acquire(java.time.Duration timeout) throws InterruptedException { return semaphore.tryAcquire(timeout.toNanos(), java.util.concurrent.TimeUnit.NANOSECONDS); }
     public void release() { semaphore.release(); }
     public int availablePermits() { return semaphore.availablePermits(); }
 }

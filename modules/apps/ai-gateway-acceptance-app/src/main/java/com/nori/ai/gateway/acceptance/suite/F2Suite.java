@@ -30,7 +30,5 @@ public final class F2Suite {
     @Test @Order(18) @Tag("AC-43-CLS") @Tag("label-MOCK_API") @Tag("label-LLM_STUB") void ac_43_cls() { F2Runtime.run("AC-43-CLS"); }
     @Test @Order(19) @Tag("AC-43-COMP") @Tag("label-MOCK_API") @Tag("label-LLM_STUB") void ac_43_comp() { F2Runtime.run("AC-43-COMP"); }
     @Test @Order(20) @Tag("AC-35-EGRESS") @Tag("label-MOCK_API") void ac_35_egress() { F2Runtime.run("AC-35-EGRESS"); }
-    @Test @Order(21) @Tag("AC-33-CTX") @Tag("label-MOCK_API") @Tag("label-LLM_STUB") void ac_33_ctx() { F2Runtime.run("AC-33-CTX"); }
-    @Test @Order(22) @Tag("AC-33-DIGEST") @Tag("label-MOCK_API") @Tag("label-LLM_STUB") void ac_33_digest() { F2Runtime.run("AC-33-DIGEST"); }
     @Test @Order(23) @Tag("AC-33-PERSIST") @Tag("label-MOCK_API") @Tag("label-LLM_STUB") void ac_33_persist() { F2Runtime.run("AC-33-PERSIST"); }
 }

@@ -48,7 +48,7 @@ public final class JobDispatcher implements AutoCloseable {
         });
         if(selected!=null)selected.ifPresent(job->{
             publisher.publishQueued(job.jobId());publisher.publishStarted(job.jobId());
-            var token=slots.claim(job.jobId());workers.execute(()->worker.run(job,token));
+            var token=slots.claim(job.jobId());token.deadline(job.createdAt().plus(capacity.jobLifetimeLimit()),clock);workers.execute(()->worker.run(job,token));
         });
     }
     public boolean started(){return started;}

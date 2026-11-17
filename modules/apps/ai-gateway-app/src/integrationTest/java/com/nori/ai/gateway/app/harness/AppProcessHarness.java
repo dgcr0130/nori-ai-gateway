@@ -27,7 +27,7 @@ public final class AppProcessHarness implements AutoCloseable {
         String fingerprint=fingerprintOverride==null?HarnessFingerprint.calculate(classpath):fingerprintOverride;
         Path argfile=Files.createTempFile(state,"harness-",".args");var lines=new ArrayList<String>();
         // 공용 하네스도 운영 기본 OTLP endpoint로 보내지 않습니다. 시험이 명시한 값이 있으면 그 값이 우선합니다.
-        var effective=new TreeMap<String,String>(Map.of("ai.gateway.otlp.metrics.enabled","false","ai.gateway.otlp.traces.enabled","false","ai.gateway.otlp.logs.enabled","false"));effective.putAll(properties);
+        var effective=new TreeMap<String,String>(Map.of("ai.gateway.otlp.metrics.enabled","false","ai.gateway.otlp.traces.enabled","false","ai.gateway.otlp.logs.enabled","false"));com.nori.ai.gateway.integration.testing.InferenceFixtures.properties().forEach((key,value)->effective.put(key,value.toString()));effective.putAll(properties);
         effective.forEach((key,value)->lines.add(quote("-D"+key+"="+value)));
         lines.add("-cp");lines.add(quote(classpath));lines.add(HarnessMain.class.getName());
         for(String value:List.of("--fingerprint",fingerprint,"--config",HarnessP09TestPorts.class.getName(),"--state-dir",state.toString()))lines.add(quote(value));
@@ -58,7 +58,7 @@ public final class AppProcessHarness implements AutoCloseable {
     public URI uri(String path){return URI.create("http://127.0.0.1:"+port+path);}
     public int awaitExit(Duration timeout)throws InterruptedException{if(!process.waitFor(timeout.toMillis(),TimeUnit.MILLISECONDS))throw new AssertionError("자식 JVM이 종료되지 않았습니다");return process.exitValue();}
     public int sentinelCount(){return sentinelCount.get();}
-    private static String quote(String value){return "\""+value.replace("\\","\\\\").replace("\"","\\\"")+"\"";}
+    private static String quote(String value){return "\""+value.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n").replace("\r","\\r").replace("\t","\\t")+"\"";}
     @Override public void close(){
         for(Process child:children){var descendants=child.descendants().toList();for(var descendant:descendants)descendant.destroy();child.destroy();
             try{if(!child.waitFor(5,TimeUnit.SECONDS))child.destroyForcibly().waitFor(5,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();child.destroyForcibly();}

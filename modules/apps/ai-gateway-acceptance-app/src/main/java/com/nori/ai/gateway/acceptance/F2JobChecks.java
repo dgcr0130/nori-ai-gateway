@@ -136,8 +136,8 @@ public final class F2JobChecks {
         if (call.reduction().isEmpty()) throw new TestAbortedException("AC31_REDUCTION_NOT_EXERCISED");
         if (!call.sent()) throw new TestAbortedException("AC31_REDUCTION_INSUFFICIENT");
         require(composer.size() == 1, "F2_AC31_COMPOSER_CALLS");
-        require(call.maxTokens() == 5_248 && call.inputTokens() <= 2_816 && call.inputTokens() + call.maxTokens() <= TokenBudgetPolicy.CONTEXT_TOKENS, "F2_AC31_PRE_CALL_ASSERT");
-        require(reductionRecorded(call.reduction(), 2_816, call.inputTokens()), "F2_AC31_REDUCTION_RECORD");
+        require(call.maxTokens() == 3_072 && call.inputTokens() <= 4_608 && call.inputTokens() + call.maxTokens() + 512 <= TokenBudgetPolicy.CONTEXT_TOKENS, "F2_AC31_PRE_CALL_ASSERT");
+        require(reductionRecorded(call.reduction(), 4_608, call.inputTokens()), "F2_AC31_REDUCTION_RECORD");
         require(watch(job, "COMPOSER", QUESTION) == 1, "F2_AC31_QUESTION_REDUCED");
         int prompt = call.promptTokens().orElseThrow(() -> new TestAbortedException("AC31_USAGE_MISSING"));
         require(prompt == call.inputTokens(), "F2_AC31_SERVER_TRUNCATION");
@@ -208,7 +208,7 @@ public final class F2JobChecks {
     }
     private void classificationFailsTwice(String leaf) {
         var reply = leaf.equals("AC-32-SCHEMA") ? classify("{\"t\":\"LQ\",\"eqp\":\"EQP-001\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}")
-            : reply("CLASSIFY", "{\"t\":\"LQ\",\"eqp\":\"EQP-0", "length", 5_120);
+            : reply("CLASSIFY", "{\"t\":\"LQ\",\"eqp\":\"EQP-0", "length", 2_048);
         var job = scripted(leaf, "EQP-001 상태 알려줘", window(Duration.ofMinutes(30), false), List.of(reply, reply), List.of());
         failed(job, "PLAN_INVALID");
         clarification(job, "PLAN_INVALID", List.of("q"));
@@ -234,7 +234,7 @@ public final class F2JobChecks {
         require(oracle.toolRows(job.id()).isEmpty() && businessReads() == 0, "F2_CLS_BUDGET_TOOL");
         // 호출 직전 assert 로 막힌 시도도 감사에 남는다(sent=false). 보낸 분류 호출은 0 이다.
         var calls = oracle.llmCalls(job.id());
-        require(calls.size() == 1 && calls.getFirst().callType().equals("CLASSIFY") && !calls.getFirst().sent() && calls.getFirst().inputTokens() > 3_072
+        require(calls.size() == 1 && calls.getFirst().callType().equals("CLASSIFY") && !calls.getFirst().sent() && calls.getFirst().inputTokens() > 5_120
             && calls.getFirst().errorCode().equals(Optional.of("INPUT_BUDGET_EXCEEDED")), "F2_CLS_BUDGET_AUDIT");
     }
     private void composerOverBudget() {
@@ -309,7 +309,7 @@ public final class F2JobChecks {
         if (counted.isEmpty()) { unobserved.add("o"); return; }
         int answer = counted.get();
         var budget = TokenBudgetPolicy.current().budget(CallType.CLASSIFY);
-        require(answer <= 256 && budget.answerLimit() == 256 && budget.requestMaxTokens() == 5_120, "F2_NEEDS_MAX_WIRE_BUDGET");
+        require(answer <= 768 && budget.answerLimit() == 768 && budget.requestMaxTokens() == 2_048, "F2_NEEDS_MAX_WIRE_BUDGET");
         String question = "\"" + "검".repeat(256) + "\" " + "설비 진행이 멈춘 원인과 정상 절차 비교, 조치까지 보고서로 정리해줘".repeat(4);
         var job = scripted("needs-o", question, window(Duration.ofMinutes(30), false), List.of(reply("CLASSIFY", content, "stop", answer), compose("확인된 자료를 정리했다.")), List.of());
         require(watch(job, "CLASSIFY", QUESTION) == 1, "F2_NEEDS_MAX_WIRE_RETRIED");

@@ -16,7 +16,7 @@ import com.nori.ai.gateway.core.scope.OwnerSystem;
 import com.nori.ai.gateway.core.workflow.EvidenceNeed;
 import com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter;
 import com.nori.ai.gateway.integration.tokenizer.PromptTokenCounter;
-import com.nori.ai.gateway.integration.tokenizer.QwenChatTemplateRenderer;
+import com.nori.ai.gateway.integration.tokenizer.ConfiguredChatTemplateRenderer;
 import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * SPEC §27.2 AC-32-NEEDS ⓞ: eqp 64 CODEPOINT(JSON escape 포함)·from/to 각 35자·qRef·n 6코드·a 를 모두 채운 최대 분류 wire v3 를 pin tokenizer 로 계수하고,
- * 운영 classify-v3 프롬프트·Registry 참고 정보로 조립한 실제 분류 입력과 함께 예산(답변 256·요청 5,120·입력+요청 ≤ 8192)을 확인한다(Plan §16.3 R5).
+ * 운영 classify-v3 프롬프트·Registry 참고 정보로 조립한 실제 분류 입력과 함께 예산(답변 768·요청 2,048·입력+요청 ≤ 8192)을 확인한다(Plan §16.3 R5).
  */
 class ClassificationWireV3TokenBudgetTest {
     private static final Instant NOW = Instant.parse("2026-11-05T00:00:00Z");
@@ -66,11 +66,11 @@ class ClassificationWireV3TokenBudgetTest {
         try (var tokenizer = new HfTokenizerCounter()) {
             int answer = tokenizer.countText(content);
             assertThat(answer).as("ⓞ 답변 토큰").isLessThanOrEqualTo(256);
-            assertThat(budget.answerLimit()).isEqualTo(256);
-            assertThat(budget.requestMaxTokens()).as("ⓞ 요청 max_tokens").isEqualTo(5_120);
+            assertThat(budget.answerLimit()).isEqualTo(768);
+            assertThat(budget.requestMaxTokens()).as("ⓞ 요청 max_tokens").isEqualTo(2_048);
             InferenceClient client = new InferenceClient() {
                 @Override public ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens) {
-                    sent.add(messages); assertThat(maxTokens).isEqualTo(5_120);
+                    sent.add(messages); assertThat(maxTokens).isEqualTo(2_048);
                     return new Completed(content, "stop", 100, answer, Duration.ofMillis(1), 100);
                 }
                 @Override public List<float[]> embed(List<String> inputs) { throw new UnsupportedOperationException(); }
@@ -84,7 +84,7 @@ class ClassificationWireV3TokenBudgetTest {
             var classified = ((ClassificationService.Classified) result).classification();
             assertThat(classified.eqp()).isEqualTo(eqp);
             assertThat(classified.evidenceNeeds()).containsExactly(EvidenceNeed.values());
-            int input = new PromptTokenCounter(new QwenChatTemplateRenderer(), tokenizer).count(sent.getFirst());
+            int input = new PromptTokenCounter(com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer(), tokenizer).count(sent.getFirst());
             assertThat(input).as("분류 입력 상한").isLessThanOrEqualTo(budget.inputLimit());
             assertThat(input + budget.requestMaxTokens()).as("ⓞ 입력 + max_tokens").isLessThanOrEqualTo(TokenBudgetPolicy.CONTEXT_TOKENS);
         }

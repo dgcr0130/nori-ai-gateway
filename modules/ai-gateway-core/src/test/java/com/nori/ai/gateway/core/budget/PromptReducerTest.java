@@ -106,13 +106,13 @@ class PromptReducerTest {
     }
 
     @Test void theCallTypeInputLimitOfTheCurrentPolicyDecidesWhetherToReduce() {
-        // system 2,001 + 질문 600 + 이전 턴 2개 300 = 2,901: 분류 3,072 이내, Composer 2,816 초과
-        var draft = new PromptDraft("S".repeat(2_000), "", List.of(new Turn("u".repeat(75), "a".repeat(75)), new Turn("v".repeat(75), "b".repeat(75))),
+        // system 3,801 + 질문 600 + 이전 턴 300 = 4,701: 분류 5,120 이내, 작성 4,608 초과
+        var draft = new PromptDraft("S".repeat(3_800), "", List.of(new Turn("u".repeat(75), "a".repeat(75)), new Turn("v".repeat(75), "b".repeat(75))),
             List.of(), "", List.of(), List.of(), "Q".repeat(600));
         var reducer = new PromptReducer(CHARACTERS, TokenBudgetPolicy.current());
         assertThat(reducer.reduce(CallType.CLASSIFY, draft, PromptReducerTest::assemble).steps()).isEmpty();
         var composer = reducer.reduce(CallType.COMPOSER, draft, PromptReducerTest::assemble);
-        assertThat(composer.steps()).containsExactly(new Step(1, 2_901, 2_751));
+        assertThat(composer.steps()).containsExactly(new Step(1, 4_701, 4_551));
         assertThat(composer.withinBudget()).isTrue();
     }
 }

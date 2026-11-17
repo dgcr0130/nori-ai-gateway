@@ -7,7 +7,7 @@ import org.junit.jupiter.api.*;
 import static com.nori.ai.gateway.app.inference.OllamaEndpointStub.*;
 import static org.assertj.core.api.Assertions.*;
 
-/** P22 embedding 프로필 측정 hook: 실제 InferenceClient.embed 1회로 차원·bge-m3 digest 만 돌려주고 벡터·입력은 반환하지 않는다. */
+/** P22 embedding 프로필 측정 hook: 실제 InferenceClient.embed 1회로 차원·미제공 digest(null) 만 돌려주고 벡터·입력은 반환하지 않는다. */
 @Tag("stage-F2") @Tag("label-MOCK_API")
 class EmbeddingProbeHookIT extends P09QueueSupport {
     private static final int DIMENSION = 1024;
@@ -16,20 +16,21 @@ class EmbeddingProbeHookIT extends P09QueueSupport {
 
     @Override protected Map<String,Object> extraApplicationProperties() {
         var properties = new HashMap<String,Object>(super.extraApplicationProperties());
-        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.inference.baseUrl", stub.baseUrl(), "ai.gateway.inference.generationModelDigest", EXPECTED_DIGEST));
+        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
         return properties;
     }
     @AfterEach void stopStub() { stub.close(); }
 
     @Test void returnsOnlyDimensionAndModelDigestFromOneRealEmbedCallAndHidesItselfWithoutTheHookToken() throws Exception {
         await(() -> context.getBean(InferenceReadinessService.class).ready());
+        stub.clear();
         String sentinel = "embed-sentinel-" + UUID.randomUUID();
         var response = hook("/__test/embedding-probe", "POST", "{\"input\":\"" + sentinel + "\",\"baseUrl\":\"http://127.0.0.1:1\"}", hookToken);
         assertThat(response.statusCode()).isEqualTo(200);
         var body = json.readTree(response.body());
         assertThat(Set.copyOf(body.propertyNames())).isEqualTo(Set.of("dimension", "modelDigest"));
         assertThat(body.get("dimension").asInt()).isEqualTo(DIMENSION);
-        assertThat(body.get("modelDigest").asString()).isEqualTo(EMBEDDING_DIGEST);
+        assertThat(body.get("modelDigest").isNull()).isTrue();
         assertThat(response.body()).doesNotContain("0.5", sentinel);
         assertThat(stub.count("/v1/embeddings")).isOne();
         var embedRequest = stub.received().stream().filter(request -> request.path().equals("/v1/embeddings")).findFirst().orElseThrow();

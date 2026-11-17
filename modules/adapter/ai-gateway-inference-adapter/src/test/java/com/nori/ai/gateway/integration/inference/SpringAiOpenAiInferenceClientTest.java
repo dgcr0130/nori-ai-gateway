@@ -26,7 +26,7 @@ class SpringAiOpenAiInferenceClientTest {
     private final AtomicInteger sends = new AtomicInteger();
     private final GenerationSemaphore generation = new GenerationSemaphore(1);
     private final OpenAiEmbeddingModel unusedEmbeddings = OpenAiEmbeddingModel.builder().openAiClient(
-        new InferenceModelConfiguration().inferenceOpenAiClient(new InferenceEndpointConfig("http://127.0.0.1:1", "a".repeat(64))))
+        new InferenceModelConfiguration().inferenceOpenAiClient(new InferenceEndpointConfig(com.nori.ai.gateway.integration.testing.InferenceFixtures.settings("http://127.0.0.1:1/v1"))))
         .options(OpenAiEmbeddingOptions.builder().model("bge-m3").build()).build();
 
     private InferenceClient client(ChatTransport transport) {
@@ -35,8 +35,8 @@ class SpringAiOpenAiInferenceClientTest {
     }
 
     @Test void budgetExceededReturnsWithoutSendingAndPolicyMismatchIsRejectedBeforeSending() {
-        counted.set(3_073);
-        assertThat(client((type, messages, max) -> fail("전송 금지")).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX)).isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(3_073));
+        counted.set(5_121);
+        assertThat(client((type, messages, max) -> fail("전송 금지")).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX)).isEqualTo(InferenceClient.ChatOutcome.budgetExceeded(5_121));
         counted.set(10);
         assertThatThrownBy(() -> client((type, messages, max) -> fail("전송 금지")).chat(CallType.CLASSIFY, MESSAGES, 128)).isInstanceOf(IllegalArgumentException.class);
         assertThat(sends).hasValue(0);
@@ -60,7 +60,7 @@ class SpringAiOpenAiInferenceClientTest {
     @Test void truncatedMissingUsageEmptyAndTransportFailuresAreCallFailuresWithClassNameOnly() {
         assertThat(client((t, m, x) -> new ChatTransport.Response("답", "stop", 99, 1)).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX))
             .isInstanceOfSatisfying(CallFailed.class, failed -> assertThat(failed.reason()).isEqualTo(FailureReason.TRUNCATED));
-        assertThat(client((t, m, x) -> new ChatTransport.Response("답", "stop", 101, 1)).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX)).isInstanceOf(Completed.class);
+        assertThat(client((t, m, x) -> new ChatTransport.Response("답", "stop", 101, 1)).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX)).isInstanceOf(CallFailed.class);
         assertThat(client((t, m, x) -> new ChatTransport.Response("답", "stop", null, null)).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX))
             .isInstanceOfSatisfying(CallFailed.class, failed -> assertThat(failed.reason()).isEqualTo(FailureReason.TRUNCATED));
         assertThat(client((t, m, x) -> new ChatTransport.Response(null, null, 100, 0)).chat(CallType.CLASSIFY, MESSAGES, CLASSIFY_MAX))

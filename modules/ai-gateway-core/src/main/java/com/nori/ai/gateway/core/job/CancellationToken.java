@@ -12,6 +12,16 @@ public final class CancellationToken {
     private final Set<InFlightCall> calls = new HashSet<>();
     private Reason reason;
     private Thread worker;
+    private java.time.Instant deadline;
+    private java.time.Clock clock;
+    public synchronized void deadline(java.time.Instant value, java.time.Clock source) { deadline = Objects.requireNonNull(value); clock = Objects.requireNonNull(source); }
+    public synchronized Duration remaining(Duration limit) {
+        if (reason != null) return Duration.ZERO;
+        if (deadline == null) return limit;
+        Duration left = Duration.between(clock.instant(), deadline);
+        if (left.isNegative() || left.isZero()) { signal(Reason.TIMEOUT); return Duration.ZERO; }
+        return left.compareTo(limit) < 0 ? left : limit;
+    }
     public synchronized void attachWorker(Thread value) { worker = value; if (reason != null) value.interrupt(); }
     public synchronized void register(InFlightCall call) {
         Objects.requireNonNull(call); calls.add(call);

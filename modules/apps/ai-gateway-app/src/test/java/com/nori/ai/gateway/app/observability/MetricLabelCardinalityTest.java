@@ -51,17 +51,17 @@ class MetricLabelCardinalityTest {
     @Test void inferenceReadinessAlertAndRejectionLabelsIncludeTheDigestMismatchAndNothingElse() {
         var registry = new SimpleMeterRegistry();
         registry.config().meterFilter(MetricsCatalog.filter(REGISTRY));
-        Counter.builder("aigw.jobs.rejected").tags("owner_system", "TC", "reason", "MODEL_DIGEST_MISMATCH").register(registry).increment();
-        io.micrometer.core.instrument.Gauge.builder("aigw.inference.readiness.state", () -> 1).tag("state", "MODEL_DIGEST_MISMATCH").register(registry);
+        Counter.builder("aigw.jobs.rejected").tags("owner_system", "TC", "reason", "INFERENCE_UNAVAILABLE").register(registry).increment();
+        io.micrometer.core.instrument.Gauge.builder("aigw.inference.readiness.state", () -> 1).tag("state", "INFERENCE_UNAVAILABLE").register(registry);
         io.micrometer.core.instrument.Gauge.builder("aigw.inference.readiness.state", () -> 0).tag("state", "READY").register(registry);
-        io.micrometer.core.instrument.Gauge.builder("aigw.inference.alert", () -> 1).tag("state", "MODEL_DIGEST_MISMATCH").register(registry);
+        io.micrometer.core.instrument.Gauge.builder("aigw.inference.alert", () -> 1).tag("state", "INFERENCE_UNAVAILABLE").register(registry);
         // 경보는 비READY 상태만, 사유(ENDPOINT_ERROR)는 state 라벨 값이 아니다.
         io.micrometer.core.instrument.Gauge.builder("aigw.inference.alert", () -> 0).tag("state", "READY").register(registry);
         io.micrometer.core.instrument.Gauge.builder("aigw.inference.readiness.state", () -> 0).tag("state", "ENDPOINT_ERROR").register(registry);
         Counter.builder("aigw.jobs.rejected").tags("owner_system", "TC", "reason", "MODEL_DIGEST").register(registry).increment();
         assertThat(registry.getMeters().stream().map(meter -> meter.getId().getName() + meter.getId().getTags())).containsExactlyInAnyOrder(
-            "aigw.jobs.rejected[tag(owner_system=TC), tag(reason=MODEL_DIGEST_MISMATCH)]", "aigw.inference.readiness.state[tag(state=MODEL_DIGEST_MISMATCH)]",
-            "aigw.inference.readiness.state[tag(state=READY)]", "aigw.inference.alert[tag(state=MODEL_DIGEST_MISMATCH)]");
+            "aigw.jobs.rejected[tag(owner_system=TC), tag(reason=INFERENCE_UNAVAILABLE)]", "aigw.inference.readiness.state[tag(state=INFERENCE_UNAVAILABLE)]",
+            "aigw.inference.readiness.state[tag(state=READY)]", "aigw.inference.alert[tag(state=INFERENCE_UNAVAILABLE)]");
     }
 
     @Test void sourceTimerKeepsOnlyTheThreeSourceTagsAndUsesTheCatalogBuckets() {

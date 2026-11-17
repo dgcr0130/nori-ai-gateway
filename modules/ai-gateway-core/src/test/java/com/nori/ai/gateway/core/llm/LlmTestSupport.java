@@ -42,8 +42,8 @@ final class LlmTestSupport {
         @Override public List<float[]> embed(List<String> inputs) { throw new UnsupportedOperationException("임베딩은 이 시험 대상이 아닙니다"); }
     }
 
-    static InferenceClient.Completed reply(String content) { return new InferenceClient.Completed(content, "stop", 100, 50, Duration.ofMillis(5), 100); }
-    static InferenceClient.Completed reply(String content, String finish) { return new InferenceClient.Completed(content, finish, 100, 50, Duration.ofMillis(5), 100); }
+    static InferenceClient.Completed reply(String content) { return new InferenceClient.Completed(content, "stop", 100, Math.max(50, content.codePointCount(0, content.length())), Duration.ofMillis(5), 100); }
+    static InferenceClient.Completed reply(String content, String finish) { return new InferenceClient.Completed(content, finish, 100, Math.max(50, content.codePointCount(0, content.length())), Duration.ofMillis(5), 100); }
 
     /** 코드포인트 수로 세는 대역. 실제 pin tokenizer 와 같이 짝 없는 surrogate 는 셀 수 없어 거부한다. */
     static final AnswerTokenCounting CODEPOINTS = text -> {

@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Response Composer 서술(SPEC §14.5 서술 2,816/128/T_cmp, §14.6 ②, §22.3). 입력은 Gateway 가 만든 결정론 근거 요약이고
+ * Response Composer 서술(SPEC §14.5 설정된 작성 예산, §14.6 ②, §22.3). 입력은 Gateway 가 만든 결정론 근거 요약이고
  * Source 원문은 user 메시지의 data 구획에만 둔다. 입력 조립 순서는 호출자 sanitizer 적용분 → {@link PromptReducer} → 관찰 → Client 내부 예산 assert 다.
  * 실패는 {@link ComposerOutcome} 으로만 돌려주며 대체 문장을 만들지 않는다. 사고 표지가 든 content 는 결과에 싣지 않는다.
  */
@@ -74,6 +74,7 @@ public final class ComposerService {
     private final InferenceClient inference;
     private final PromptReducer reducer;
     private final TokenBudgetPolicy.CallBudget budget;
+    private final int evidenceTokens;
     private final AnswerTokenCounting answers;
     private final ExpiryCheckpoint expiry;
     private final LlmCallObserver observer;
@@ -85,6 +86,7 @@ public final class ComposerService {
         this.inference = Objects.requireNonNull(inference, "inference");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
         this.budget = Objects.requireNonNull(policy, "policy").budget(CallType.COMPOSER);
+        this.evidenceTokens = policy.evidenceTokens();
         this.answers = Objects.requireNonNull(answers, "answers");
         this.expiry = Objects.requireNonNull(expiry, "expiry");
         this.observer = Objects.requireNonNull(observer, "observer");
@@ -101,13 +103,18 @@ public final class ComposerService {
         var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> messages(value, input.evidence(), input.coverage()));
         if (!reduction.withinBudget()) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         String data = reduction.messages().getLast().content();
+        // 이후 검색 단계가 선택한 근거도 설정한 상한을 넘겨 전송할 수 없습니다. 질문은 줄이지 않습니다.
+        try {
+            String evidence = ClassificationService.canonical(SchemaContracts.JSON.readTree(data).path("data"));
+            if (answers.count(evidence) > evidenceTokens) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
+        } catch (IllegalArgumentException uncountable) { return failed(ComposerOutcome.LLM_UNAVAILABLE, 0, reduction.steps()); }
         List<ChatMessage> messages = reduction.messages();
         int calls = 0;
         for (int attempt = 0; attempt < 2; attempt++) {
             expiry.assertLive(job.cancellation());
             InferenceClient.ChatOutcome outcome;
             try (var scope = observer.open(job.jobId(), CallType.COMPOSER, messages)) {
-                outcome = inference.chat(CallType.COMPOSER, messages, budget.requestMaxTokens());
+                outcome = inference.chat(CallType.COMPOSER, messages, budget.requestMaxTokens(), job.cancellation());
             }
             String failure = outcome instanceof InferenceClient.Completed answered ? AnswerCheck.failure(answered, budget, answers) : null;
             // 시도마다 같은 축소 단계(첫 조립 기준)를 함께 남긴다. 재시도 입력 계수는 Client 의 호출 직전 계수다.

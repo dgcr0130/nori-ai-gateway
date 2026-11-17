@@ -58,7 +58,8 @@ public abstract class StackContextSupport {
 
     protected void startApplication(Class<?>... additionalSources) {
         prepareSecurityCredentials();
-        var properties = new HashMap<String,Object>(securityProperties());
+        var properties = new HashMap<String,Object>(com.nori.ai.gateway.integration.testing.InferenceFixtures.properties());
+        properties.putAll(securityProperties());
         properties.putAll(Map.of("ai.gateway.capacity.max-running-jobs",1,"ai.gateway.capacity.generation-concurrency",1,
             "ai.gateway.capacity.queued-depth",4,"ai.gateway.capacity.queue-wait-limit","60s","ai.gateway.capacity.job-lifetime-limit","180s",
             "ai.gateway.inference.mode","disabled"));

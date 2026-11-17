@@ -69,7 +69,7 @@ class OfficialGgufCountParityTest {
         JsonNode file = GoldenResources.json(PromptTokenCounterGoldenTest.DIR + "input-audit-v4-v2.json");
         assertThat(file.path("renderer").asText()).isEqualTo("OLLAMA_GO_QWEN3_THINKING_V1");
         for (JsonNode row : file.path("rows")) audit.put(row.path("messagesSha256").asText(), row.path("inputTokens").asInt());
-        var counter = new PromptTokenCounter(new QwenChatTemplateRenderer(), tokenizer);
+        var counter = new PromptTokenCounter(com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer(), tokenizer);
         int compared = 0;
         for (String group : List.of("token", "usage")) {
             for (var entry : PromptTokenCounterGoldenTest.expandedMessages(group).entrySet()) {

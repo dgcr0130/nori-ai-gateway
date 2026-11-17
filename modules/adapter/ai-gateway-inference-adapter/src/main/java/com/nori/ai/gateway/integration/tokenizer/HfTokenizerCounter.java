@@ -15,8 +15,8 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
- * 생성 모델과 같은 Qwen3 tokenizer.json 을 DJL HuggingFace tokenizers 엔진으로 읽어 텍스트 토큰 수를 센다(Plan §3.5 엔진 재사용).
- * classpath 의 pin 파일 SHA-256 이 다르면 기동하지 않으며, SDK 의 원격 다운로드 분기는 오프라인 모드로 막는다.
+ * 설정한 로컬 tokenizer.json을 DJL HuggingFace tokenizers 엔진으로 읽어 텍스트 토큰 수를 센다(Plan §3.5 엔진 재사용).
+ * 설정한 파일 SHA-256이 다르면 기동하지 않으며, SDK 의 원격 다운로드 분기는 오프라인 모드로 막는다.
  * special/added token 은 tokenizer.json 정의대로 인식하고, 계수에는 별도 special token 을 덧붙이지 않는다(add_special_tokens=false).
  */
 @Component
@@ -29,6 +29,20 @@ public class HfTokenizerCounter implements AutoCloseable {
 
     private final HuggingFaceTokenizer tokenizer;
 
+    public HfTokenizerCounter(com.nori.ai.gateway.integration.inference.InferenceEndpointConfig endpoint) { this(endpoint.settings()); }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public HfTokenizerCounter(com.nori.ai.gateway.integration.inference.LlmSettings configuration) {
+        requireOfflineMode();
+        var settings = configuration.tokenCounting();
+        final byte[] bytes;
+        try { bytes = Files.readAllBytes(Path.of(settings.tokenizerFile())); }
+        catch (IOException failure) { throw new IllegalStateException("TOKENIZER_FILE_UNREADABLE"); }
+        if (!sha256(bytes).equalsIgnoreCase(settings.sha256())) throw new IllegalStateException("TOKENIZER_SHA_MISMATCH");
+        tokenizer = load(bytes);
+    }
+
+    /** 기존 오프라인 회귀 fixture의 로컬 자원 진입점입니다. 운영 빈은 필수 설정 생성자를 사용합니다. */
     public HfTokenizerCounter() { this(HfTokenizerCounter.class.getClassLoader(), RESOURCE, TOKENIZER_SHA256); }
 
     HfTokenizerCounter(ClassLoader loader, String resource, String expectedSha256) {

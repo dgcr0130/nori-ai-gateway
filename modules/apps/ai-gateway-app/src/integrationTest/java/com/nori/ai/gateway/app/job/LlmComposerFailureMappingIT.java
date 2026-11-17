@@ -25,7 +25,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
     @Test void blocksWithAComposerTransportFailureArePartialWithNarrativeUnavailableAndNoRetry() throws Exception {
         var chats = new AtomicInteger();
         stub.respond(request -> request.path().equals("/v1/chat/completions")
-            ? (chats.getAndIncrement() == 0 ? chat(wire("LQ", "EQP-001", null, null, null), 100_000) : new OllamaEndpointStub.Json(503, "{\"error\":\"busy\"}"))
+            ? (chats.getAndIncrement() == 0 ? chat(wire("LQ", "EQP-001", null, null, null), OllamaEndpointStub.promptTokens(request)) : new OllamaEndpointStub.Json(503, "{\"error\":\"busy\"}"))
             : OllamaEndpointStub.healthy(request));
         var job = admitUnarmed("composer-5xx", "EQP-001 상태 알려줘", windowOnly(), null);
         assertThat(terminal(job)).isEqualTo("PARTIAL");

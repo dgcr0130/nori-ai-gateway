@@ -1,34 +1,41 @@
 package com.nori.ai.gateway.integration.inference;
 
-import java.util.Arrays;
-import java.util.List;
+import com.nori.ai.gateway.integration.testing.InferenceFixtures;
+import java.time.Duration;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 
 class InferenceEndpointConfigTest {
-    private static final String DIGEST = "a".repeat(64);
-
-    @Test void acceptsOnlySchemeHostPortAndDerivesSdkAndReadinessUrlsExactlyOnce() {
-        var config = new InferenceEndpointConfig("http://192.168.0.160:11434", DIGEST);
-        assertThat(config.sdkBaseUrl()).isEqualTo("http://192.168.0.160:11434/v1");
-        assertThat(config.readinessUri()).hasToString("http://192.168.0.160:11434/api/ps");
-        assertThat(config.expectedGenerationDigest()).isEqualTo(DIGEST);
-        assertThat(config.toString()).doesNotContain("192.168.0.160", DIGEST);
-        assertThat(new InferenceEndpointConfig("https://inference.local:8443", DIGEST).sdkBaseUrl()).isEqualTo("https://inference.local:8443/v1");
+    @TempDir Path directory;
+    @Test void configuredPrefixIsUsedAsIsAndExplicitPortIsRequired() {
+        for (String url : new String[]{"http://127.0.0.1:1234/v1", "https://localhost:443/openai"}) {
+            var endpoint = new InferenceEndpointConfig(InferenceFixtures.settings(url));
+            assertThat(endpoint.sdkBaseUrl()).isEqualTo(url);
+            assertThat(endpoint.readinessUri().toString()).isEqualTo(url + "/models");
+            assertThat(endpoint.apiKey()).isNull();
+        }
+        for (String url : new String[]{"http://localhost/v1", "http://localhost:1234", "http://localhost:1234/v1/", "http://x:y@localhost:1234/v1", "file:///tmp/v1", "http://localhost:1/v1?q=x", "http://localhost:1/v1#x"})
+            assertThatThrownBy(() -> new InferenceEndpointConfig(InferenceFixtures.settings(url))).hasMessage("추론 endpoint 설정이 잘못되었습니다");
     }
-
-    @Test void rejectsMissingPathTrailingSlashV1PortlessAndOtherFormsWithoutEchoingTheValue() {
-        List<String> invalid = Arrays.asList(null, "", "  ", "http://192.168.0.160:11434/", "http://192.168.0.160:11434/v1", "http://192.168.0.160:11434/v1/",
-            "http://192.168.0.160", "192.168.0.160:11434", "ftp://192.168.0.160:11434", "http://user@192.168.0.160:11434",
-            "http://192.168.0.160:11434?x=1", "http://192.168.0.160:11434#f", "http://exa mple:1", "http://192.168.0.160:11434/api");
-        for (String value : invalid)
-            assertThatThrownBy(() -> new InferenceEndpointConfig(value, DIGEST)).as(String.valueOf(value))
-                .isInstanceOf(IllegalStateException.class).hasMessage("추론 endpoint 설정이 잘못되었습니다");
+    @Test void keyFileIsOptionalAndInvalidKeyNeverAppearsInFailure() throws Exception {
+        var original = InferenceFixtures.settings("http://127.0.0.1:1/v1");
+        Path key = directory.resolve("api.key"); Files.writeString(key, "fixture-key\n");
+        var settings = copy(original, key.toString(), original.requestTimeout(), original.contextTokens());
+        assertThat(new InferenceEndpointConfig(settings).apiKey()).isEqualTo("fixture-key");
+        Files.writeString(key, "invalid secret key");
+        assertThatThrownBy(() -> new InferenceEndpointConfig(settings)).hasMessage("추론 endpoint 설정이 잘못되었습니다");
+        assertThat(settings.toString()).doesNotContain("api.key");
     }
-
-    @Test void requiresTheDeploymentExpectedGenerationDigestInApiPsFormat() {
-        for (String digest : Arrays.asList(null, "", "A".repeat(64), "a".repeat(63), "sha256:" + "a".repeat(64), "g".repeat(64)))
-            assertThatThrownBy(() -> new InferenceEndpointConfig("http://127.0.0.1:1", digest)).as(String.valueOf(digest))
-                .isInstanceOf(IllegalStateException.class).hasMessage("추론 endpoint 설정이 잘못되었습니다");
+    static LlmSettings copy(LlmSettings s, String key, Duration timeout, int context) {
+        return new LlmSettings(s.baseUrl(),s.generationModel(),s.embeddingModel(),s.temperature(),context,timeout,key,s.tokenCounting(),s.budgets(),s.evidenceTokens(),s.generationConcurrency());
+    }
+    @Test void rejectsWindowOverflowAndTimeoutOutsideOneToSixtySeconds() {
+        var s=InferenceFixtures.settings("http://127.0.0.1:1/v1");
+        assertThatThrownBy(() -> copy(s,null,Duration.ofSeconds(60),8191)).isInstanceOf(IllegalArgumentException.class);
+        for (Duration timeout : new Duration[]{Duration.ZERO,Duration.ofMillis(999),Duration.ofSeconds(61)})
+            assertThatThrownBy(() -> copy(s,null,timeout,8192)).isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.*;
 class AllowlistLogFilterTest {
     private static final String READINESS_LOGGER = "com.nori.ai.gateway.integration.inference.InferenceReadinessService";
     private static final List<String> INFERENCE_ALERT_CODES = List.of("INFERENCE_ALERT_RAISED_MODEL_LOADING", "INFERENCE_ALERT_RAISED_INFERENCE_UNAVAILABLE",
-        "INFERENCE_ALERT_RAISED_MODEL_CONTEXT_MISMATCH", "INFERENCE_ALERT_RAISED_MODEL_DIGEST_MISMATCH", "INFERENCE_ALERT_CLEARED");
+        "INFERENCE_ALERT_CLEARED");
     private final LoggerContext context = (LoggerContext) org.slf4j.LoggerFactory.getILoggerFactory();
     private final AllowlistLogFilter filter = new AllowlistLogFilter();
     private final AllowlistJsonEncoder encoder = new AllowlistJsonEncoder();

@@ -62,8 +62,8 @@ public class JobConfiguration {
      * LLM 호출 시도 감사(SPEC §14.5·§12.3). 분류·Composer 가 같은 빈을 쓰고, 버전 값은 생성 모델 이름과 각 서비스가 읽는 Prompt 자원 이름이다.
      */
     @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
-    com.nori.ai.gateway.core.llm.LlmCallAudit llmCallAudit(com.nori.ai.gateway.app.observability.AuditRecorder audit){
-        return new com.nori.ai.gateway.app.job.LlmCallAuditRecorder(audit,com.nori.ai.gateway.integration.inference.InferenceEndpointConfig.GENERATION_MODEL,
+    com.nori.ai.gateway.core.llm.LlmCallAudit llmCallAudit(com.nori.ai.gateway.app.observability.AuditRecorder audit,com.nori.ai.gateway.integration.inference.InferenceEndpointConfig endpoint){
+        return new com.nori.ai.gateway.app.job.LlmCallAuditRecorder(audit,endpoint.settings().generationModel(),
             java.util.Map.of(com.nori.ai.gateway.core.budget.CallType.CLASSIFY,version(CLASSIFY_PROMPT),com.nori.ai.gateway.core.budget.CallType.COMPOSER,version(com.nori.ai.gateway.app.job.WorkflowExecutionConfiguration.COMPOSE_PROMPT)));
     }
     /** "prompts/classify-v3.txt" → "classify-v3". */

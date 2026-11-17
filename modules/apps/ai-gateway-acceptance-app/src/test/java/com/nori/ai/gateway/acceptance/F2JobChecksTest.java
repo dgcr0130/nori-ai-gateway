@@ -47,7 +47,7 @@ class F2JobChecksTest {
 
     @Test void overBudgetClassificationIsArmedWithoutAnyClassificationReplySoASentCallCannotLookLikeABudgetStop() throws Exception {
         try (var fixture = new F2LocalFixture()) {
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1).llmCall("CLASSIFY", false, 9_000, 5_120, null, "[]", "INPUT_BUDGET_EXCEEDED");
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1).llmCall("CLASSIFY", false, 9_000, 2_048, null, "[]", "INPUT_BUDGET_EXCEEDED");
             fixture.checks(Optional.empty()).run("AC-43-CLS");
             assertThat(types(fixture.armed.values().iterator().next())).containsExactly("COMPOSER");
             // 분류가 실제로 전송됐다면 고정 응답 유형 불일치로 LLM_UNAVAILABLE 이 된다.
@@ -58,7 +58,7 @@ class F2JobChecksTest {
             // 감사가 없거나 보낸 분류로 남으면 FAIL 이다.
             fixture.responder = entry -> new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-43-CLS")).hasMessage("F2_CLS_BUDGET_AUDIT");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1).llmCall("CLASSIFY", true, 9_000, 5_120, 9_000, "[]", "INPUT_BUDGET_EXCEEDED");
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1).llmCall("CLASSIFY", true, 9_000, 2_048, 9_000, "[]", "INPUT_BUDGET_EXCEEDED");
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-43-CLS")).hasMessage("F2_CLS_BUDGET_AUDIT");
         }
     }
@@ -78,13 +78,13 @@ class F2JobChecksTest {
         try (var fixture = new F2LocalFixture()) {
             fixture.scenarios.add(F2JobChecks.COMPOSER_OVERSIZE_SCENARIO);
             java.util.function.Supplier<F2LocalFixture.Outcome> base = () -> { var outcome = new F2LocalFixture.Outcome().failed("INPUT_BUDGET_EXCEEDED").watch("CLASSIFY", 0, 1); outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(Map.of("type", "table")))); return outcome; };
-            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 900, 5_120, 900, "[]", null);
+            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 900, 2_048, 900, "[]", null);
             fixture.checks(Optional.empty()).run("AC-43-COMP");
-            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 900, 5_120, 900, "[]", null).llmCall("COMPOSER", false, 4_000, 5_248, null, "[{\"stage\":3,\"beforeTokens\":6000,\"afterTokens\":4000}]", "INPUT_BUDGET_EXCEEDED");
+            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 900, 2_048, 900, "[]", null).llmCall("COMPOSER", false, 4_000, 3_072, null, "[{\"stage\":3,\"beforeTokens\":6000,\"afterTokens\":4000}]", "INPUT_BUDGET_EXCEEDED");
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-43-COMP")).hasMessage("F2_COMP_BUDGET_COMPOSER_AUDITED");
             fixture.responder = entry -> base.get();
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-43-COMP")).hasMessage("F2_COMP_BUDGET_CLASSIFY_AUDIT");
-            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 3_100, 5_120, 3_100, "[]", null);
+            fixture.responder = entry -> base.get().llmCall("CLASSIFY", true, 5_121, 2_048, 5_121, "[]", null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-43-COMP")).as("분류 입력이 상한을 넘으면 전제 위반").hasMessage("F2_COMP_BUDGET_CLASSIFY_AUDIT");
         }
     }
@@ -92,7 +92,7 @@ class F2JobChecksTest {
     private static final String REDUCED = "[{\"stage\":3,\"beforeTokens\":6200,\"afterTokens\":3400},{\"stage\":4,\"beforeTokens\":3400,\"afterTokens\":2700}]";
     private static F2LocalFixture.Outcome reducedComposer(int prompt) {
         return new F2LocalFixture.Outcome().watch("CLASSIFY", 0, 1).watch("COMPOSER", 0, 1)
-            .llmCall("CLASSIFY", true, 900, 5_120, 900, "[]", null).llmCall("COMPOSER", true, 2_700, 5_248, prompt, REDUCED, null);
+            .llmCall("CLASSIFY", true, 900, 2_048, 900, "[]", null).llmCall("COMPOSER", true, 2_700, 3_072, prompt, REDUCED, null);
     }
 
     @Test void composerReductionIsJudgedFromTheAuditRowsOfOneLiveJobWithAQuestionWatchOnly() throws Exception {
@@ -105,22 +105,22 @@ class F2JobChecksTest {
             assertThat(F2LiveSamples.snapshot()).singleElement().satisfies(sample -> assertThat(sample.leafId()).isEqualTo("AC-31"));
             fixture.responder = entry -> reducedComposer(2_650);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).as("서버 잘림").isInstanceOf(AssertionError.class).hasMessage("F2_AC31_SERVER_TRUNCATION");
-            fixture.responder = entry -> reducedComposer(2_700).llmCall("COMPOSER", true, 2_700, 5_248, 2_700, REDUCED, null);
+            fixture.responder = entry -> reducedComposer(2_700).llmCall("COMPOSER", true, 2_700, 3_072, 2_700, REDUCED, null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).hasMessage("F2_AC31_COMPOSER_CALLS");
             fixture.responder = entry -> { var outcome = reducedComposer(2_700); outcome.watch.removeIf(row -> row.get("callType").equals("COMPOSER")); return outcome; };
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).as("축소 금지 항목(현재 질문) 소실").hasMessage("F2_AC31_QUESTION_REDUCED");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("CLASSIFY", true, 3_200, 5_120, 3_200, "[]", null).llmCall("COMPOSER", true, 2_700, 5_248, 2_700, REDUCED, null);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("CLASSIFY", true, 5_200, 2_048, 5_200, "[]", null).llmCall("COMPOSER", true, 2_700, 3_072, 2_700, REDUCED, null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).as("상한을 넘은 호출이 하나라도 전송").hasMessage("F2_AC31_OVER_BUDGET_SENT");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_700, 5_248, 2_700, "[{\"stage\":3,\"beforeTokens\":6200,\"afterTokens\":3400},{\"stage\":4,\"beforeTokens\":3300,\"afterTokens\":2700}]", null);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_700, 3_072, 2_700, "[{\"stage\":3,\"beforeTokens\":6200,\"afterTokens\":3400},{\"stage\":4,\"beforeTokens\":3300,\"afterTokens\":2700}]", null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).as("단계 사이 계수 단절").hasMessage("F2_AC31_REDUCTION_RECORD");
             // 전제 미충족은 PASS 도 FAIL 도 아닌 NOT_RUN 이다.
-            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_000, 5_248, 2_000, "[]", null);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_000, 3_072, 2_000, "[]", null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).isInstanceOf(TestAbortedException.class).hasMessage("AC31_REDUCTION_NOT_EXERCISED");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().llmCall("CLASSIFY", true, 900, 5_120, 900, "[]", null);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().llmCall("CLASSIFY", true, 900, 2_048, 900, "[]", null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).isInstanceOf(TestAbortedException.class).hasMessage("AC31_COMPOSER_NOT_REACHED");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().llmCall("COMPOSER", false, 3_000, 5_248, null, REDUCED, "INPUT_BUDGET_EXCEEDED");
+            fixture.responder = entry -> new F2LocalFixture.Outcome().llmCall("COMPOSER", false, 3_000, 3_072, null, REDUCED, "INPUT_BUDGET_EXCEEDED");
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).isInstanceOf(TestAbortedException.class).hasMessage("AC31_REDUCTION_INSUFFICIENT");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_700, 5_248, null, REDUCED, null);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().watch("COMPOSER", 0, 1).llmCall("COMPOSER", true, 2_700, 3_072, null, REDUCED, null);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-31")).isInstanceOf(TestAbortedException.class).hasMessage("AC31_USAGE_MISSING");
         }
     }

@@ -105,7 +105,7 @@ public final class ClassificationService {
             expiry.assertLive(request.cancellation());
             InferenceClient.ChatOutcome outcome;
             try (var scope = observer.open(request.jobId(), CallType.CLASSIFY, messages)) {
-                outcome = inference.chat(CallType.CLASSIFY, messages, budget.requestMaxTokens());
+                outcome = inference.chat(CallType.CLASSIFY, messages, budget.requestMaxTokens(), request.cancellation());
             }
             Verdict verdict = outcome instanceof InferenceClient.Completed completed ? judge(completed, references, zone) : null;
             // 보낸 호출은 취소와 무관하게 그 시도의 감사를 먼저 남긴다(분류는 축소 단계가 없다).

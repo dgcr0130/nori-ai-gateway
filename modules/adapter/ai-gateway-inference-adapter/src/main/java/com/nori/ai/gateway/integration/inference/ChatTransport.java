@@ -12,6 +12,8 @@ public interface ChatTransport {
     /** 실패는 원인 예외 그대로 던진다. Client 가 클래스명만 남기고 변환한다. */
     Response send(CallType type, List<ChatMessage> messages, int maxTokens);
 
+    default Response send(CallType type, List<ChatMessage> messages, int maxTokens, java.time.Duration timeout) { return send(type, messages, maxTokens); }
+
     /** 응답이 비었으면 {@code content} 가 null 이다. usage 가 없으면 토큰 수는 null 이다. */
     record Response(String content, String finishReason, Integer promptTokens, Integer completionTokens) {
         @Override public String toString() { return "Response[보호됨]"; }

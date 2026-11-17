@@ -54,7 +54,7 @@ class ClassificationServiceTest {
             List.of(EvidenceNeed.H), java.util.Set.of(), AnswerMode.B, Classification.WIRE_V3));
         assertThat(classified.classification().q().codePoints().toArray()).isEqualTo(query.codePoints().toArray());
         var sent = client.sent.getFirst();
-        assertThat(sent.maxTokens()).isEqualTo(5_120);
+        assertThat(sent.maxTokens()).isEqualTo(2_048);
         assertThat(sent.messages().getFirst().content()).isEqualTo("분류 지시\nRegistry 참고:\nboundSystem: X\n");
         String user = sent.messages().get(1).content();
         assertThat(user).contains("\"qRefCatalog\":[\"Q1\"]").startsWith("{\"context\":{\"referenceTime\":\"2026-10-20T10:00:00+09:00\",\"selectedResourceRefs\":[],\"timeWindow\":null,\"timezone\":\"+09:00\"}");
@@ -90,7 +90,7 @@ class ClassificationServiceTest {
         cases.put("eqp 65", reply(wire("LQ", "E".repeat(65), null, null, "Q1")));
         cases.put("length", reply(wire("LQ", null, null, null, "Q1"), "length"));
         cases.put("other finish", reply(wire("LQ", null, null, null, "Q1"), "tool_calls"));
-        cases.put("answer over 256", reply("{\"t\":\"LQ\"," + " ".repeat(260) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\",\"n\":[\"S\"],\"a\":\"B\"}"));
+        cases.put("answer over 768", reply("{\"t\":\"LQ\"," + " ".repeat(780) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\",\"n\":[\"S\"],\"a\":\"B\"}"));
         cases.put("think marker", reply("</think>" + wire("LQ", null, null, null, "Q1")));
         cases.put("not json", reply("LQ 입니다"));
         for (var entry : cases.entrySet()) {
@@ -99,7 +99,7 @@ class ClassificationServiceTest {
             assertThat(result).as(entry.getKey()).isEqualTo(new ClassificationService.Rejected(ErrorCode.PLAN_INVALID, 2));
             assertThat(client.sent).as(entry.getKey()).hasSize(2);
         }
-        var budget = new ScriptedClient(reply("{\"t\":\"LQ\"," + " ".repeat(260) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":null,\"n\":[\"S\"],\"a\":\"B\"}"), reply(wire("GQ", null, null, null, null)));
+        var budget = new ScriptedClient(reply("{\"t\":\"LQ\"," + " ".repeat(780) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":null,\"n\":[\"S\"],\"a\":\"B\"}"), reply(wire("GQ", null, null, null, null)));
         service(budget).classify(request("질문", CONTEXT));
         assertThat(budget.sent.get(1).messages().getLast().content()).contains("(오류: USAGE_EXCEEDS_LIMIT)");
     }
@@ -124,13 +124,16 @@ class ClassificationServiceTest {
 
     /** SPEC §14.5: 호출 직전 assert 에 도달한 시도(재시도 포함)마다 감사 1건, 보내지 않은 시도는 sent=false·usage 없음, 원문 0. */
     @Test void everyAttemptIncludingRetriesFailuresAndBudgetStopsLeavesExactlyOneTextFreeAudit() {
-        var retried = new ScriptedClient(reply("{\"t\":\"LQ\",\"eqp\":\"FIRST-SECRET\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}"), reply(wire("LQ", "SECOND", null, null, null)));
+        var firstReply = reply("{\"t\":\"LQ\",\"eqp\":\"FIRST-SECRET\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}");
+        var secondReply = reply(wire("LQ", "SECOND", null, null, null));
+        var retried = new ScriptedClient(firstReply, secondReply);
         service(retried).classify(request("질문", CONTEXT));
         assertThat(audits).hasSize(2).allSatisfy(audit -> {
             assertThat(audit.callType()).isEqualTo(CallType.CLASSIFY); assertThat(audit.sent()).isTrue(); assertThat(audit.inputTokens()).isEqualTo(100);
-            assertThat(audit.maxTokens()).isEqualTo(5_120); assertThat(audit.promptTokens()).isEqualTo(100); assertThat(audit.completionTokens()).isEqualTo(50);
+            assertThat(audit.maxTokens()).isEqualTo(2_048); assertThat(audit.promptTokens()).isEqualTo(100);
             assertThat(audit.reduction()).isEmpty(); assertThat(audit.jobId()).isEqualTo("job-1"); assertThat(audit.conversationId()).isEqualTo("conversation"); assertThat(audit.scope()).isSameAs(SCOPE);
         });
+        assertThat(audits).extracting(LlmCallAudit.Attempt::completionTokens).containsExactly(firstReply.completionTokens(),secondReply.completionTokens());
         assertThat(audits.get(0).status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.FAILED); assertThat(audits.get(0).errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.PLAN_INVALID);
         assertThat(audits.get(1).status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.SUCCESS); assertThat(audits.get(1).errorCode()).isNull();
         assertThat(audits.toString()).doesNotContain("FIRST-SECRET", "SECOND", "질문");

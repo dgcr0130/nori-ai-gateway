@@ -52,9 +52,9 @@
 |---|---|
 | `ok=true` | 회차를 진행한다. |
 | `qwen3:4b` 또는 `bge-m3` 미상주 | (b) 모델 적재 절차로 간다. |
-| `qwen3:4b` digest 불일치 | 서버의 모델은 소유자 영역이다. 적재·`pull` 로 고치지 않고 기록한 뒤 회차를 보류한다(readiness 는 fail-closed 로 `READY` 가 아니다). |
-| `qwen3:4b` `context_length≠8192` | 서버 설정의 소유자 영역이다. 서버를 바꾸지 않고 기록한 뒤 회차를 보류한다(readiness `MODEL_CONTEXT_MISMATCH`). |
-| exit 2 `PS_SUMMARY_FETCH_FAILED`·`PS_SUMMARY_PARSE_FAILED` | API 무응답·형식 오류(readiness `INFERENCE_UNAVAILABLE`)다. 서비스를 재시작하지 않고 기록한 뒤 회차를 보류한다. |
+| `qwen3:4b` digest 불일치 | 서버의 모델은 소유자 영역이다. 적재·`pull` 로 고치지 않고 기록한 뒤 회차를 보류한다(이 수동 서버 점검과 별개로 Gateway 공통 readiness는 digest를 조회하지 않는다). |
+| `qwen3:4b` `context_length≠8192` | 서버 설정의 소유자 영역이다. 서버를 바꾸지 않고 기록한 뒤 회차를 보류한다(Gateway는 컨텍스트를 설정 예산과 요청 초과 거절로 관리하며 전용 서버 조회 결과를 readiness에 사용하지 않는다). |
+| exit 2 `PS_SUMMARY_FETCH_FAILED`·`PS_SUMMARY_PARSE_FAILED` | 수동 서버 API 점검의 무응답·형식 오류다. Gateway readiness는 공통 API 요청으로 별도 판정한다. 서비스를 재시작하지 않고 기록한 뒤 회차를 보류한다. |
 
 ## (b) 모델 적재 절차
 

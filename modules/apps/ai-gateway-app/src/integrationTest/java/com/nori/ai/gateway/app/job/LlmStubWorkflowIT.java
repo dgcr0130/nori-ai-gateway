@@ -36,7 +36,7 @@ class LlmStubWorkflowIT extends LlmStubSupport {
     }
 
     @Test @Tag("AC-32-SCHEMA") @Tag("AC-32-LENGTH") void twoSchemaOrLengthFailuresEndAsPlanInvalidWithoutAnyTool() throws Exception {
-        var length = new TestHookRegistry.LlmReply(CallType.CLASSIFY, "{\"t\":\"LQ\",\"eqp\":\"EQP-0", "length", null, 5_120);
+        var length = new TestHookRegistry.LlmReply(CallType.CLASSIFY, "{\"t\":\"LQ\",\"eqp\":\"EQP-0", "length", null, 2_048);
         for (var reply : List.of(classify(MISSING_KEY), length)) {
             calls().reset();
             var job = admitScripted("fail-" + reply.finishReason(), "EQP-001 상태 알려줘", windowOnly(), List.of(reply, reply), Optional.empty(), null);

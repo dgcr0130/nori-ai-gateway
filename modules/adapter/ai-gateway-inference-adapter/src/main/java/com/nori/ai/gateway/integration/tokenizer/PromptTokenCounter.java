@@ -9,10 +9,10 @@ import org.springframework.stereotype.Component;
 /** 생성 모델 chat template 렌더 결과 전체를 pin tokenizer 로 센다(사전 토큰 계수 core 포트 구현). */
 @Component
 public class PromptTokenCounter implements PromptTokenCounting {
-    private final QwenChatTemplateRenderer renderer;
+    private final ConfiguredChatTemplateRenderer renderer;
     private final HfTokenizerCounter tokenizer;
 
-    public PromptTokenCounter(QwenChatTemplateRenderer renderer, HfTokenizerCounter tokenizer) {
+    public PromptTokenCounter(ConfiguredChatTemplateRenderer renderer, HfTokenizerCounter tokenizer) {
         this.renderer = Objects.requireNonNull(renderer, "renderer");
         this.tokenizer = Objects.requireNonNull(tokenizer, "tokenizer");
     }

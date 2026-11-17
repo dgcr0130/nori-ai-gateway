@@ -162,7 +162,7 @@ class AppContextWiringIT extends StackContextSupport {
         for (Class<?> type : List.of(com.nori.ai.gateway.core.budget.TokenBudgetPolicy.class, com.nori.ai.gateway.core.budget.PromptReducer.class,
                 com.nori.ai.gateway.core.budget.PreCallBudgetAssert.class, com.nori.ai.gateway.core.budget.TruncationDetector.class,
                 com.nori.ai.gateway.core.budget.PromptTokenCounting.class, com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter.class,
-                com.nori.ai.gateway.integration.tokenizer.QwenChatTemplateRenderer.class)) assertThat(context.getBeansOfType(type)).as(type.getName()).hasSize(1);
+                com.nori.ai.gateway.integration.tokenizer.ConfiguredChatTemplateRenderer.class)) assertThat(context.getBeansOfType(type)).as(type.getName()).hasSize(1);
         var guard = context.getBean(com.nori.ai.gateway.core.budget.PreCallBudgetAssert.class);
         var counting = context.getBean(com.nori.ai.gateway.core.budget.PromptTokenCounting.class);
         var policy = context.getBean(com.nori.ai.gateway.core.budget.TokenBudgetPolicy.class);
@@ -171,12 +171,12 @@ class AppContextWiringIT extends StackContextSupport {
         assertThat(org.springframework.test.util.ReflectionTestUtils.getField(guard, "policy")).isSameAs(policy);
         assertThat(org.springframework.test.util.ReflectionTestUtils.getField(context.getBean(com.nori.ai.gateway.core.budget.PromptReducer.class), "counter")).isSameAs(counting);
         assertThat(org.springframework.test.util.ReflectionTestUtils.getField(counting, "tokenizer")).isSameAs(context.getBean(com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter.class));
-        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(counting, "renderer")).isSameAs(context.getBean(com.nori.ai.gateway.integration.tokenizer.QwenChatTemplateRenderer.class));
-        assertThat(policy.budget(com.nori.ai.gateway.core.budget.CallType.COMPOSER).requestMaxTokens()).isEqualTo(5_248);
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(counting, "renderer")).isSameAs(context.getBean(com.nori.ai.gateway.integration.tokenizer.ConfiguredChatTemplateRenderer.class));
+        assertThat(policy.budget(com.nori.ai.gateway.core.budget.CallType.COMPOSER).requestMaxTokens()).isEqualTo(3_072);
         // P03 v4 token-golden TG01-KO(20261104T044320Z-diag-v2-t0-b): Ollama usage.prompt_tokens = 40
         var golden = List.of(new com.nori.ai.gateway.core.budget.ChatMessage(com.nori.ai.gateway.core.budget.ChatMessage.Role.SYSTEM, "너는 TC 설비 도우미다."),
             new com.nori.ai.gateway.core.budget.ChatMessage(com.nori.ai.gateway.core.budget.ChatMessage.Role.USER, "포토 설비의 오늘 상태를 간단히 알려줘."));
-        assertThat(guard.check(com.nori.ai.gateway.core.budget.CallType.CLASSIFY, golden, 5_120)).isEqualTo(new com.nori.ai.gateway.core.budget.PreCallBudgetAssert.Allowed(40));
+        assertThat(guard.check(com.nori.ai.gateway.core.budget.CallType.CLASSIFY, golden, 2_048)).isEqualTo(new com.nori.ai.gateway.core.budget.PreCallBudgetAssert.Allowed(40));
     }
 
     @Test void actualApplicationRejectsMissingHistoryBeforeLaterRunner() throws Exception {
@@ -382,7 +382,7 @@ class AppContextWiringIT extends StackContextSupport {
     private Map<String,Object> inferenceProperties = Map.of();
     @Override protected Map<String,Object> extraApplicationProperties() { return inferenceProperties; }
     private static final List<Class<?>> INFERENCE_BEANS = List.of(com.nori.ai.gateway.integration.inference.InferenceEndpointConfig.class,
-        com.nori.ai.gateway.integration.inference.InferenceModelConfiguration.class, com.nori.ai.gateway.integration.inference.OllamaReadinessProbe.class,
+        com.nori.ai.gateway.integration.inference.InferenceModelConfiguration.class, com.nori.ai.gateway.integration.inference.OpenAiReadinessProbe.class,
         com.nori.ai.gateway.integration.inference.InferenceReadinessService.class, com.nori.ai.gateway.integration.inference.SpringAiOpenAiInferenceClient.class,
         com.nori.ai.gateway.app.hooks.EmbeddingProbeHook.class, com.nori.ai.gateway.integration.inference.SpringAiChatTransport.class);
     private Map<String,Object> hookProperties() throws Exception {
@@ -398,7 +398,7 @@ class AppContextWiringIT extends StackContextSupport {
             var hooks = hookProperties();
             inferenceProperties = hooks;
             startApplication();
-            assertThat(context.getEnvironment().getProperty("ai.gateway.inference.baseUrl")).as("baseUrl 없이 기동").isNull();
+            assertThat(context.getEnvironment().getProperty("ai.gateway.llm.baseUrl")).as("disabled의 공통 계수 설정은 로컬 주소만 가진다").isEqualTo("http://127.0.0.1:1/v1");
             for (Class<?> type : INFERENCE_BEANS) assertThat(context.getBeansOfType(type)).as(type.getName()).isEmpty();
             for (Class<?> type : List.of(org.springframework.ai.openai.OpenAiChatModel.class, org.springframework.ai.openai.OpenAiEmbeddingModel.class,
                     com.nori.ai.gateway.core.port.InferenceClient.class, com.nori.ai.gateway.integration.inference.ChatTransport.class,
@@ -407,7 +407,7 @@ class AppContextWiringIT extends StackContextSupport {
             context.close(); context = null;
             // 값이 있어도 disabled 는 읽지 않으므로 endpoint 연결 시도 0 이다.
             var withEndpoint = new HashMap<String,Object>(hooks);
-            withEndpoint.putAll(Map.of("ai.gateway.inference.baseUrl", stub.baseUrl(), "ai.gateway.inference.generationModelDigest", com.nori.ai.gateway.app.inference.OllamaEndpointStub.EXPECTED_DIGEST));
+            withEndpoint.putAll(Map.of("ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
             inferenceProperties = withEndpoint;
             startApplication();
             for (Class<?> type : INFERENCE_BEANS) assertThat(context.getBeansOfType(type)).as(type.getName()).isEmpty();
@@ -421,8 +421,7 @@ class AppContextWiringIT extends StackContextSupport {
             database = new com.nori.ai.gateway.persistence.testing.PgTestDatabase(System.getProperty("aigw.pgTestImage"), java.nio.file.Path.of(System.getProperty("aigw.rootDir"))).start();
             database.bootstrap(); database.migrate();
             var properties = new HashMap<String,Object>(hookProperties());
-            properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.inference.baseUrl", stub.baseUrl(),
-                "ai.gateway.inference.generationModelDigest", com.nori.ai.gateway.app.inference.OllamaEndpointStub.EXPECTED_DIGEST));
+            properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
             inferenceProperties = properties;
             startApplication();
             for (Class<?> type : INFERENCE_BEANS) assertThat(context.getBeansOfType(type)).as(type.getName()).hasSize(1);
@@ -445,9 +444,10 @@ class AppContextWiringIT extends StackContextSupport {
             while (!readiness.ready() && System.nanoTime() < deadline) Thread.sleep(20);
             assertThat(readiness.ready()).isTrue();
             // 실제 호출 경로 1개: 예산 guard(실제 tokenizer) → SpringAiChatTransport → OpenAiChatModel → stub /v1/chat/completions
+            readiness.stop();stub.clear();
             var golden = List.of(new com.nori.ai.gateway.core.budget.ChatMessage(com.nori.ai.gateway.core.budget.ChatMessage.Role.SYSTEM, "너는 TC 설비 도우미다."),
                 new com.nori.ai.gateway.core.budget.ChatMessage(com.nori.ai.gateway.core.budget.ChatMessage.Role.USER, "포토 설비의 오늘 상태를 간단히 알려줘."));
-            assertThat(client.chat(com.nori.ai.gateway.core.budget.CallType.CLASSIFY, golden, 5_120)).isInstanceOf(com.nori.ai.gateway.core.port.InferenceClient.Completed.class);
+            assertThat(client.chat(com.nori.ai.gateway.core.budget.CallType.CLASSIFY, golden, 2_048)).isInstanceOf(com.nori.ai.gateway.core.port.InferenceClient.Completed.class);
             assertThat(stub.count("/v1/chat/completions")).isOne();
         }
     }
@@ -470,8 +470,7 @@ class AppContextWiringIT extends StackContextSupport {
         try (var stub = new com.nori.ai.gateway.app.inference.OllamaEndpointStub()) {
             database = new com.nori.ai.gateway.persistence.testing.PgTestDatabase(System.getProperty("aigw.pgTestImage"), java.nio.file.Path.of(System.getProperty("aigw.rootDir"))).start();
             database.bootstrap(); database.migrate();
-            inferenceProperties = Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.inference.baseUrl", stub.baseUrl(),
-                "ai.gateway.inference.generationModelDigest", com.nori.ai.gateway.app.inference.OllamaEndpointStub.EXPECTED_DIGEST);
+            inferenceProperties = Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1");
             startApplication();
             var client = context.getBean(com.nori.ai.gateway.core.port.InferenceClient.class);
             assertThat(context.getBeanNamesForType(com.nori.ai.gateway.integration.inference.ChatTransport.class)).containsExactly("springAiChatTransport");

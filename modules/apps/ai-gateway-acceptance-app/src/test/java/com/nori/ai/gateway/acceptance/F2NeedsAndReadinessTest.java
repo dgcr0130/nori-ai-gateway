@@ -40,7 +40,7 @@ class F2NeedsAndReadinessTest {
             assertThat(maximum.path("usage").path("completionTokens").asInt()).as("ⓞ 하네스 tokenizer 계수를 그대로 무장").isEqualTo(120);
             assertThat(fixture.questions.getLast()).contains("\"" + "검".repeat(256) + "\"");
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-NEEDS")).hasMessage("NEEDS_CASE_UNOBSERVED_do");
-            assertThatThrownBy(() -> fixture.checks(Optional.of(257)).run("AC-32-NEEDS")).isInstanceOf(AssertionError.class).hasMessage("F2_NEEDS_MAX_WIRE_BUDGET");
+            assertThatThrownBy(() -> fixture.checks(Optional.of(769)).run("AC-32-NEEDS")).isInstanceOf(AssertionError.class).hasMessage("F2_NEEDS_MAX_WIRE_BUDGET");
             fixture.responder = entry -> needs(entry, true);
             assertThatThrownBy(() -> fixture.checks(Optional.of(120)).run("AC-32-NEEDS")).isInstanceOf(AssertionError.class).hasMessage("F2_NEEDS_SERVER_ADDED_c");
         }
@@ -50,19 +50,13 @@ class F2NeedsAndReadinessTest {
 
     @Test void readinessLeavesUseOnlyTheStubHookObserve503AndAlwaysRestoreReady() throws Exception {
         try (var fixture = new F2LocalFixture()) {
-            readiness(fixture, (code, since) -> code.equals("INFERENCE_ALERT_RAISED_MODEL_CONTEXT_MISMATCH") ? 1 : 0).run("AC-33-CTX");
-            assertThat(fixture.readiness).isEqualTo("READY"); assertThat(fixture.jobs).isZero();
             readiness(fixture, (code, since) -> 0).run("AC-44");
             readiness(fixture, (code, since) -> 0).run("AC-33-LOADING");
-            readiness(fixture, (code, since) -> code.equals("INFERENCE_ALERT_RAISED_MODEL_DIGEST_MISMATCH") ? 1 : 0).run("AC-33-DIGEST");
-            fixture.retryAfter = false;
-            assertThatThrownBy(() -> readiness(fixture, (code, since) -> code.endsWith("DIGEST_MISMATCH") ? 1 : 0).run("AC-33-DIGEST")).hasMessage("F2_ADMISSION_RETRY_AFTER_MODEL_DIGEST_MISMATCH");
-            assertThat(fixture.readiness).as("실패해도 OFF 로 되돌린다").isEqualTo("READY");
-            readiness(fixture, (code, since) -> code.endsWith("CONTEXT_MISMATCH") ? 1 : 0).run("AC-33-CTX");
-            fixture.retryAfter = true;
-            assertThatThrownBy(() -> readiness(fixture, (code, since) -> code.endsWith("CONTEXT_MISMATCH") ? 2 : 0).run("AC-33-CTX")).hasMessage("F2_IMMEDIATE_ALERT_MODEL_CONTEXT_MISMATCH");
-            assertThatThrownBy(() -> readiness(fixture, F2ReadinessChecks.unavailableAlerts()).run("AC-33-CTX")).isInstanceOf(TestAbortedException.class).hasMessage("LOKI_READBACK_MISSING");
+            fixture.retryAfter=false;
+            assertThatThrownBy(() -> readiness(fixture,(code,since)->0).run("AC-44")).hasMessage("F2_ADMISSION_RETRY_AFTER_INFERENCE_UNAVAILABLE");
             assertThat(fixture.readiness).isEqualTo("READY");
+            fixture.retryAfter=true;
+            assertThatThrownBy(() -> readiness(fixture,F2ReadinessChecks.unavailableAlerts()).run("AC-33-PERSIST")).isInstanceOf(TestAbortedException.class).hasMessage("LOKI_READBACK_MISSING");
         }
     }
 
@@ -80,8 +74,8 @@ class F2NeedsAndReadinessTest {
     @Test void readinessRestorationFailureIsReportedOnlyWhenTheLeafItselfPassed() throws Exception {
         try (var fixture = new F2LocalFixture()) {
             var calls = new AtomicBoolean();
-            var checks = readiness(fixture, (code, since) -> { if (calls.getAndSet(true)) return 1; fixture.restoredState = "INFERENCE_UNAVAILABLE"; return 1; });
-            assertThatThrownBy(() -> checks.run("AC-33-CTX")).hasMessage("F2_READINESS_NOT_RESTORED");
+            var checks = readiness(fixture, (code, since) -> { if (code.equals("INFERENCE_ALERT_CLEARED")) return 0; fixture.restoredState = "INFERENCE_UNAVAILABLE"; return 1; });
+            assertThatThrownBy(() -> checks.run("AC-33-PERSIST")).hasMessage("F2_READINESS_NOT_RESTORED");
         }
     }
 }

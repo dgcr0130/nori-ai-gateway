@@ -36,7 +36,7 @@ class F2SuiteTest {
 
     @Test void productionLauncherDiscoversExactlyTheCatalogF2LeavesWithCatalogLabelsAndOneMeasurementTest() throws Exception {
         var catalog = catalog(); var tests = discover("suite-F2");
-        assertThat(tests).hasSize(23);
+        assertThat(tests).hasSize(21);
         var actual = new TreeSet<String>(); int measurements = 0;
         for (var test : tests) {
             var tags = tags(test); assertThat(tags).contains("suite-F2", "stage-F2").doesNotContain("suite-F2-OUTAGE");
@@ -50,7 +50,10 @@ class F2SuiteTest {
             if (F2Runtime.READINESS.contains(leaf)) assertThat(labels).as(leaf + " readiness stub 수단").contains("LLM_STUB");
         }
         assertThat(measurements).isOne();
-        assertThat(actual).containsExactlyInAnyOrderElementsOf(strings(catalog.path("producerIndex").path("F2")));
+        // 과거 catalog 기록은 보존하고 제거한 서버 전용 준비 검사 두 건만 현재 producer에서 제외합니다.
+        var retired=Set.of("AC-33-CTX","AC-33-DIGEST");
+        assertThat(actual).doesNotContainAnyElementsOf(retired);
+        assertThat(actual).containsExactlyInAnyOrderElementsOf(strings(catalog.path("producerIndex").path("F2")).stream().filter(leaf->!retired.contains(leaf)).toList());
     }
 
     @Test void liveMeasurementLeavesRunBeforeStubAndReadinessStubLeavesRunLast() throws Exception {
@@ -63,7 +66,8 @@ class F2SuiteTest {
         var sequence = List.copyOf(order.values());
         assertThat(sequence.subList(0, 4)).containsExactlyInAnyOrder("AC-22-LIVE", "AC-29", "AC-38-F2", "AC-31");
         assertThat(sequence.get(4)).isEqualTo("measurement-f2-llm-latency-samples");
-        assertThat(sequence.subList(sequence.size() - 3, sequence.size())).containsExactlyInAnyOrder("AC-33-CTX", "AC-33-DIGEST", "AC-33-PERSIST");
+        assertThat(sequence.getLast()).isEqualTo("AC-33-PERSIST");
+        assertThat(sequence).doesNotContain("AC-33-CTX","AC-33-DIGEST");
     }
 
     @Test void outageSuiteRunsOnlyTheLeafOfTheRequestedPhaseMatchingTheCatalogComponent() throws Exception {

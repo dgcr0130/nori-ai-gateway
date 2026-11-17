@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * P22 embedding 프로필 측정 hook(Plan §4.5 M-5). 배포 Gateway 의 실제 {@link InferenceClient#embed} 를 고정 입력으로 1회 호출해
- * 차원 수와 readiness 가 마지막으로 읽은 bge-m3 digest 만 돌려준다(벡터 값·입력·주소 반환 0, 요청 본문 미사용).
+ * 차원 수를 돌려주며 공통 API에서 제공하지 않는 기존 modelDigest는 null로 유지한다(벡터 값·입력·주소 반환 0, 요청 본문 미사용).
  */
 @RestController
 @RequestMapping("/__test")
@@ -36,7 +36,7 @@ public final class EmbeddingProbeHook {
         catch (InferenceClient.EmbeddingFailed failed) { return ResponseEntity.status(503).body(Map.of("reason", failed.reason().name())); }
         var response = new LinkedHashMap<String,Object>();
         response.put("dimension", vectors.getFirst().length);
-        response.put("modelDigest", readiness.snapshot().embeddingDigest());
+        response.put("modelDigest", null);
         return ResponseEntity.ok(response);
     }
 }

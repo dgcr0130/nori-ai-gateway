@@ -19,12 +19,17 @@ import org.springframework.ai.openai.OpenAiChatOptions;
  */
 public final class SpringAiChatTransport implements ChatTransport {
     private final OpenAiChatModel model;
+    private final com.nori.ai.gateway.integration.tokenizer.ConfiguredChatTemplateRenderer renderer;
 
-    public SpringAiChatTransport(OpenAiChatModel model) { this.model = Objects.requireNonNull(model, "model"); }
+    public SpringAiChatTransport(OpenAiChatModel model, com.nori.ai.gateway.integration.tokenizer.ConfiguredChatTemplateRenderer renderer) { this.model = Objects.requireNonNull(model, "model"); this.renderer = renderer; }
 
     @Override public Response send(CallType type, List<ChatMessage> messages, int maxTokens) {
-        OpenAiChatOptions options = model.getOptions().mutate().maxTokens(maxTokens).build();
-        var response = model.call(new Prompt(messages.stream().map(SpringAiChatTransport::message).toList(), options));
+        return send(type, messages, maxTokens, model.getOptions().getTimeout());
+    }
+
+    @Override public Response send(CallType type, List<ChatMessage> messages, int maxTokens, java.time.Duration timeout) {
+        OpenAiChatOptions options = model.getOptions().mutate().maxTokens(maxTokens).timeout(timeout).build();
+        var response = model.call(new Prompt(renderer.normalize(messages).stream().map(SpringAiChatTransport::message).toList(), options));
         var result = response == null ? null : response.getResult();
         var usage = response == null || response.getMetadata() == null ? null : response.getMetadata().getUsage();
         Integer promptTokens = usage == null ? null : usage.getPromptTokens(), completionTokens = usage == null ? null : usage.getCompletionTokens();

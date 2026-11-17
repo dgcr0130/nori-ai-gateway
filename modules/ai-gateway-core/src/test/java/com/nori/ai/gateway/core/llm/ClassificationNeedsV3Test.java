@@ -38,7 +38,7 @@ class ClassificationNeedsV3Test {
         var result = classify(client, CONTEXT);
         assertThat(result).isInstanceOf(ClassificationService.Classified.class);
         assertThat(client.sent).as("재시도 0건").hasSize(1);
-        assertThat(client.sent.getFirst().maxTokens()).isEqualTo(5_120);
+        assertThat(client.sent.getFirst().maxTokens()).isEqualTo(2_048);
         return ((ClassificationService.Classified) result).classification();
     }
 

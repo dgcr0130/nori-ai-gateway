@@ -31,7 +31,7 @@ class PromptTokenCounterGoldenTest {
 
     private static HfTokenizerCounter tokenizer;
     private static PromptTokenCounter counter;
-    private static final QwenChatTemplateRenderer renderer = new QwenChatTemplateRenderer();
+    private static final ConfiguredChatTemplateRenderer renderer = com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer();
 
     @BeforeAll static void load() { tokenizer = new HfTokenizerCounter(); counter = new PromptTokenCounter(renderer, tokenizer); }
     @AfterAll static void close() { tokenizer.close(); }
@@ -48,12 +48,12 @@ class PromptTokenCounterGoldenTest {
 
     @Test void goldenCopiesAreByteIdenticalAndBoundToThePinnedTokenizerTemplateAndModel() {
         COPY_SHA256.forEach((name, sha) -> assertThat(GoldenResources.sha256(DIR + name)).as(name).isEqualTo(sha));
-        assertThat(QwenChatTemplateRenderer.TEMPLATE_SHA256).isEqualTo(COPY_SHA256.get("qwen3-4b.template"));
-        assertThat(new String(GoldenResources.bytes(DIR + "qwen3-4b.template.sha256")).trim()).startsWith(QwenChatTemplateRenderer.TEMPLATE_SHA256);
+        assertThat(com.nori.ai.gateway.integration.testing.InferenceFixtures.TEMPLATE_SHA256).isEqualTo(COPY_SHA256.get("qwen3-4b.template"));
+        assertThat(new String(GoldenResources.bytes(DIR + "qwen3-4b.template.sha256")).trim()).startsWith(com.nori.ai.gateway.integration.testing.InferenceFixtures.TEMPLATE_SHA256);
         for (String binding : List.of("token-golden.run-binding.json", "usage.run-binding.json")) {
             JsonNode runtime = GoldenResources.json(DIR + binding).path("runtimeManifest");
             assertThat(runtime.path("tokenizerSha256").asText()).isEqualTo(HfTokenizerCounter.TOKENIZER_SHA256);
-            assertThat(runtime.path("templateSha256").asText()).isEqualTo(QwenChatTemplateRenderer.TEMPLATE_SHA256);
+            assertThat(runtime.path("templateSha256").asText()).isEqualTo(com.nori.ai.gateway.integration.testing.InferenceFixtures.TEMPLATE_SHA256);
             assertThat(runtime.path("modelDigest").asText()).isEqualTo(MODEL_DIGEST);
             assertThat(GoldenResources.json(DIR + binding).path("parameterManifest").path("contextTokens").asInt()).isEqualTo(8_192);
         }
@@ -69,7 +69,7 @@ class PromptTokenCounterGoldenTest {
             String id = row.path("id").asText();
             JsonNode input = messages.get(id);
             assertThat(GoldenResources.messagesSha256(input)).as("%s 입력 결속", id).isEqualTo(row.path("messagesSha256").asText());
-            assertThat(row.path("templateSha256").asText()).isEqualTo(QwenChatTemplateRenderer.TEMPLATE_SHA256);
+            assertThat(row.path("templateSha256").asText()).isEqualTo(com.nori.ai.gateway.integration.testing.InferenceFixtures.TEMPLATE_SHA256);
             assertThat(row.path("modelDigest").asText()).isEqualTo(MODEL_DIGEST);
             assertThat(counter.count(GoldenResources.messages(input))).as("%s 계수 == usage.prompt_tokens", id).isEqualTo(row.path("promptTokens").asInt());
         }

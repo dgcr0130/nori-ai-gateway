@@ -31,8 +31,6 @@ public final class F2ReadinessChecks {
             switch (leaf) {
                 case "AC-33-LOADING" -> unavailable("MODEL_LOADING");
                 case "AC-44" -> unavailable("INFERENCE_UNAVAILABLE");
-                case "AC-33-CTX" -> immediate("MODEL_CONTEXT_MISMATCH", false);
-                case "AC-33-DIGEST" -> immediate("MODEL_DIGEST_MISMATCH", true);
                 case "AC-33-PERSIST" -> persistent();
                 default -> throw new IllegalArgumentException("F2_READINESS_LEAF_INVALID");
             }
@@ -50,14 +48,6 @@ public final class F2ReadinessChecks {
         require(stub(kind).equals(kind), "F2_READINESS_STATE_" + kind);
         rejected(kind, true);
         require(gateway.get("/v1/conversations/" + conversation, F2Fixture.claims()).statusCode() == 200, "F2_HISTORY_UNAVAILABLE");
-    }
-    /** AC-33-CTX·AC-33-DIGEST: 즉시 경보 1건 + 503(+DIGEST 는 Retry-After) + Job 0. DIGEST 는 ctx 경보를 올리지 않는다. */
-    private void immediate(String kind, boolean digest) {
-        Instant since = Instant.now().minusSeconds(1);
-        require(stub(kind).equals(kind), "F2_READINESS_STATE_" + kind);
-        require(awaitAlert("INFERENCE_ALERT_RAISED_" + kind, since) == 1, "F2_IMMEDIATE_ALERT_" + kind);
-        rejected(kind, digest);
-        if (digest) require(alerts.count("INFERENCE_ALERT_RAISED_MODEL_CONTEXT_MISMATCH", since) == 0, "F2_DIGEST_RAISED_CONTEXT_ALERT");
     }
     /** AC-33-PERSIST: 제어 시계로 600s 를 넘긴 MODEL_LOADING 은 지속 경보 1건, READY 전 해제 0, 503 유지, Job 0. */
     private void persistent() {
@@ -92,7 +82,7 @@ public final class F2ReadinessChecks {
     }
     private String stub(String kind) {
         var state = hooks.post("/__test/readiness-stub", Map.of("kind", kind), 200).path("state").asText();
-        require(Set.of("READY", "MODEL_LOADING", "MODEL_CONTEXT_MISMATCH", "MODEL_DIGEST_MISMATCH", "INFERENCE_UNAVAILABLE").contains(state), "F2_READINESS_STATE_INVALID");
+        require(Set.of("READY", "MODEL_LOADING", "INFERENCE_UNAVAILABLE").contains(state), "F2_READINESS_STATE_INVALID");
         return state;
     }
     /** 로그 수집 지연을 기다려 1건 이상이 보이면 그 건수를 돌려준다. 기한 안에 0 이면 0 이다. */

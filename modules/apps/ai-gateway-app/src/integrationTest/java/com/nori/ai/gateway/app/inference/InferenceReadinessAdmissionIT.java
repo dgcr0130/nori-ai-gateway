@@ -3,7 +3,7 @@ package com.nori.ai.gateway.app.inference;
 import com.nori.ai.gateway.app.hooks.PausePointRegistry;
 import com.nori.ai.gateway.app.job.P09QueueSupport;
 import com.nori.ai.gateway.integration.inference.InferenceReadinessService;
-import com.nori.ai.gateway.integration.inference.OllamaReadinessProbe;
+import com.nori.ai.gateway.integration.inference.OpenAiReadinessProbe;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.http.*;
 import java.time.Duration;
@@ -16,8 +16,8 @@ import static com.nori.ai.gateway.app.inference.OllamaEndpointStub.*;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * readiness stub hook(라벨 LLM_STUB, 추론 서버 무접촉)과 실제 /api/ps stub 으로 AC-33·AC-44 구성 요소를 확인한다:
- * 비READY 접수 503 + Retry-After 60 + 상태 errorCode, 경보(600s 유예·즉시), 추론·모델 관리 요청 0, 대화 이력·k8s readiness 200, 디스패처 READY 게이트.
+ * readiness stub hook(라벨 LLM_STUB, 추론 서버 무접촉)과 실제 공통 API stub 으로 AC-33·AC-44 구성 요소를 확인한다:
+ * 비READY 접수 503 + Retry-After 60 + 상태 errorCode, 경보(600s 유예), 추론·모델 관리 요청 0, 대화 이력·k8s readiness 200, 디스패처 READY 게이트.
  */
 @Tag("stage-F2") @Tag("label-MOCK_API") @Tag("label-LLM_STUB")
 @ExtendWith(OutputCaptureExtension.class)
@@ -27,14 +27,16 @@ class InferenceReadinessAdmissionIT extends P09QueueSupport {
 
     @Override protected Map<String,Object> extraApplicationProperties() {
         var properties = new HashMap<String,Object>(super.extraApplicationProperties());
-        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.inference.baseUrl", stub.baseUrl(), "ai.gateway.inference.generationModelDigest", EXPECTED_DIGEST));
+        properties.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
         return properties;
     }
     @BeforeEach void ready() throws Exception {
         await(() -> readiness().ready());
+        readiness().stop();
         var created = api("POST", "/v1/conversations", "{}");
         assertThat(created.statusCode()).isEqualTo(201);
         conversation = json.readTree(created.body()).get("id").asString();
+        stub.clear();
     }
     @AfterEach void stopStub() { stub.close(); }
 
@@ -63,7 +65,7 @@ class InferenceReadinessAdmissionIT extends P09QueueSupport {
     }
     private double alert(String state) { return context.getBean(MeterRegistry.class).get("aigw.inference.alert").tag("state", state).gauge().value(); }
     private void assertNoInferenceOrManagementRequests() {
-        assertThat(stub.received()).extracting(Received::path).as("추론 요청·모델 로드/pull/재시작 요청 0").containsOnly("/api/ps");
+        assertThat(stub.received()).extracting(Received::path).as("고정 준비 상태에서는 외부 요청 0").isEmpty();
         assertThat(count("job")).as("대체 문장·Job 생성 0").isZero();
     }
 
@@ -92,50 +94,24 @@ class InferenceReadinessAdmissionIT extends P09QueueSupport {
         assertThat(alert("MODEL_LOADING")).isZero();
     }
 
-    @Test @Tag("AC-33-CTX") void contextMismatchRejectsAndAlertsImmediately() throws Exception {
-        assertThat(stubState("MODEL_CONTEXT_MISMATCH")).isEqualTo("MODEL_CONTEXT_MISMATCH");
-        assertThat(alert("MODEL_CONTEXT_MISMATCH")).as("즉시 경보").isEqualTo(1.0);
-        assertRejected("context", "MODEL_CONTEXT_MISMATCH");
-        assertHistoryAndProbesStayAvailable();
-        assertNoInferenceOrManagementRequests();
-    }
-
-    @Test @Tag("AC-33-DIGEST") void digestMismatchRejectsWithItsOwnCodeAlertsImmediatelyAndNeverLoadsOrPullsAModel(CapturedOutput output) throws Exception {
-        assertThat(stubState("MODEL_DIGEST_MISMATCH")).isEqualTo("MODEL_DIGEST_MISMATCH");
-        assertThat(alert("MODEL_DIGEST_MISMATCH")).as("600s 유예 없이 즉시 경보").isEqualTo(1.0);
-        assertThat(alert("MODEL_CONTEXT_MISMATCH")).isZero();
-        assertThat(output.getAll()).as("즉시 경보 코드가 허용 목록 stdout 에 원문으로 남는다").contains("\"message\":\"INFERENCE_ALERT_RAISED_MODEL_DIGEST_MISMATCH\"");
-        assertRejected("digest", "MODEL_DIGEST_MISMATCH");
-        assertHistoryAndProbesStayAvailable();
-        clock().advance(3600);
-        assertThat(stubState("MODEL_DIGEST_MISMATCH")).isEqualTo("MODEL_DIGEST_MISMATCH");
-        assertThat(alert("MODEL_DIGEST_MISMATCH")).as("저절로 해제되지 않음").isEqualTo(1.0);
-        assertNoInferenceOrManagementRequests();
-    }
-
     @Test @Tag("AC-44") void noResponseIsInferenceUnavailableAndRejectsWithoutFallbackText() throws Exception {
         assertThat(stubState("INFERENCE_UNAVAILABLE")).isEqualTo("INFERENCE_UNAVAILABLE");
-        assertThat(readiness().snapshot().reason()).isEqualTo(OllamaReadinessProbe.Reason.NO_RESPONSE);
+        assertThat(readiness().snapshot().reason()).isEqualTo(OpenAiReadinessProbe.Reason.NO_RESPONSE);
         assertRejected("stopped", "INFERENCE_UNAVAILABLE");
         assertHistoryAndProbesStayAvailable();
         assertNoInferenceOrManagementRequests();
     }
 
-    @Test void realEndpointEvaluationOrderDecidesTheAdmissionCode() throws Exception {
-        stub.respond(request -> new Json(200, ps(generation(4096, OTHER_DIGEST), embedding(8192))));
-        assertThat(readiness().refresh().state()).as("ctx·digest 동시 불일치").isEqualTo(OllamaReadinessProbe.State.MODEL_CONTEXT_MISMATCH);
-        assertRejected("order-context", "MODEL_CONTEXT_MISMATCH");
-        stub.respond(request -> new Json(200, ps(generation(8192, OTHER_DIGEST))));
-        assertThat(readiness().refresh().state()).as("미상주 + digest 불일치").isEqualTo(OllamaReadinessProbe.State.MODEL_LOADING);
-        assertRejected("order-loading", "MODEL_LOADING");
-        stub.respond(request -> new Json(200, ps("{\"name\":\"qwen3:4b\",\"context_length\":8192}", embedding(8192))));
-        var missingDigest = readiness().refresh();
-        assertThat(missingDigest.state()).isEqualTo(OllamaReadinessProbe.State.INFERENCE_UNAVAILABLE);
-        assertThat(missingDigest.reason()).isEqualTo(OllamaReadinessProbe.Reason.ENDPOINT_ERROR);
-        assertRejected("order-digest", "INFERENCE_UNAVAILABLE");
+    @Test void commonApiFailureClosesAdmissionAndRecoveryRequiresMinimumRequests() throws Exception {
+        stub.respond(request -> request.path().equals("/v1/models") ? new Json(200,"{\"data\":[]}") : healthy(request));
+        assertThat(readiness().refresh().state()).isEqualTo(OpenAiReadinessProbe.State.MODEL_LOADING);
+        assertRejected("missing-model","MODEL_LOADING");
+        stub.respond(request -> request.path().equals("/v1/chat/completions") ? new Json(200,EMPTY_CHOICES) : healthy(request));
+        assertThat(readiness().refresh().state()).isEqualTo(OpenAiReadinessProbe.State.INFERENCE_UNAVAILABLE);
+        assertRejected("failed-minimum","INFERENCE_UNAVAILABLE");
         stub.respond(OllamaEndpointStub::healthy);
-        assertThat(readiness().refresh().state()).isEqualTo(OllamaReadinessProbe.State.READY);
-        assertNoInferenceOrManagementRequests();
+        assertThat(readiness().refresh().state()).isEqualTo(OpenAiReadinessProbe.State.READY);
+        assertThat(stub.received()).extracting(Received::path).containsOnly("/v1/models","/v1/chat/completions","/v1/embeddings");
     }
 
     @Test void dispatcherMovesAQueuedJobToRunningOnlyWhileReady() throws Exception {

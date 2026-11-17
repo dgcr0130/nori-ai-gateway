@@ -27,7 +27,7 @@ DB 역할 Secret 의 provision·회전 명령은 없습니다. 운영 DB 는 빌
 
 검증 수용 자격(서비스 토큰 해시·actor JWKS·hook 토큰 해시와 acceptance-signer/client)은 Plan §11.7의 별도 G-VERIFY-CREDS 생산자(P15)가 준비합니다. 수용 oracle 의 DB 자격은 앱과 같은 단일 계정이라 별도 DB 역할·Secret 이 없습니다(Plan §11.7 2026-11-10).
 
-GitLab·SeaweedFS는 각 원천 게이트 소유자가 이미 승인한 자격을 등록합니다. 저장소·로그·채팅에 값을 남기지 않습니다. 추론 서버는 Gateway가 빌려 쓰는 공유 자원이며 Gateway는 기존 endpoint(`inference.baseUrl`)를 자격 없이 직접 호출합니다(SPEC §26.1). 추론 자격 Secret·토큰 회전 절차는 없고, 비 2xx(401·403 포함)·파싱 불가 응답은 P19 readiness가 `INFERENCE_UNAVAILABLE`(사유 `ENDPOINT_ERROR`)로 분류합니다. 이번 단계에는 추론 서버 접근을 하지 않습니다.
+GitLab·SeaweedFS는 각 원천 게이트 소유자가 이미 승인한 자격을 등록합니다. 저장소·로그·채팅에 값을 남기지 않습니다. 추론 호출은 `ai.gateway.llm.baseUrl`의 API 접두 경로를 그대로 사용한다. `apiKeyFile`을 생략하면 Authorization을 보내지 않고, 지정하면 로컬 파일의 Bearer 자격만 사용한다. 비밀 원문은 저장소·로그에 남기지 않는다. 준비는 `/models`와 최소 생성·임베딩 요청으로 검사하며 실패하면 접수를 닫는다.
 
 ## 배포와의 관계
 
