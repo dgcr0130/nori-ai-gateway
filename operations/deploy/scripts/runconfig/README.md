@@ -24,7 +24,7 @@ python3 -B operations/deploy/scripts/runconfig-selftest.py
 
 음성 렌더는 정확한 expected code에만 성공합니다. `--expect-fail`은 render 전용입니다.
 
-앱 release lint 는 안에서 guard 음성(용량·Secret 생성/이름 schema·digest 누락·prod·release 이름·ingest/Source 읽기·SPEC SHA 불일치)과 §11.9 렌더 행렬(행마다 config Secret 투영 키·단일 계정 env·DB egress(192.168.0.150/32:15432)·추론 모드 env·egress 대상·수용 Job Secret·수용 DB 자격·spec-verify 해제 SHA)·모든 렌더의 CronJob 0·재배포 0 suite 의 Deployment 렌더 불변을 확인합니다. `lint-spec-bytes.md`·`lint-spec-baseline.md`·`lint-fixture-catalog.yaml`·`lint-image-digests.json` 은 LINT-ONLY 이며 deploy 는 `--baseline acceptance/spec-baseline.md` 만 받습니다.
+앱 release lint 는 안에서 guard 음성(용량·Secret 생성/이름 schema·digest 누락·prod·release 이름·ingest/Source 읽기)과 §11.9 렌더 행렬(행마다 config Secret 투영 키·단일 계정 env·DB egress(192.168.0.150/32:15432)·추론 모드 env·egress 대상·수용 Job Secret·수용 DB 자격·spec 볼륨의 ConfigMap 결속과 읽기 전용 마운트)·모든 렌더의 CronJob 0·재배포 0 suite 의 Deployment 렌더 불변을 확인합니다. `lint-fixture-catalog.yaml`·`lint-image-digests.json` 은 LINT-ONLY 입니다.
 
 ## 배포
 

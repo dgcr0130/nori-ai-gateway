@@ -18,7 +18,7 @@ public final class GateReportWriter {
     }
     private static String render(GateEvaluator.GateReport report) {
         StringBuilder text = new StringBuilder("# 단계 게이트 판정\n\n");
-        text.append("단계: ").append(report.stage()).append(" · 부모 회차: ").append(report.parentRunId()).append(" · 기준선 seq: ").append(report.baselineSeq()).append(" · 판정: ").append(report.result()).append("\n\n");
+        text.append("단계: ").append(report.stage()).append(" · 부모 회차: ").append(report.parentRunId()).append(" · 판정: ").append(report.result()).append("\n\n");
         text.append("| leaf | component | 판정 | 선택 회차 | 사유 |\n|---|---|---|---|---|\n");
         for (var leaf : report.leaves()) for (var component : leaf.components()) text.append('|').append(leaf.leafId()).append('|').append(component.componentId()).append('|').append(component.result()).append('|').append(component.runId()).append('|').append(component.reasonCode()).append("|\n");
         text.append("\n| 상위 ID | 현재 단계 | 전체 범위 |\n|---|---|---|\n");

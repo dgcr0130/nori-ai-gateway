@@ -15,8 +15,7 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 
 class EvidenceBlockWriterTest {
     @TempDir Path directory;
-    static final String SPEC = "a".repeat(64);
-    static final EvidenceBlockWriter.Context CONTEXT = new EvidenceBlockWriter.Context("F4", "F4", "run-1", "parent-1", SPEC,
+    static final EvidenceBlockWriter.Context CONTEXT = new EvidenceBlockWriter.Context("F4", "F4", "run-1", "parent-1",
         CanonicalJson.MAPPER.createObjectNode().put("appImageDigest", "sha256:" + "b".repeat(64)).put("acceptanceImageDigest", "sha256:" + "c".repeat(64)));
 
     /** P01 LeafReportRoundTripFunctionalTest 와 같은 시험을 실제 Launcher·OTR 로 실행해 같은 판정을 얻는다. */
@@ -33,9 +32,6 @@ class EvidenceBlockWriterTest {
         for (JsonNode leaf : extraction.leaves()) {
             assertThat(leaf.path("producer").asText()).isEqualTo("ACCEPTANCE");
             assertThat(leaf.path("componentId").asText()).isEqualTo("ACC:F4");
-            assertThat(leaf.path("specSha").asText()).isEqualTo(SPEC);
-            assertThat(leaf.path("specShaSource").asText()).isEqualTo("FILE_HASHED");
-            assertThat(leaf.path("specInputOrigin").asText()).isEqualTo("ACCEPTANCE_MOUNT");
             assertThat(leaf.path("labels").get(0).asText()).isEqualTo("MOCK_API");
             assertSealed(leaf);
         }
@@ -66,8 +62,8 @@ class EvidenceBlockWriterTest {
         assertThat(EvidenceBlockWriter.extract(directory, CONTEXT).leaves()).isEmpty();
     }
 
-    @Test void spoolsSpecFailureRecordWithoutSpecSha() {
-        var aborted = EvidenceBlockWriter.record(new EvidenceBlockWriter.Context("F1", "F1", "r", "p", null, null), Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", "SPEC_INPUT_MISSING"));
+    @Test void spoolsAbortedRecordWithoutSpecMetadata() {
+        var aborted = EvidenceBlockWriter.record(new EvidenceBlockWriter.Context("F1", "F1", "r", "p", null), Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", "ACCEPTANCE_INPUT_INVALID"));
         assertThat(aborted.has("specSha")).isFalse(); assertThat(aborted.has("specShaSource")).isFalse(); assertSealed(aborted);
     }
 

@@ -16,12 +16,12 @@ class PerfReporterTest {
     TestSupport f;
     @BeforeEach void setup() throws Exception {f=new TestSupport(directory);Files.createDirectories(directory.resolve("acceptance/approvals"));Files.writeString(directory.resolve("acceptance/approvals/approval.md"),"fixture 승인");}
     Path criteria(String leaf,Map<String,Object> extra) throws Exception {
-        Map<String,Object> fields=new LinkedHashMap<>();fields.put("baselineSeq",1);fields.put("approved",true);fields.put("approvalRef","acceptance/approvals/approval.md");fields.put("specSha",f.binding().specSha());fields.put("leafId",leaf);fields.putAll(extra);
+        Map<String,Object> fields=new LinkedHashMap<>();fields.put("approved",true);fields.put("approvalRef","acceptance/approvals/approval.md");fields.put("leafId",leaf);fields.putAll(extra);
         Path path=directory.resolve("acceptance/approvals/perf-proposal.md");Files.writeString(path,"# 승인 기준\n\n```json\n"+Json.canonicalString(Json.MAPPER.valueToTree(fields))+"\n```\n");return path;
     }
     ObjectNode measurement(String stage,String parent,String id,List<Map<String,Object>> samples,Map<String,Object> extra){Map<String,Object> values=new LinkedHashMap<>();values.put("kind","MEASUREMENT");values.put("measurementId",id);values.put("stage",stage);values.put("parentRunId",parent);values.put("runId",UUID.randomUUID().toString());values.put("samples",samples);values.put("buildIdentity",f.identity(stage));values.putAll(extra);return f.record(values);}
     Path sample(ObjectNode record,String name){Path file=directory.resolve("samples/"+name+".json");Json.write(file,record);return file;}
-    ObjectNode report(String stage,String leaf,List<Path> files,Path criteria){return new PerfReporter().report(stage,leaf,"p",files,criteria,new EvidenceRepositoryFs(directory).stageDirectory(stage).resolve("perf"),directory,f.binding(),f.catalog,f.parent(stage,"p"));}
+    ObjectNode report(String stage,String leaf,List<Path> files,Path criteria){return new PerfReporter().report(stage,leaf,"p",files,criteria,new EvidenceRepositoryFs(directory).stageDirectory(stage).resolve("perf"),directory,f.catalog,f.parent(stage,"p"));}
     Map<String,Object> limits(){return Map.of("chunkCount",100L,"indexingMs",100L,"dbBytes",100L,"indexBytes",100L,"memoryBytes",100L);}
     List<Map<String,Object>> f3samples(){return List.of(Map.of("path","VECTOR","round",1,"latencyMs",10),Map.of("path","KEYWORD","round",1,"latencyMs",20));}
     @Test void computesNearestRankOnlyFromMatchingParentRawSamplesAndIndexMeasurement() throws Exception {
@@ -32,7 +32,7 @@ class PerfReporterTest {
         assertThat(search).exists();assertThat(index).exists();assertThat(other).exists();
         EvidenceRepositoryFs repository = new EvidenceRepositoryFs(directory); repository.store(f.parent("F3", "p"));
         assertThat(repository.readAll("F3").stream().map(Json::canonicalString).toList()).contains(Json.canonicalString(result));
-        var gate = new GateEvaluator().evaluate("F3", "p", repository.readAll("F3"), f.catalog, com.nori.ai.gateway.eval.spec.SpecBaseline.parseChain(f.baseline));
+        var gate = new GateEvaluator().evaluate("F3", "p", repository.readAll("F3"), f.catalog);
         assertThat(gate.leaves().stream().filter(l -> l.leafId().equals("AC-23-PERF")).findFirst().orElseThrow().result()).isEqualTo("PASS");
     }
     @Test void absentCriteriaProducesNoRecordAndMissingResourceEvidenceNeverPasses() throws Exception {

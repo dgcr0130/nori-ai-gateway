@@ -12,10 +12,10 @@ import org.junit.platform.launcher.core.LauncherFactory;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectPackage;
 
 /**
- * 배포 수용 Job 진입점. 첫 단계는 {@link SpecInputVerifier} 이고 실패하면 시험을 하나도 실행하지 않고 RUN ABORTED 1건·exit 3 이다.
- * 일치하면 {@code aigw.acceptance.suite} 의 시험만 JUnit Platform Launcher 로 순차 실행하고, OTR 은 tmpfs 에만 쓴 뒤 정제 레코드만 블록으로 낸다.
+ * 배포 수용 Job 진입점. suite·부모 회차·빌드 신원을 검사한다.
+ * 입력이 유효하면 {@code aigw.acceptance.suite} 의 시험만 JUnit Platform Launcher 로 순차 실행하고, OTR 은 tmpfs 에만 쓴 뒤 정제 레코드만 블록으로 낸다.
  * {@code -OUTAGE} suite 는 {@code AIGW_OUTAGE_PHASE}(STOPPED·LOADING) 의 {@code outage-<phase>} 태그 시험만 실행하고 모든 레코드에 {@code outagePhase} 를 싣는다(gate 의 component 단계 대조).
- * 종료 코드: 0 실행 시험 전부 성공(skip·abort 0), 1 실패·skip·abort·하네스 오류, 2 입력 오류, 3 SPEC 입력 실패, 4 실행 시험 0.
+ * 종료 코드: 0 실행 시험 전부 성공(skip·abort 0), 1 실패·skip·abort·하네스 오류, 2 입력 오류, 4 실행 시험 0.
  * 프로세스 stdout 은 증거 블록 전용이다: 시험·라이브러리가 System.out/err 에 쓰는 내용과 예외 원문은 버린다.
  */
 public final class AcceptanceMain {
@@ -57,7 +57,7 @@ public final class AcceptanceMain {
         System.setOut(discard); System.setErr(discard);
         try { return body.applyAsInt(evidence); }
         catch (Throwable unexpected) {
-            var context = new EvidenceBlockWriter.Context(null, null, UUID.randomUUID().toString(), null, null, null);
+            var context = new EvidenceBlockWriter.Context(null, null, UUID.randomUUID().toString(), null, null);
             EvidenceBlockWriter.write(evidence, List.of(EvidenceBlockWriter.record(context, Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", "ACCEPTANCE_HARNESS_FAILED"))));
             return 1;
         } finally { evidence.flush(); System.setOut(originalOut); System.setErr(originalErr); }
@@ -71,14 +71,7 @@ public final class AcceptanceMain {
         JsonNode identity = config.buildIdentity().orElse(null);
         boolean outage = suite != null && suite.endsWith("-OUTAGE");
         String phase = outage ? config.outagePhase().orElse(null) : null;
-        String specSha;
-        try { specSha = SpecInputVerifier.verify(config.specGzipFile().orElse(null), config.expectedSpecSha256().orElse(null)); }
-        catch (SpecInputVerifier.Failure failure) {
-            var context = new EvidenceBlockWriter.Context(stage, suite, runId, parent, null, identity);
-            EvidenceBlockWriter.write(out, List.of(phased(EvidenceBlockWriter.record(context, Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", failure.code())), phase)));
-            return 3;
-        }
-        var context = new EvidenceBlockWriter.Context(stage, suite, runId, parent, specSha, identity);
+        var context = new EvidenceBlockWriter.Context(stage, suite, runId, parent, identity);
         if (suite == null || parent == null || identity == null || outage && phase == null) {
             EvidenceBlockWriter.write(out, List.of(phased(EvidenceBlockWriter.record(context, Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", "ACCEPTANCE_INPUT_INVALID")), phase)));
             return 2;

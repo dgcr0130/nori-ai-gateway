@@ -7,23 +7,19 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.zip.GZIPOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 
 /** F2 회차 경계: -OUTAGE 단계 입력·레코드 단계 표지, F2 rubric 대상 운반, F2-RUBRIC 대상 결속. */
 class F2AcceptanceMainTest {
-    static final byte[] SPEC = "# 승인 SPEC 바이트\n".getBytes(StandardCharsets.UTF_8);
     @TempDir Path directory;
     final AtomicInteger launches = new AtomicInteger();
     final ByteArrayOutputStream out = new ByteArrayOutputStream();
 
     private Map<String,String> env(Map<String,String> extra) throws IOException {
-        Path gzip = directory.resolve("spec.md.gz");
-        try (var stream = new GZIPOutputStream(Files.newOutputStream(gzip))) { stream.write(SPEC); }
-        var base = new HashMap<>(Map.of("AIGW_PARENT_RUN_ID", "F2-20261113T000000Z-0a1b2c3d", "AIGW_SPEC_GZIP_FILE", gzip.toString(),
-            "AIGW_EXPECTED_SPEC_SHA256", CanonicalJson.sha256(SPEC), "AIGW_BUILD_IDENTITY_JSON", "{\"appImageDigest\":\"sha256:" + "b".repeat(64) + "\"}"));
+        var base = new HashMap<>(Map.of("AIGW_PARENT_RUN_ID", "F2-20261113T000000Z-0a1b2c3d",
+            "AIGW_BUILD_IDENTITY_JSON", "{\"appImageDigest\":\"sha256:" + "b".repeat(64) + "\"}"));
         base.putAll(extra); return base;
     }
     private static String otr(String leaf, String... tags) {
@@ -93,8 +89,7 @@ class F2AcceptanceMainTest {
 
     @Test void f2RubricViewRejectsTargetsOfAnotherStageAndReadsTerminalLiveJobsWithTheOriginalActor() throws Exception {
         var identity = CanonicalJson.MAPPER.readTree("{\"appImageDigest\":\"sha256:" + "b".repeat(64) + "\"}");
-        String specSha = CanonicalJson.sha256(SPEC);
-        var context = new EvidenceBlockWriter.Context("F1", "F1", "run", "F2-20261113T000000Z-0a1b2c3d", specSha, identity);
+        var context = new EvidenceBlockWriter.Context("F1", "F1", "run", "F2-20261113T000000Z-0a1b2c3d", identity);
         var source = EvidenceBlockWriter.record(context, Map.of("kind", "RUN", "status", "COMPLETED", "rubricTargets", List.of(new RubricViewer.Target("AC-22-LIVE", "f2-live-incident-comm", "job-1", "a".repeat(64)))));
         Path file = directory.resolve("targets.json"); Files.writeString(file, source.toString());
         var output = new ByteArrayOutputStream();

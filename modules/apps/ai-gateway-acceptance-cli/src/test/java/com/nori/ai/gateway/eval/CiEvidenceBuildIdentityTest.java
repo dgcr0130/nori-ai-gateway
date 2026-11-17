@@ -40,7 +40,7 @@ class CiEvidenceBuildIdentityTest {
     }
 
     @Test void runnerModeComparesAgainstTheCiCommitWhenPresent() {
-        var cli = new EvalCli(Map.of("AIGW_SPEC_FILE", x.f.spec.toString(), "CI_COMMIT_SHA", "f".repeat(40)),
+        var cli = new EvalCli(Map.of("CI_COMMIT_SHA", "f".repeat(40)),
             new java.io.PrintStream(new java.io.ByteArrayOutputStream()), new java.io.PrintStream(new java.io.ByteArrayOutputStream()), directory);
         assertThat(cli.execute("test-evidence", "verify", "--tasks", ":sub:integrationTest", "--expect-build-identity", "build/package/build-identity.json")).isEqualTo(4);
     }

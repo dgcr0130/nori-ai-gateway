@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalCli;
 import com.nori.ai.gateway.eval.io.Json;
 import com.nori.ai.gateway.eval.report.EvidenceRecord;
-import com.nori.ai.gateway.eval.spec.SpecGuard;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import java.io.*;
@@ -17,11 +16,7 @@ class EmbeddingProfileTest {
     @TempDir Path root;
 
     ObjectNode measurement(Map<String,Object> values) throws IOException {
-        Path spec = root.resolve("spec.md"); Files.writeString(spec, "fixture spec", StandardCharsets.UTF_8);
-        Path baseline = root.resolve("acceptance/spec-baseline.md"); Files.createDirectories(baseline.getParent());
-        Files.writeString(baseline, "```json\n[{\"seq\":1,\"sha256\":\"" + Json.sha(Files.readAllBytes(spec)) + "\",\"prevSha256\":null,\"approvedAt\":\"2026-10-29\",\"approvalRef\":\"fixture\",\"changedSections\":[\"ALL\"],\"affectedLeaves\":\"ALL\",\"measurementAffecting\":true}]\n```\n", StandardCharsets.UTF_8);
-        var binding = new SpecGuard(Map.of()).check(spec.toString(), null, baseline);
-        return EvidenceRecord.create(binding, Map.of("kind", "MEASUREMENT", "measurementId", EmbeddingProfile.MEASUREMENT_ID, "stage", "F3", "runId", "probe-1", "parentRunId", "F3-PROBE-1", "values", values));
+        return EvidenceRecord.create(Map.of("kind", "MEASUREMENT", "measurementId", EmbeddingProfile.MEASUREMENT_ID, "stage", "F3", "runId", "probe-1", "parentRunId", "F3-PROBE-1", "values", values));
     }
     int cli(Path evidence) { return new EvalCli(Map.of(), new PrintStream(new ByteArrayOutputStream()), new PrintStream(new ByteArrayOutputStream()), root).execute("f3", "embedding-profile", "--evidence", root.relativize(evidence).toString(), "--out", "out/embedding-profile.json"); }
     Path write(String name, Object record) { Path file = root.resolve(name); Json.write(file, record); return file; }
@@ -39,8 +34,6 @@ class EmbeddingProfileTest {
             assertThat(cli(write("bad.json", measurement(values)))).as(values.toString()).isEqualTo(2);
         ObjectNode other = measurement(Map.of("dimension", 1024, "modelDigest", "a".repeat(64))); other.put("measurementId", "f3:index-resources"); EvidenceRecord.seal(other);
         assertThat(cli(write("other.json", other))).isEqualTo(2);
-        ObjectNode declared = measurement(Map.of("dimension", 1024, "modelDigest", "a".repeat(64))); declared.put("specShaSource", "DECLARED"); EvidenceRecord.seal(declared);
-        assertThat(cli(write("declared.json", declared))).isEqualTo(2);
         assertThat(root.resolve("out/embedding-profile.json")).doesNotExist();
     }
     // Plan P02: 정수 차원 > 0·digest 형식만 검사(상한 없음). 정수 표현 가능성은 유지 — 소수·long overflow 거부.

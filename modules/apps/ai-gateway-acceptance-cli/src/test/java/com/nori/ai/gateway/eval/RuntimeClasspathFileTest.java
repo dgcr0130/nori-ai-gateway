@@ -26,7 +26,7 @@ class RuntimeClasspathFileTest {
         runtime = directory.resolve("runtime classpath.txt");
         Files.writeString(runtime, "com.example:library:1.0 sha256=012345\n", StandardCharsets.UTF_8);
         Json.write(otr.resolve("run-binding.json"), Map.of("runId", "runtime-file-test", "inputFingerprint", FINGERPRINT,
-            "specSha", fixture.binding().specSha(), "recordedAt", "2026-11-05T00:00:00Z"));
+             "recordedAt", "2026-11-05T00:00:00Z"));
         Files.writeString(otr.resolve("events.xml"), """
             <e:events xmlns:e="https://schemas.opentest4j.org/reporting/events/0.2.0"
                       xmlns:j="https://schemas.junit.org/open-test-reporting"
@@ -37,7 +37,7 @@ class RuntimeClasspathFileTest {
               <e:finished id="1"><c:result status="SUCCESSFUL"/></e:finished>
             </e:events>
             """);
-        env = new HashMap<>(Map.of("AIGW_SPEC_FILE", fixture.spec.toString()));
+        env = new HashMap<>(Map.of());
         errors = new ByteArrayOutputStream();
     }
 
@@ -109,7 +109,7 @@ class RuntimeClasspathFileTest {
     }
 
     @Test void existingExtractorSignatureRemainsUsableWithoutFile() {
-        new OtrLeafExtractor().extract(otr, ":probe:test", ":probe", fixture.baseline, fixture.spec.toString(),
+        new OtrLeafExtractor().extract(otr, ":probe:test", ":probe",
             output, FINGERPRINT, true, fixture.catalog, env);
         assertIdentity(null);
     }

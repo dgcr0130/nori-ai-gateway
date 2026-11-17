@@ -14,7 +14,7 @@ class GateReportOutputTest {
 
     int gate(TestSupport t, ByteArrayOutputStream err, String... extra) {
         List<String> args = new ArrayList<>(List.of("gate", "--stage", "F0", "--parent-run-id", "R1")); args.addAll(List.of(extra));
-        return new EvalCli(Map.of("AIGW_SPEC_FILE", t.spec.toString()), new PrintStream(new ByteArrayOutputStream()), new PrintStream(err, true, StandardCharsets.UTF_8), t.root).execute(args.toArray(String[]::new));
+        return new EvalCli(Map.of(), new PrintStream(new ByteArrayOutputStream()), new PrintStream(err, true, StandardCharsets.UTF_8), t.root).execute(args.toArray(String[]::new));
     }
 
     @Test void derivedReportIsWrittenOnlyOutsideResultsWithoutOverwriting() throws Exception {

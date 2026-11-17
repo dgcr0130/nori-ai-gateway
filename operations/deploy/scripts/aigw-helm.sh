@@ -4,7 +4,7 @@ set +x
 export PYTHONDONTWRITEBYTECODE=1
 # 차트는 이 checkout 의 operations/deploy/helm/** 에서 읽는다(Plan §4.1 2026-11-10). deploy·suite-only 는 operations/ 미커밋 변경 0 과
 # HEAD = 앱 이미지 GIT_SHA(image-digests.json buildIdentity.gitSha)를 부작용 전에 확인하고, 증거에는 chartRepoSha·chartDigest 를 남긴다.
-release= mode= runconfig= profile= expect= image_digests= suite= spec_file= baseline=
+release= mode= runconfig= profile= expect= image_digests= suite=
 fixture_catalog= clock_initial= parent_run_id= outage_phase= set_extra= rubric_targets=
 error() { printf '%s\n' "$1" >&2; exit "${2:-2}"; }
 while (($#)); do
@@ -12,7 +12,7 @@ while (($#)); do
   case "$1" in
     --release) release=$2;; --mode) mode=$2;; --runconfig) runconfig=$2;;
     --values-profile) profile=$2;; --expect-fail) expect=$2;;
-    --image-digests) image_digests=$2;; --suite) suite=$2;; --spec-file) spec_file=$2;; --baseline) baseline=$2;;
+    --image-digests) image_digests=$2;; --suite) suite=$2;;
     --fixture-catalog) fixture_catalog=$2;; --clock-initial) clock_initial=$2;;
     --parent-run-id) parent_run_id=$2;; --outage-phase) outage_phase=$2;; --set-extra) set_extra=$2;; --rubric-targets) rubric_targets=$2;;
     *) error ARGUMENT_INVALID;;
@@ -44,9 +44,6 @@ if [[ -n $fixture_catalog ]]; then
   allowed=$(realpath -m -- modules/apps/ai-gateway-app/src/main/resources/config/fixtures/corpus)
   [[ $resolved == "$allowed"/* && ! -L $fixture_catalog && -f $resolved ]] || error FIXTURE_CATALOG_INVALID
 fi
-if [[ -z $baseline ]]; then baseline=acceptance/spec-baseline.md; fi
-[[ $mode != deploy || $baseline == acceptance/spec-baseline.md ]] || error BASELINE_DEPLOY_FIXED
-[[ -n $spec_file ]] || spec_file=${AIGW_SPEC_FILE:-}
 for tool in python3 helm git sha256sum mktemp realpath; do command -v "$tool" >/dev/null || error "TOOL_MISSING:$tool"; done
 chart_repo_sha=
 if [[ $mode == deploy || $mode == suite-only ]]; then
@@ -114,16 +111,16 @@ flags() {
     F3|F3-ACL|F3-RULEVER|F4|F4-PERF) printf '%s\n' true true true true;;
   esac
 }
-suite_args() {  # $1 = suite, $2 = 출력 배열 이름, $3 = spec 값 파일, $4 = catalog 파일
+suite_args() {  # $1 = suite, $2 = 출력 배열 이름, $3 = catalog 파일
   local -n out=$2
   out=()
   mapfile -t f < <(flags "$1")
   out+=(--set "inference.enabled=${f[0]}" --set "knowledgeSource.read.enabled=${f[1]}" --set "ingest.enabled=${f[2]}" --set "ingest.fixtureCatalog.enabled=${f[3]}")
-  [[ ${f[3]} == false ]] || out+=(--set-file "fixtureCatalog.content=$4")
+  [[ ${f[3]} == false ]] || out+=(--set-file "fixtureCatalog.content=$3")
   if [[ $1 != none ]]; then
     [[ $1 != F3-RULEVER ]] || out+=(--set-string sanitize.verifyRuleSet=mask-v1r)
     out+=(--set acceptance.enabled=true --set-string "acceptance.suite=$1" --set-string "acceptance.parentRunId=$parent_run_id"
-      --set-file "acceptance.buildIdentityJson=$tmp/build-identity.json" -f "$3")
+      --set-file "acceptance.buildIdentityJson=$tmp/build-identity.json")
   fi
 }
 # 쉼표가 든 JSON 은 --set 으로 넘기면 값이 쪼개지므로 파일로 넘긴다.
@@ -136,13 +133,6 @@ if [[ $mode == lint ]]; then
 fi
 if [[ $suite != none && $mode != lint ]]; then
   [[ -n $parent_run_id ]] || error ACCEPTANCE_PARENT_REQUIRED
-fi
-spec_values=$tmp/spec-none.json; printf '{}' > "$spec_values"
-if [[ $suite != none ]]; then
-  # M-10: 실제 SPEC 바이트만 결속한다. 부재 exit 2·기준선 불일치 exit 3, 둘 다 렌더 전.
-  [[ -n $spec_file && -f $spec_file ]] || error SPEC_INPUT_MISSING
-  spec_sha=$(python3 -B operations/deploy/scripts/app_render.py spec "$spec_file" "$baseline" "$tmp/spec.json") || exit $?
-  spec_values=$tmp/spec.json
 fi
 if [[ $mode == suite-only ]]; then
   # 재배포 0 suite: 기존 release 값을 그대로 두고 수용 Job 값만 바꾼다(앱 Deployment 템플릿 입력 불변).
@@ -158,21 +148,21 @@ if [[ $mode == suite-only ]]; then
   deployment_started=1
   helm upgrade "$release" "$package" -n tc --reuse-values --set acceptance.enabled=true --set-string "acceptance.suite=$suite" \
     --set-string "acceptance.parentRunId=$parent_run_id" --set-string "acceptance.outagePhase=$outage_phase" \
-    --set-file "acceptance.buildIdentityJson=$tmp/build-identity.json" "${rubric_args[@]}" -f "$spec_values" --wait --timeout 600s >"$tmp/upgrade.log" 2>&1 || error HELM_UPGRADE_FAILED 1
+    --set-file "acceptance.buildIdentityJson=$tmp/build-identity.json" "${rubric_args[@]}" --wait --timeout 600s >"$tmp/upgrade.log" 2>&1 || error HELM_UPGRADE_FAILED 1
   deployment_started=0
   printf 'SUITE_ONLY_OK release=%s suite=%s chartRepoSha=%s chartDigest=%s\n' "$release" "$suite" "$chart_repo_sha" "$chart_digest" >&2
   exit 0
 fi
-suite_args "$suite" extra "$spec_values" "$catalog"
+suite_args "$suite" extra "$catalog"
 if [[ -n $expect ]]; then
-  case $expect in INGEST_REQUIRES_SOURCE_READ|SPEC_VERIFY_SHA_MISMATCH) ;; *) error EXPECT_FAIL_CODE_INVALID;; esac
+  case $expect in INGEST_REQUIRES_SOURCE_READ) ;; *) error EXPECT_FAIL_CODE_INVALID;; esac
   if helm template "$release" "$package" "${common[@]}" "${extra[@]}" >"$tmp/render.yaml" 2>"$tmp/error"; then error EXPECTED_FAILURE_ABSENT 1; fi
   grep -Fq -- "$expect" "$tmp/error" || error EXPECTED_FAILURE_MISMATCH 1
   printf 'EXPECTED_FAILURE:%s\n' "$expect"; exit 0
 fi
 helm lint "$package" "${common[@]}" "${extra[@]}" >"$tmp/lint.log" 2>&1 || error HELM_LINT_FAILED
 helm template "$release" "$package" "${common[@]}" "${extra[@]}" >"$tmp/render.yaml" 2>"$tmp/error" || error HELM_RENDER_FAILED
-python3 -B operations/deploy/scripts/app_render.py matrix "$tmp/render.yaml" "$release" "$suite" "${spec_sha:-}" "$tmp/values.json" || exit 1
+python3 -B operations/deploy/scripts/app_render.py matrix "$tmp/render.yaml" "$release" "$suite" "$tmp/values.json" || exit 1
 if [[ $mode == lint ]]; then
   # guard 음성: 각각 기대 사유로만 실패해야 한다(하나라도 다르면 exit 1).
   negative() {  # $1 = 기대 사유, 나머지 = 추가 helm 인자
@@ -200,13 +190,12 @@ if [[ $mode == lint ]]; then
   negative INFERENCE_PORT_CONFLICT --set inference.enabled=true --set-string inference.baseUrl=http://lint-only-inference:1 --set inference.port=1 --set netpol.targets.inference.port=2
   if helm template invalid-release "$package" "${common[@]}" "${extra[@]}" >"$tmp/negative" 2>"$tmp/error"; then error RENDER_GUARD_MISSING 1; fi
   grep -Fq RENDER_INVALID_RELEASE "$tmp/error" || error RENDER_GUARD_MISMATCH 1
-  # §11.9 렌더 행렬: lint 전용 SPEC 바이트·기준선으로 이 release 의 모든 배포 suite 를 렌더해 행과 대조한다.
-  lint_spec_sha=$(python3 -B operations/deploy/scripts/app_render.py spec operations/deploy/scripts/runconfig/fixtures/lint-spec-bytes.md operations/deploy/scripts/runconfig/fixtures/lint-spec-baseline.md "$tmp/lint-spec.json") || exit 1
+  # §11.9 렌더 행렬: lint 전용 입력으로 이 release 의 모든 배포 suite 를 렌더해 행과 대조한다.
   rows=(F1 F2 F3-PROBE F3 F3-ACL F3-RULEVER F4 F4-PERF)
   for row in "${rows[@]}"; do
-    suite_args "$row" row_args "$tmp/lint-spec.json" "$catalog"
+    suite_args "$row" row_args "$catalog"
     helm template "$release" "$package" "${common[@]}" "${row_args[@]}" >"$tmp/row.yaml" 2>"$tmp/error" || error "RENDER_MATRIX_FAILED:$row" 1
-    python3 -B operations/deploy/scripts/app_render.py matrix "$tmp/row.yaml" "$release" "$row" "$lint_spec_sha" "$tmp/values.json" || error "RENDER_MATRIX_MISMATCH:$row" 1
+    python3 -B operations/deploy/scripts/app_render.py matrix "$tmp/row.yaml" "$release" "$row" "$tmp/values.json" || error "RENDER_MATRIX_MISMATCH:$row" 1
     if [[ $row == F1 || $row == F4 ]]; then
       # 재배포 0 suite(suite-only)는 수용 Job 값만 바꾼다: 같은 행의 Deployment 렌더가 바이트 그대로여야 한다.
       before=$(python3 -B operations/deploy/scripts/app_render.py deployment-sha "$tmp/row.yaml" "$release")
@@ -216,8 +205,6 @@ if [[ $mode == lint ]]; then
       [[ $row == F1 ]] && negative RUBRIC_TARGETS_REQUIRED "${row_args[@]}" --set-string acceptance.suite=F1-RUBRIC
     fi
   done
-  suite_args "${rows[0]}" row_args "$tmp/lint-spec.json" "$catalog"
-  negative SPEC_VERIFY_SHA_MISMATCH "${row_args[@]}" --set-string "specVerify.expectedSha256=$(printf '0%.0s' {1..64})"
 fi
 if [[ $mode == render ]]; then cat "$tmp/render.yaml"; fi
 if [[ $mode == deploy ]]; then

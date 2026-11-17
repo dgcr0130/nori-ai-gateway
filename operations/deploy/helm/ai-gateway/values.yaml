@@ -50,11 +50,6 @@ netpol:
   targets: {}
 egressProbe:
   targets: []
-specVerify:
-  version: v1
-  gzipBase64: ""
-  sha256: ""
-  expectedSha256: ""
 acceptance:
   enabled: false
   suite: none

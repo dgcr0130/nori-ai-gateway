@@ -61,22 +61,16 @@ fun ordered(value: Any?): Any? = when (value) {
     else -> value
 }
 fun json(value: Any?): String = JsonOutput.toJson(ordered(value))
-var aigwExplicitSpec: File? = null
-fun specFile(): File? = aigwExplicitSpec ?: providers.gradleProperty("aigw.specPath").orNull
-    ?.let { rootProject.file(it) }
-    ?: providers.environmentVariable("AIGW_SPEC_FILE").orNull?.let { rootProject.file(it) }
 fun catalogFile(): File = rootProject.file("modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json")
 fun classpathItem(file: File): Any = if (file.isDirectory) file.walkTopDown().filter { it.isFile }
     .map { file.toPath().relativize(it.toPath()).toString().replace('\\', '/') to fileSha(it) }
     .sortedBy { it.first }.map { listOf(it.first, it.second) }.toList() else fileSha(file)
 fun aigwInputComponents(test: Test): Map<String, Any?> {
     val properties = test.systemProperties.filterKeys { it.startsWith("aigw.") }
-        .filterKeys { it !in setOf("aigw.rootDir", "aigw.specPath", "aigw.evalClasspath", "aigw.harness.classpath", "aigw.harness.javaExe") }
+        .filterKeys { it !in setOf("aigw.rootDir", "aigw.evalClasspath", "aigw.harness.classpath", "aigw.harness.javaExe") }
         .mapValues { (key, value) -> if (key in setOf("aigw.runtimeClasspathFile", "aigw.tokenizerFile")) fileSha(rootProject.file(value.toString())) else value.toString() }
     return mapOf(
         "classpath" to test.classpath.files.map { classpathItem(it) },
-        "specSha" to (specFile()?.let { fileSha(it) } ?: "MISSING"),
-        "baselineSha256" to fileSha(rootProject.file("acceptance/spec-baseline.md")),
         "catalogSha256" to fileSha(catalogFile()),
         "includeTags" to (providers.gradleProperty("includeTags").orNull ?: "").split(',').filter { it.isNotBlank() }.sorted(),
         "testFilters" to (test.filter.includePatterns + (test.filter as org.gradle.api.internal.tasks.testing.filter.DefaultTestFilter).commandLineIncludePatterns).sorted(),
@@ -130,8 +124,6 @@ subprojects {
         jvmArgumentProviders.add(CommandLineArgumentProvider { listOf("-Djunit.platform.reporting.output.dir=${otr.get().asFile.absolutePath}") })
         outputs.dir(otr)
         // 파일 경로가 같아도 내용 변경은 반드시 새 측정으로 이어져야 합니다.
-        inputs.property("aigw.specSha", provider { specFile()?.let { fileSha(it) } ?: "MISSING" })
-        inputs.property("aigw.baselineSha", provider { fileSha(rootProject.file("acceptance/spec-baseline.md")) })
         inputs.property("aigw.catalogSha", provider { fileSha(catalogFile()) })
         inputs.property("aigw.policyInputs", provider { json(aigwInputComponents(testTask).filterKeys { it != "classpath" }) })
         doFirst {
@@ -142,7 +134,6 @@ subprojects {
             File(output, "run-binding.json").writeText(json(mapOf(
                 "runId" to UUID.randomUUID().toString(), "inputFingerprint" to aigwInputFingerprint(testTask),
                 "recordedAt" to java.time.Instant.now().toString(),
-                "specSha" to components["specSha"], "baselineSha256" to components["baselineSha256"],
                 "catalogSha256" to components["catalogSha256"], "components" to components
             )), Charsets.UTF_8)
         }
@@ -177,11 +168,9 @@ subprojects {
                 }
                 val arguments = mutableListOf("leaf-extract", "--otr-dir", otr.get().asFile.absolutePath,
                     "--task", testTask.path, "--module", project.path,
-                    "--baseline", rootProject.file("acceptance/spec-baseline.md").absolutePath,
                     "--catalog", catalogFile().absolutePath,
                     "--out", evidence.get().asFile.absolutePath,
                     "--current-fingerprint", aigwInputFingerprint(testTask))
-                specFile()?.let { arguments.addAll(listOf("--spec", it.absolutePath)) }
                 if (app != null) arguments.addAll(listOf("--runtime-classpath-file", app.layout.buildDirectory.file("aigw/runtime-classpath.txt").get().asFile.absolutePath))
                 if (testTask.path in requiredTests) arguments.add("--require-executed")
                 setArgs(arguments)
@@ -222,8 +211,6 @@ project(":apps:ai-gateway-acceptance-cli") {
         doFirst {
             val arguments = args ?: emptyList()
             if (arguments.take(2) == listOf("test-evidence", "verify")) {
-                val specIndex = arguments.indexOf("--spec")
-                if (specIndex >= 0) aigwExplicitSpec = rootProject.file(arguments[specIndex + 1])
                 val tasksIndex = arguments.indexOf("--tasks")
                 val selectorIndex = arguments.indexOf("--selector")
                 val selected = if (tasksIndex >= 0) arguments[tasksIndex + 1].split(',') else {

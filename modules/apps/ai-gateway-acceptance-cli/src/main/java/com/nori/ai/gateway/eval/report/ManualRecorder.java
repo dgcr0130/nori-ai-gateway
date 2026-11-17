@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.SpecBinding;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
@@ -13,7 +12,7 @@ public final class ManualRecorder {
     private final LeafCatalog catalog;
     private final EvidenceRepositoryFs repository;
     public ManualRecorder(LeafCatalog catalog, EvidenceRepositoryFs repository) { this.catalog = catalog; this.repository = repository; }
-    public ObjectNode record(String mode, String stage, String leaf, String run, String parent, List<String> supplied, SpecBinding binding) {
+    public ObjectNode record(String mode, String stage, String leaf, String run, String parent, List<String> supplied) {
         if (!Set.of("user-run", "rubric").contains(mode) || !(mode.equals("rubric") ? Set.of("F1", "F2", "F4") : Set.of("F2", "F4")).contains(stage)) throw new EvalException(2, "UNKNOWN_COMMAND");
         catalog.leaf(leaf); Map<String,Object> fields = new LinkedHashMap<>();
         JsonNode schema;
@@ -39,7 +38,7 @@ public final class ManualRecorder {
         record.put("producer", mode.equals("rubric") ? "RUBRIC" : "USER_RUN"); record.put("componentId", mode.equals("rubric") ? "RB:" + stage + "-RUBRIC" : "UR");
         if (mode.equals("rubric")) { record.put("suite", stage + "-RUBRIC"); record.putAll(fields); } else record.put("values", fields);
         record.put("labels", labels); record.put("result", verdict); record.put("buildIdentity", manifest.path("buildIdentity"));
-        ObjectNode result = EvidenceRecord.create(binding, record); EvidenceRecord.validate(result, catalog); repository.store(result); return result;
+        ObjectNode result = EvidenceRecord.create(record); EvidenceRecord.validate(result, catalog); repository.store(result); return result;
     }
     static Object typed(String type, String value) {
         try {

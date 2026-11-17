@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.SpecBaseline;
 import java.nio.file.*;
 import java.util.*;
 import java.time.Instant;
@@ -12,9 +11,9 @@ import java.time.Instant;
 public final class GateEvaluator {
     public record ComponentVerdict(String componentId, String result, String runId, String reasonCode) {}
     public record LeafVerdict(String leafId, String result, List<ComponentVerdict> components) {}
-    public record GateReport(String stage, String parentRunId, int baselineSeq, String result, List<LeafVerdict> leaves,
+    public record GateReport(String stage, String parentRunId, String result, List<LeafVerdict> leaves,
                              Map<String,String> stageParents, Map<String,String> allParents, int informationalRecordCount) {}
-    public GateReport evaluate(String stage, String parentRunId, List<JsonNode> records, LeafCatalog catalog, SpecBaseline chain) {
+    public GateReport evaluate(String stage, String parentRunId, List<JsonNode> records, LeafCatalog catalog) {
         if (!stage.matches("F[0-4]") || parentRunId == null || parentRunId.isBlank()) throw new EvalException(2, "GATE_INPUT_MISSING");
         for (JsonNode record : records) EvidenceRecord.validate(record, catalog);
         List<JsonNode> bound = records.stream().filter(n -> n.path("stage").asText().equals(stage) && n.path("parentRunId").asText().equals(parentRunId)).toList();
@@ -22,7 +21,7 @@ public final class GateEvaluator {
         List<LeafVerdict> leaves = new ArrayList<>();
         for (JsonNode leaf : catalog.required(stage)) {
             String id = leaf.path("id").asText(); List<ComponentVerdict> components = new ArrayList<>();
-            for (JsonNode component : catalog.components(stage, id)) components.add(select(stage, id, component, bound, parent, chain, catalog));
+            for (JsonNode component : catalog.components(stage, id)) components.add(select(stage, id, component, bound, parent, catalog));
             leaves.add(new LeafVerdict(id, and(components.stream().map(ComponentVerdict::result).toList()), components));
         }
         Map<String,String> stageParents = new LinkedHashMap<>(), allParents = new LinkedHashMap<>();
@@ -35,9 +34,9 @@ public final class GateEvaluator {
             if (!current.isEmpty()) stageParents.put(id, and(current));
             allParents.put(id, and(all));
         }
-        return new GateReport(stage, parentRunId, chain.seq(), and(leaves.stream().map(LeafVerdict::result).toList()), List.copyOf(leaves), stageParents, allParents, records.size() - bound.size());
+        return new GateReport(stage, parentRunId, and(leaves.stream().map(LeafVerdict::result).toList()), List.copyOf(leaves), stageParents, allParents, records.size() - bound.size());
     }
-    private ComponentVerdict select(String stage, String leaf, JsonNode component, List<JsonNode> records, JsonNode parent, SpecBaseline chain, LeafCatalog catalog) {
+    private ComponentVerdict select(String stage, String leaf, JsonNode component, List<JsonNode> records, JsonNode parent, LeafCatalog catalog) {
         String componentId = component.path("componentId").asText(), producer = component.path("producer").asText();
         if (parent == null) return missing(componentId, "PARENT_MANIFEST_MISSING", "");
         JsonNode selected;
@@ -61,15 +60,14 @@ public final class GateEvaluator {
             List<JsonNode> sourceRecords = new ArrayList<>(); original.path("records").forEach(sourceRecords::add);
             for (JsonNode n : sourceRecords) EvidenceRecord.validate(n, catalog);
             selected = latest(sourceRecords.stream().filter(n -> n.path("leafId").asText().equals(leaf) && n.path("runId").equals(reference.path("runId"))).toList());
-        } else if (producer.equals("RUBRIC")) return rubric(stage, leaf, component, records, parent, chain, catalog);
+        } else if (producer.equals("RUBRIC")) return rubric(stage, leaf, component, records, parent, catalog);
         else selected = latest(records.stream().filter(n -> authority(n, leaf, component) && labelsMatch(n, catalog.leaf(leaf).path("labelsByStage").path(stage))).toList());
         if (selected == null) return missing(componentId, "COMPONENT_MISSING", "");
-        return verdict(stage, leaf, componentId, producer, selected, parent, chain, catalog);
+        return verdict(stage, leaf, componentId, producer, selected, parent, catalog);
     }
-    /** 고른 기록 하나의 기준선·이미지 identity·라벨 확인 뒤 그 기록의 판정. */
-    private ComponentVerdict verdict(String stage, String leaf, String componentId, String producer, JsonNode selected, JsonNode parent, SpecBaseline chain, LeafCatalog catalog) {
+    /** 고른 기록 하나의 이미지 identity·라벨 확인 뒤 그 기록의 판정. */
+    private ComponentVerdict verdict(String stage, String leaf, String componentId, String producer, JsonNode selected, JsonNode parent, LeafCatalog catalog) {
         String run = selected.path("runId").asText();
-        if (!chain.eligible(selected.path("specSha").asText(), leaf)) return missing(componentId, "SPEC_BASELINE_STALE", run);
         if (!BuildIdentity.matches(parent.path("buildIdentity"), selected.path("buildIdentity"), producer, stage)) return missing(componentId, "IDENTITY_MISMATCH", run);
         Set<String> labels = new HashSet<>(); selected.path("labels").forEach(n -> labels.add(n.asText()));
         for (JsonNode expected : catalog.leaf(leaf).path("labelsByStage").path(stage)) if (!labels.contains(expected.asText())) return missing(componentId, "LABEL_MISMATCH", run);
@@ -79,7 +77,7 @@ public final class GateEvaluator {
      * RUBRIC 구성 요소: 같은 자동 suite 의 최신 회차(COMPLETED)가 이 leaf 에 남긴 rubric 대상 {leafId, fixtureId, answerSha256} 마다 그 fixture·답변 SHA 에 결속된
      * RUBRIC 기록(같은 대상 중 최신)이 있어야 한다. 대상별 판정은 AND 다 — 하나라도 결속 기록이 없으면 NOT_RUN, 하나라도 FAIL 이면 FAIL.
      */
-    private ComponentVerdict rubric(String stage, String leaf, JsonNode component, List<JsonNode> records, JsonNode parent, SpecBaseline chain, LeafCatalog catalog) {
+    private ComponentVerdict rubric(String stage, String leaf, JsonNode component, List<JsonNode> records, JsonNode parent, LeafCatalog catalog) {
         String componentId = component.path("componentId").asText();
         List<JsonNode> judged = records.stream().filter(n -> authority(n, leaf, component) && labelsMatch(n, catalog.leaf(leaf).path("labelsByStage").path(stage))).toList();
         if (judged.isEmpty()) return missing(componentId, "COMPONENT_MISSING", "");
@@ -91,7 +89,7 @@ public final class GateEvaluator {
         for (JsonNode target : current.path("rubricTargets")) {
             if (!target.path("leafId").asText().equals(leaf)) continue;
             JsonNode bound = latest(judged.stream().filter(n -> n.path("fixtureId").equals(target.path("fixtureId")) && n.path("answerSha256").equals(target.path("answerSha256")) && n.path("answerSha256").asText().matches("[0-9a-f]{64}")).toList());
-            targets.add(bound == null ? missing(componentId, "RUBRIC_TARGET_MISMATCH", judgedRun) : verdict(stage, leaf, componentId, "RUBRIC", bound, parent, chain, catalog));
+            targets.add(bound == null ? missing(componentId, "RUBRIC_TARGET_MISMATCH", judgedRun) : verdict(stage, leaf, componentId, "RUBRIC", bound, parent, catalog));
         }
         if (targets.isEmpty()) return missing(componentId, "RUBRIC_TARGET_MISMATCH", judgedRun);
         String result = and(targets.stream().map(ComponentVerdict::result).toList());

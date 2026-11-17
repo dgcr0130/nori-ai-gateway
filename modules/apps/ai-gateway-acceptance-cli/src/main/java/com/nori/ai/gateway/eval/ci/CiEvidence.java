@@ -7,7 +7,6 @@ import com.nori.ai.gateway.eval.io.Json;
 import com.nori.ai.gateway.eval.report.EvidenceRecord;
 import com.nori.ai.gateway.eval.report.LeafCatalog;
 import com.nori.ai.gateway.eval.report.TestEvidenceVerifier;
-import com.nori.ai.gateway.eval.spec.SpecBinding;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -18,14 +17,14 @@ import java.util.regex.Pattern;
 
 /**
  * 통합 시험 증거 묶음(Plan §4.3 (b)·P15 M-10). pack 은 Docker 가능 환경의 운영자가 정제 요약만 묶고,
- * verify 는 CI 가 같은 commit·SPEC 입력·package 빌드 신원으로 다시 판정한다. 원시 XML·실패 메시지·SPEC 본문은 묶지 않는다.
+ * verify 는 CI 가 같은 commit·package 빌드 신원으로 다시 판정한다. 원시 XML·실패 메시지·SPEC 본문은 묶지 않는다.
  */
 public final class CiEvidence {
     static final String FORMAT = "aigw-it-evidence-v1";
     static final String MANIFEST = "bundle.json";
     static final String SELECTOR = "integrationTest";
     private static final Set<String> MANIFEST_FIELDS = Set.of("formatVersion", "gitSha", "worktreeClean", "dockerServerVersion", "testcontainersVersion",
-        "specSha", "specShaSource", "specInputOrigin", "files");
+        "files");
 
     /** 외부 명령(git·docker) 경계. 실패는 null 이 아니라 예외다. */
     @FunctionalInterface public interface Commands { String run(Path directory, List<String> command); }
@@ -56,7 +55,7 @@ public final class CiEvidence {
         return task.substring(1, split).replace(':', '/') + "/build/aigw-evidence/" + task.substring(split + 1) + "/leaf-results.json";
     }
 
-    public Path pack(Path out, Path requiredFile, SpecBinding binding) {
+    public Path pack(Path out, Path requiredFile) {
         Map<String,List<String>> required = required(requiredFile);
         // test-evidence verify --selector integrationTest --required … --require-docker 와 같은 판정을 먼저 통과해야 한다(N17).
         new TestEvidenceVerifier().verify(root, List.copyOf(required.keySet()), true, required);
@@ -71,22 +70,19 @@ public final class CiEvidence {
             String path = summaryPath(task);
             byte[] bytes = Json.bytes(TestEvidenceVerifier.summaryFile(root, task));
             JsonNode evidence = Json.parse(bytes);
-            requireSpec(evidence.path("summary"), binding);
-            for (JsonNode record : evidence.path("records")) requireSpec(record, binding);
             if (!head.equals(evidence.path("summary").path("buildIdentity").path("gitSha").asText(null))) throw new EvalException(4, "BUILD_IDENTITY_MISMATCH");
             entries.put(path, bytes); files.put(path, Json.sha(bytes));
         }
         ObjectNode manifest = Json.MAPPER.createObjectNode();
         manifest.put("formatVersion", FORMAT); manifest.put("gitSha", head); manifest.put("worktreeClean", clean);
         manifest.put("dockerServerVersion", docker); manifest.put("testcontainersVersion", testcontainersVersion());
-        manifest.put("specSha", binding.specSha()); manifest.put("specShaSource", binding.specShaSource()); manifest.put("specInputOrigin", binding.specInputOrigin());
         manifest.set("files", Json.MAPPER.valueToTree(files));
         entries.put(MANIFEST, Json.canonical(manifest));
         TarGz.write(out, entries);
         return out;
     }
 
-    public void verify(Path bundle, String sha, Path requiredFile, SpecBinding binding, BuildIdentityManifest identity) {
+    public void verify(Path bundle, String sha, Path requiredFile, BuildIdentityManifest identity) {
         if (sha == null || !sha.matches("[0-9a-f]{40}")) throw new EvalException(2, "INVALID_ARGUMENTS");
         Map<String,List<String>> required = required(requiredFile);
         var entries = TarGz.read(bundle);
@@ -103,7 +99,6 @@ public final class CiEvidence {
         if (!entries.keySet().containsAll(listed)) throw new EvalException(4, "CI_EVIDENCE_CONTENT_MISMATCH");
         if (!sha.equals(manifest.path("gitSha").asText())) throw new EvalException(4, "CI_EVIDENCE_SHA_MISMATCH");
         if (!manifest.path("worktreeClean").asBoolean()) throw new EvalException(4, "CI_EVIDENCE_DIRTY");
-        requireSpec(manifest, binding);
         LeafCatalog catalog = LeafCatalog.load(null);
         for (var task : required.entrySet()) {
             byte[] bytes = entries.get(summaryPath(task.getKey()));
@@ -117,9 +112,9 @@ public final class CiEvidence {
             if (summary.path("failed").asInt() != 0 || summary.path("aborted").asInt() != 0) throw new EvalException(4, "TESTS_FAILED");
             var executed = new HashSet<String>(); summary.path("executedClasses").forEach(node -> executed.add(node.asText()));
             if (!executed.containsAll(task.getValue())) throw new EvalException(4, "REQUIRED_CLASS_NOT_EXECUTED");
-            validate(summary, catalog, binding, identity, sha);
+            validate(summary, catalog, identity, sha);
             for (JsonNode record : evidence.path("records")) {
-                validate(record, catalog, binding, identity, sha);
+                validate(record, catalog, identity, sha);
                 if ("FAIL".equals(record.path("result").asText())) throw new EvalException(4, "TESTS_FAILED");
             }
         }
@@ -134,7 +129,7 @@ public final class CiEvidence {
         var names = new HashSet<String>(); manifest.fieldNames().forEachRemaining(names::add);
         if (!names.equals(MANIFEST_FIELDS) || !FORMAT.equals(manifest.path("formatVersion").asText()) || !manifest.path("worktreeClean").isBoolean()
             || !manifest.path("files").isObject()) throw new EvalException(4, "CI_EVIDENCE_BUNDLE_INVALID");
-        for (String text : List.of("gitSha", "dockerServerVersion", "testcontainersVersion", "specSha", "specShaSource", "specInputOrigin"))
+        for (String text : List.of("gitSha", "dockerServerVersion", "testcontainersVersion"))
             if (!manifest.path(text).isTextual() || manifest.path(text).asText().length() > 128) throw new EvalException(4, "CI_EVIDENCE_BUNDLE_INVALID");
         for (JsonNode file : manifest.path("files")) if (!file.isTextual() || !file.asText().matches("[0-9a-f]{64}")) throw new EvalException(4, "CI_EVIDENCE_BUNDLE_INVALID");
         return manifest;
@@ -150,16 +145,10 @@ public final class CiEvidence {
         return evidence;
     }
 
-    private static void validate(JsonNode record, LeafCatalog catalog, SpecBinding binding, BuildIdentityManifest identity, String sha) {
-        requireSpec(record, binding);
+    private static void validate(JsonNode record, LeafCatalog catalog, BuildIdentityManifest identity, String sha) {
         try { EvidenceRecord.validate(record, catalog); }
         catch (EvalException e) { throw new EvalException(4, e.getMessage().equals("EVIDENCE_HASH_MISMATCH") ? "CI_EVIDENCE_CONTENT_MISMATCH" : "CI_EVIDENCE_RECORD_INVALID"); }
         identity.requireTaskIdentity(record.path("buildIdentity"), sha);
-    }
-
-    private static void requireSpec(JsonNode node, SpecBinding binding) {
-        if (!"FILE_HASHED".equals(node.path("specShaSource").asText())) throw new EvalException(3, "SPEC_SHA_SOURCE_INVALID");
-        if (!binding.specSha().equals(node.path("specSha").asText())) throw new EvalException(3, "SPEC_BASELINE_MISMATCH");
     }
 
     private String testcontainersVersion() {

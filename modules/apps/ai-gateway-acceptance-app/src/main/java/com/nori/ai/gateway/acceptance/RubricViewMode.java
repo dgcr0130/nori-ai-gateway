@@ -8,8 +8,8 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * {@code AcceptanceMain --mode rubric-view} 입력 검사. SPEC 입력과 rubric 대상 레코드(같은 부모 회차의 RUN COMPLETED)를 확인한다.
- * F1·F2 고정 fixture의 actor 단언으로 같은 Spec·빌드·부모 회차의 실제 Job을 다시 조회하고, reviewer 입력 없이는 판정하지 않습니다.
+ * {@code AcceptanceMain --mode rubric-view} 입력 검사. rubric 대상 레코드(같은 부모 회차의 RUN COMPLETED)를 확인한다.
+ * F1·F2 고정 fixture의 actor 단언으로 같은 빌드·부모 회차의 실제 Job을 다시 조회하고, reviewer 입력 없이는 판정하지 않습니다.
  * F2-RUBRIC 대상은 사전등록 {@code rubric/f2-v1.json} fixture 와 (leaf, fixture) 가 정확히 맞아야 하며 세 자유 서술 leaf 를 모두 덮어야 합니다.
  */
 final class RubricViewMode {
@@ -20,14 +20,7 @@ final class RubricViewMode {
         String stage = suite == null ? null : AcceptanceConfig.stageOf(suite).orElseThrow();
         String runId = UUID.randomUUID().toString(), parent = config.parentRunId().orElse(null);
         JsonNode identity = config.buildIdentity().orElse(null);
-        String specSha;
-        try { specSha = SpecInputVerifier.verify(config.specGzipFile().orElse(null), config.expectedSpecSha256().orElse(null)); }
-        catch (SpecInputVerifier.Failure failure) {
-            EvidenceBlockWriter.write(out, List.of(EvidenceBlockWriter.record(new EvidenceBlockWriter.Context(stage, suite, runId, parent, null, identity),
-                Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", failure.code()))));
-            return 3;
-        }
-        var context = new EvidenceBlockWriter.Context(stage, suite, runId, parent, specSha, identity);
+        var context = new EvidenceBlockWriter.Context(stage, suite, runId, parent, identity);
         if (suite == null || !suite.endsWith("-RUBRIC") || parent == null || targets(config.env().get("AIGW_RUBRIC_TARGETS_FILE"), parent).isEmpty()) {
             EvidenceBlockWriter.write(out, List.of(EvidenceBlockWriter.record(context, Map.of("kind", "RUN", "status", "ABORTED", "reasonCode", "RUBRIC_TARGETS_INVALID"))));
             return 2;
@@ -36,7 +29,7 @@ final class RubricViewMode {
         String automatic=suite.substring(0,suite.length()-"-RUBRIC".length());
         try {
             var source=CanonicalJson.MAPPER.readTree(Files.readAllBytes(Path.of(config.env().get("AIGW_RUBRIC_TARGETS_FILE"))));
-            if(!source.path("stage").asText().equals(stage)||!source.path("suite").asText().equals(automatic)||!source.path("specSha").asText().equals(specSha)||!source.path("buildIdentity").equals(identity))return abort(out,context,"RUBRIC_TARGETS_INVALID");
+            if(!source.path("stage").asText().equals(stage)||!source.path("suite").asText().equals(automatic)||!source.path("buildIdentity").equals(identity))return abort(out,context,"RUBRIC_TARGETS_INVALID");
             var copy=((com.fasterxml.jackson.databind.node.ObjectNode)source).deepCopy();String expected=copy.path("contentSha256").asText();copy.remove("contentSha256");
             if(!expected.equals(CanonicalJson.sha256(CanonicalJson.bytes(copy))))return abort(out,context,"RUBRIC_TARGETS_INVALID");
         }catch(IOException|RuntimeException failure){return abort(out,context,"RUBRIC_TARGETS_INVALID");}

@@ -7,10 +7,6 @@ metadata:
   labels:
     {{- include "aigw.labels" . | nindent 4 }}
     aigw.nori/spec-verify-version: v1
-  annotations:
-    aigw.nori/spec-sha256: {{ .Values.specVerify.sha256 | quote }}
-binaryData:
-  spec.md.gz: {{ .Values.specVerify.gzipBase64 | quote }}
 {{- if hasSuffix "-RUBRIC" .Values.acceptance.suite }}
 data:
   rubric-targets.json: {{ .Values.acceptance.rubricTargets | quote }}

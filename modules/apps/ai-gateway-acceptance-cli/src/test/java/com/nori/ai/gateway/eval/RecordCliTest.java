@@ -20,7 +20,7 @@ class RecordCliTest {
         assertThat(rubric(f,RUBRIC)).isZero();
         var record=new EvidenceRepositoryFs(directory).readAll("F2").stream().filter(n->n.path("kind").asText().equals("LEAF")).findFirst().orElseThrow();
         assertThat(record.path("result").asText()).isEqualTo("PASS");assertThat(record.path("componentId").asText()).isEqualTo("RB:F2-RUBRIC");
-        assertThat(record.path("specShaSource").asText()).isEqualTo("FILE_HASHED");assertThat(record.path("contentSha256").asText()).hasSize(64);EvidenceRecord.validate(record,f.catalog);
+        assertThat(record.has("specShaSource")).isFalse();assertThat(record.path("contentSha256").asText()).hasSize(64);EvidenceRecord.validate(record,f.catalog);
     }
     @Test void rejectsUnknownFieldsMultilineOversizedAndRemovedCompatibilityCommand() throws Exception {
         TestSupport f=new TestSupport(directory);new EvidenceRepositoryFs(directory).store(f.parent("F2","p"));
@@ -35,9 +35,9 @@ class RecordCliTest {
         // 서버 측 leaf와 철회된 복원 leaf는 catalog에서 제거했고, readiness 수용 leaf는 user-run으로 등록할 수 없다.
         TestSupport f=new TestSupport(directory);EvidenceRepositoryFs repository=new EvidenceRepositoryFs(directory);
         repository.store(f.parent("F2","p"));repository.store(f.parent("F4","p"));ManualRecorder recorder=new ManualRecorder(f.catalog,repository);
-        for(String retired:new String[]{"AC-35-TOKEN","AC-35-FW","AC-35-LOCAL"}) TestSupport.error(()->recorder.record("user-run","F2",retired,"r","p",List.of(),f.binding()),4,"UNKNOWN_LEAF_TAG");
-        TestSupport.error(()->recorder.record("user-run","F2","AC-33-LOADING","r","p",List.of("restartAt=2026-11-09T00:00:00Z","readinessTransitions=[\"READY\"]"),f.binding()),2,"USER_RUN_LEAF_FORBIDDEN");
-        TestSupport.error(()->recorder.record("user-run","F4","AC-24-RESTORE","r","p",List.of("startedAt=2026-11-09T00:00:00Z","readyAt=2026-11-09T00:01:00Z"),f.binding()),4,"UNKNOWN_LEAF_TAG");
+        for(String retired:new String[]{"AC-35-TOKEN","AC-35-FW","AC-35-LOCAL"}) TestSupport.error(()->recorder.record("user-run","F2",retired,"r","p",List.of()),4,"UNKNOWN_LEAF_TAG");
+        TestSupport.error(()->recorder.record("user-run","F2","AC-33-LOADING","r","p",List.of("restartAt=2026-11-09T00:00:00Z","readinessTransitions=[\"READY\"]")),2,"USER_RUN_LEAF_FORBIDDEN");
+        TestSupport.error(()->recorder.record("user-run","F4","AC-24-RESTORE","r","p",List.of("startedAt=2026-11-09T00:00:00Z","readyAt=2026-11-09T00:01:00Z")),4,"UNKNOWN_LEAF_TAG");
         assertThat(repository.readAll("F2").stream().filter(n->n.path("kind").asText().equals("LEAF"))).isEmpty();
         assertThat(repository.readAll("F4").stream().filter(n->n.path("kind").asText().equals("LEAF"))).isEmpty();
     }

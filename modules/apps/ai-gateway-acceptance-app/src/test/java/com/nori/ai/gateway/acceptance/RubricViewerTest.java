@@ -25,7 +25,7 @@ class RubricViewerTest {
         PrintStream originalOut = System.out, originalErr = System.err;
         System.setOut(new PrintStream(stdout, true, StandardCharsets.UTF_8)); System.setErr(new PrintStream(stderr, true, StandardCharsets.UTF_8));
         try (var viewer = RubricViewer.start(0, List.of(target, tampered), t -> Optional.of(narrative), verdicts::add,
-                new EvidenceBlockWriter.Context("F4", "F4-RUBRIC", "run-r", "parent-1", "a".repeat(64), null), "reviewer-1", "rubric-v1")) {
+                new EvidenceBlockWriter.Context("F4", "F4-RUBRIC", "run-r", "parent-1", null), "reviewer-1", "rubric-v1")) {
             assertThat(viewer.address().getAddress().isLoopbackAddress()).isTrue();
             var http = HttpClient.newHttpClient();
             URI base = URI.create("http://127.0.0.1:" + viewer.address().getPort());
@@ -59,7 +59,7 @@ class RubricViewerTest {
         var target = new RubricViewer.Target("AC-02-MISSING", "fx-1", "job-1", CanonicalJson.sha256(narrative));
         List<ObjectNode> verdicts = new CopyOnWriteArrayList<>();
         try (var viewer = RubricViewer.start(0, List.of(target), t -> Optional.of(narrative), verdicts::add,
-                new EvidenceBlockWriter.Context("F4", "F4-RUBRIC", "run-r", "parent-1", "a".repeat(64), null), "reviewer-1", "rubric-v1")) {
+                new EvidenceBlockWriter.Context("F4", "F4-RUBRIC", "run-r", "parent-1", null), "reviewer-1", "rubric-v1")) {
             var http = HttpClient.newHttpClient();
             URI base = URI.create("http://127.0.0.1:" + viewer.address().getPort());
             var direct = http.send(HttpRequest.newBuilder(base.resolve("/target/0/verdict")).POST(HttpRequest.BodyPublishers.ofString("verdict=FAIL")).build(), HttpResponse.BodyHandlers.discarding());

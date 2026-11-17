@@ -28,24 +28,23 @@ class TestCountGuardFunctionalTest {
         assertThat(fixture.run(false,":sub:test","--build-cache").task(":sub:test").getOutcome()).isEqualTo(TaskOutcome.UP_TO_DATE);assertThat(fixture.runId()).isEqualTo(initial);fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
         assertThat(Files.readAllBytes(directory.resolve("sub/build/aigw-evidence/test/leaf-results.json"))).isEqualTo(originalSummary);
         fixture.deleteOutput("sub/build");assertThat(fixture.run(false,":sub:test","--build-cache").task(":sub:test").getOutcome()).isEqualTo(TaskOutcome.FROM_CACHE);assertThat(fixture.runId()).isEqualTo(initial);fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
-        for(String change:List.of("spec","resource","catalog","baseline","class")) {
+        for(String change:List.of("resource","catalog","class")) {
             String before=fixture.runId();
             switch(change) {
-                case "spec" -> {Files.writeString(fixture.fixture.spec,"revised-approved-spec");fixture.fixture.baseline(Files.readAllBytes(fixture.fixture.spec));}
                 case "resource" -> fixture.write("sub/src/test/resources/nested/fixture.txt","v2");
                 case "catalog" -> Files.writeString(directory.resolve("modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json"),Files.readString(directory.resolve("modules/apps/ai-gateway-acceptance-cli/src/main/resources/com/nori/ai/gateway/eval/leaf-catalog-v2.json"))+"\n");
                 case "class" -> fixture.write("sub/src/test/java/probe/PassingTest.java","package probe; import org.junit.jupiter.api.*; class PassingTest { @Test void checksFixtureArithmetic(){ Assertions.assertEquals(9,3*3); } }\n");
-                case "baseline" -> Files.writeString(fixture.fixture.baseline,Files.readString(fixture.fixture.baseline)+"\n");
                 default -> throw new AssertionError();
             }
             assertThat(fixture.run(false,":sub:test","--build-cache").task(":sub:test").getOutcome()).as(change).isEqualTo(TaskOutcome.SUCCESS);
-            assertThat(fixture.runId()).isNotEqualTo(before);assertThat(Json.read(directory.resolve("sub/build/aigw-evidence/test/leaf-results.json")).path("summary").path("specSha").asText()).isEqualTo(fixture.fixture.binding().specSha());fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
+            assertThat(fixture.runId()).isNotEqualTo(before);fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
         }
     }
     @Test void staleOtrAndRecursivelyChangedCompiledResourceCannotBeRelabeledByFinalizer() throws Exception {
         TestKitSupport fixture=new TestKitSupport(directory);fixture.passingTest();fixture.write("sub/src/test/resources/nested/deep/input.txt","one");fixture.run(false,":sub:test");fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
         Path binding=directory.resolve("sub/build/aigw-otr/test/run-binding.json");byte[] preserved=Files.readAllBytes(binding);
-        Files.writeString(fixture.fixture.spec,"new-approved-spec");fixture.fixture.baseline(Files.readAllBytes(fixture.fixture.spec));
+        fixture.write("sub/src/test/resources/nested/deep/input.txt","updated-source-resource");
+        fixture.run(false,":sub:processTestResources");
         assertThat(fixture.run(true,":sub:testLeafEvidence").getOutput()).contains("STALE_TEST_EVIDENCE");assertThat(fixture.run(true,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test")).getOutput()).contains("STALE_TEST_EVIDENCE");assertThat(Files.readAllBytes(binding)).isEqualTo(preserved);
         fixture.run(false,":sub:test");fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
         Files.writeString(directory.resolve("sub/build/resources/test/nested/deep/input.txt"),"changed-compiled-resource");

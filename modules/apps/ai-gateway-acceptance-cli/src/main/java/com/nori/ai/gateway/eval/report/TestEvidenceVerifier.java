@@ -23,7 +23,7 @@ public final class TestEvidenceVerifier {
             if (!Files.isRegularFile(summaryFile)) throw new EvalException(4, "NO_TESTS_EXECUTED");
             JsonNode summary = Json.read(summaryFile).path("summary");
             if (summary.path("executedTestCount").asInt() < 1) throw new EvalException(4, "NO_TESTS_EXECUTED");
-            if (!summary.path("inputFingerprint").equals(fingerprint.path("inputFingerprint")) || !summary.path("inputFingerprint").equals(binding.path("inputFingerprint")) || !summary.path("runId").equals(binding.path("runId")) || !summary.path("specSha").equals(binding.path("specSha"))) throw new EvalException(4, "STALE_TEST_EVIDENCE");
+            if (!summary.path("inputFingerprint").equals(fingerprint.path("inputFingerprint")) || !summary.path("inputFingerprint").equals(binding.path("inputFingerprint")) || !summary.path("runId").equals(binding.path("runId"))) throw new EvalException(4, "STALE_TEST_EVIDENCE");
             if (requireDocker && summary.path("skippedTestCount").asInt() != 0) throw new EvalException(4, "TESTS_SKIPPED");
             Set<String> executed = new HashSet<>(); summary.path("executedClasses").forEach(n -> executed.add(n.asText()));
             for (String required : requiredClasses.getOrDefault(task, List.of())) if (!executed.contains(required)) throw new EvalException(4, "REQUIRED_CLASS_NOT_EXECUTED");

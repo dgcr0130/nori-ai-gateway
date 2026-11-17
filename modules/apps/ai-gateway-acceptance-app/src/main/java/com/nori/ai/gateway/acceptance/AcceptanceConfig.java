@@ -23,12 +23,6 @@ public record AcceptanceConfig(Map<String,String> env, Map<String,String> proper
 
     public Optional<String> suite() { return Optional.ofNullable(properties.get("aigw.acceptance.suite")).filter(s -> stageOf(s).isPresent()); }
     public Optional<String> parentRunId() { return Optional.ofNullable(env.get("AIGW_PARENT_RUN_ID")).filter(s -> s.matches("[A-Za-z0-9_.:-]{1,128}")); }
-    /** 경로 문자열이 경로로 해석되지 않으면 부재와 같다(SPEC_INPUT_MISSING — 검증 전 예외 0). */
-    public Optional<Path> specGzipFile() {
-        try { return Optional.ofNullable(env.get("AIGW_SPEC_GZIP_FILE")).map(Path::of); }
-        catch (java.nio.file.InvalidPathException e) { return Optional.empty(); }
-    }
-    public Optional<String> expectedSpecSha256() { return Optional.ofNullable(env.get("AIGW_EXPECTED_SPEC_SHA256")); }
     /** -OUTAGE suite 회차의 단계(stage gate --outage-phase → 차트 acceptance.outagePhase). 닫힌 두 값 밖이면 빈 값이다. */
     public Optional<String> outagePhase() { return Optional.ofNullable(env.get("AIGW_OUTAGE_PHASE")).filter(phase -> phase.equals("STOPPED") || phase.equals("LOADING")); }
     public Optional<String> gatewayBaseUrl() { return Optional.ofNullable(env.get("AIGW_GATEWAY_BASE_URL")); }

@@ -29,7 +29,7 @@ public final class EmbeddingProfile {
     static Map<String,Object> build(JsonNode record, LeafCatalog catalog) {
         try { EvidenceRecord.validate(record, catalog); }
         catch (EvalException e) { throw new EvalException(2, e.getMessage().equals("EVIDENCE_HASH_MISMATCH") ? "EVIDENCE_HASH_MISMATCH" : "MEASUREMENT_INVALID"); }
-        if (!record.path("kind").asText().equals("MEASUREMENT") || !record.path("measurementId").asText().equals(MEASUREMENT_ID) || !record.path("specShaSource").asText().equals("FILE_HASHED") || !record.path("stage").asText().equals("F3")) throw new EvalException(2, "MEASUREMENT_INVALID");
+        if (!record.path("kind").asText().equals("MEASUREMENT") || !record.path("measurementId").asText().equals(MEASUREMENT_ID) || !record.path("stage").asText().equals("F3")) throw new EvalException(2, "MEASUREMENT_INVALID");
         JsonNode values = record.path("values"), dimension = values.path("dimension");
         String digest = values.path("modelDigest").asText("");
         // Plan P02: 정수 차원 > 0 만 검사(임의 상한 없음). long 으로 손실 없이 표현되지 않는 값(overflow)은 거부합니다.

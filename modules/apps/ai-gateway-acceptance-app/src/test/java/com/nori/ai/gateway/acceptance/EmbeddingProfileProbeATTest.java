@@ -11,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.zip.GZIPOutputStream;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.platform.launcher.TagFilter;
@@ -58,10 +57,7 @@ class EmbeddingProfileProbeATTest {
     }
 
     @Test void f3ProbeRunEmitsOnlyAMeasurementRecordWithoutLeafOrVector() throws Exception {
-        byte[] spec = "# 승인 SPEC 바이트\n".getBytes(StandardCharsets.UTF_8);
-        Path gzip = directory.resolve("spec.md.gz");
-        try (var stream = new GZIPOutputStream(Files.newOutputStream(gzip))) { stream.write(spec); }
-        var env = Map.of("AIGW_PARENT_RUN_ID", "F3-20261109T000000Z-0a1b2c3d", "AIGW_SPEC_GZIP_FILE", gzip.toString(), "AIGW_EXPECTED_SPEC_SHA256", CanonicalJson.sha256(spec),
+        var env = Map.of("AIGW_PARENT_RUN_ID", "F3-20261109T000000Z-0a1b2c3d",
             "AIGW_BUILD_IDENTITY_JSON", "{\"appImageDigest\":\"sha256:" + "b".repeat(64) + "\"}");
         var out = new ByteArrayOutputStream();
         reply = "{\"dimension\":1024,\"modelDigest\":\"" + DIGEST + "\"}";
@@ -80,7 +76,6 @@ class EmbeddingProfileProbeATTest {
             assertThat(measurement.path("measurementId").asText()).isEqualTo("f3-probe:embedding-profile");
             assertThat(measurement.path("stage").asText()).isEqualTo("F3");
             assertThat(measurement.path("suite").asText()).isEqualTo("F3-PROBE");
-            assertThat(measurement.path("specShaSource").asText()).isEqualTo("FILE_HASHED");
             var names = new TreeSet<String>(); measurement.path("values").fieldNames().forEachRemaining(names::add);
             assertThat(names).containsExactly("dimension", "modelDigest");
             assertThat(measurement.path("values").path("dimension").asLong()).isEqualTo(1024);

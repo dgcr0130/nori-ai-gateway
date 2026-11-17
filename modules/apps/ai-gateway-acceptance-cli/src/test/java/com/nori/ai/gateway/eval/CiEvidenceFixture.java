@@ -29,7 +29,7 @@ final class CiEvidenceFixture {
             "runId", "r", "labels", List.of("MOCK_API"), "buildIdentity", Map.of("gitSha", SHA, "runtimeClasspathSha256", CLASSPATH))));
         output = root.resolve("sub/build/aigw-evidence/integrationTest/leaf-results.json");
         save();
-        Json.write(root.resolve("sub/build/aigw-otr/integrationTest/run-binding.json"), Map.of("runId", "r", "specSha", f.binding().specSha(), "inputFingerprint", "a".repeat(64)));
+        Json.write(root.resolve("sub/build/aigw-otr/integrationTest/run-binding.json"), Map.of("runId", "r",  "inputFingerprint", "a".repeat(64)));
         Json.write(root.resolve("build/aigw-fingerprint/_sub_integrationTest.json"), Map.of("inputFingerprint", "a".repeat(64), "projectDir", "sub"));
         required = root.resolve("acceptance/required-integration-tests.txt");
         Files.createDirectories(required.getParent());
@@ -47,5 +47,5 @@ final class CiEvidenceFixture {
             default -> throw new IllegalArgumentException();
         });
     }
-    Path pack() { return evidence().pack(root.resolve("it-evidence.tgz"), required, f.binding()); }
+    Path pack() { return evidence().pack(root.resolve("it-evidence.tgz"), required); }
 }

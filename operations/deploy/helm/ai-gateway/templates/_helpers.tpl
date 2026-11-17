@@ -65,9 +65,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
   {{- range $key := list "loki" "tempo" "metrics" "approvalRef" }}{{- $_ := required (printf "READBACK_REQUIRED:%s" $key) (index $v.acceptance.readback $key) -}}{{ end -}}
   {{- $metrics := required "NETPOL_TARGET_REQUIRED:metrics" (index $v.netpol.targets "metrics") -}}
   {{- $_ := required "NETPOL_APPROVAL_REQUIRED:metrics" $metrics.approvalRef -}}
-  {{- if or (not (regexMatch "^[a-f0-9]{64}$" $v.specVerify.sha256)) (not (regexMatch "^[a-f0-9]{64}$" $v.specVerify.expectedSha256)) }}{{ fail "SPEC_VERIFY_SHA_REQUIRED" }}{{ end -}}
-  {{- if ne $v.specVerify.sha256 $v.specVerify.expectedSha256 }}{{ fail "SPEC_VERIFY_SHA_MISMATCH" }}{{ end -}}
-  {{- $_ := required "SPEC_VERIFY_GZIP_REQUIRED" $v.specVerify.gzipBase64 -}}
   {{- $s := $v.acceptance.suite -}}
   {{- $f1 := has $s (list "F1" "F1-RUBRIC") -}}
   {{- $f2 := has $s (list "F2" "F2-OUTAGE" "F2-RUBRIC" "F3-PROBE") -}}

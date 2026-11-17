@@ -13,7 +13,7 @@ final class TestKitSupport {
     final TestSupport fixture;
     final Map<String,String> env;
     TestKitSupport(Path root) throws IOException {
-        this.root=root;fixture=new TestSupport(root);env=sanitizedEnv();env.put("AIGW_SPEC_FILE",fixture.spec.toString());
+        this.root=root;fixture=new TestSupport(root);env=sanitizedEnv();
         Path actualRoot=Path.of(System.getProperty("aigw.rootDir"));
         Files.copy(actualRoot.resolve("build.gradle.kts"),root.resolve("build.gradle.kts"));
         Files.createDirectories(root.resolve("gradle"));

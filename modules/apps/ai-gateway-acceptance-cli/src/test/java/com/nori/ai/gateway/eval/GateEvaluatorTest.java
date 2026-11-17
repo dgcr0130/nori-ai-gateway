@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.io.Json;
 import com.nori.ai.gateway.eval.report.*;
-import com.nori.ai.gateway.eval.spec.SpecBaseline;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.*;
@@ -15,7 +14,7 @@ class GateEvaluatorTest {
     @TempDir Path directory;
     TestSupport f;
     @BeforeEach void setup() throws Exception { f = new TestSupport(directory); }
-    GateEvaluator.GateReport evaluate(String stage, String parent, JsonNode... records) { return new GateEvaluator().evaluate(stage, parent, List.of(records), f.catalog, SpecBaseline.parseChain(f.baseline)); }
+    GateEvaluator.GateReport evaluate(String stage, String parent, JsonNode... records) { return new GateEvaluator().evaluate(stage, parent, List.of(records), f.catalog); }
     String result(GateEvaluator.GateReport report, String leaf) { return report.leaves().stream().filter(l -> l.leafId().equals(leaf)).findFirst().orElseThrow().result(); }
     @Test void requiresAllComponentsAndPropagatesFailWithoutCreatingAbsentRecords() {
         ObjectNode p = f.parent("F0","p"), a = f.leaf("F0","p","r","AC-37-CMP",0,"PASS","2026-10-29T00:00:01Z"), b = f.leaf("F0","p","r","AC-37-CMP",1,"PASS","2026-10-29T00:00:02Z");
@@ -28,7 +27,7 @@ class GateEvaluatorTest {
     @Test void completesCurrentF0WithoutRequiringFutureLeaves() {
         List<JsonNode> records = new ArrayList<>(); records.add(f.parent("F0","p"));
         for (JsonNode leaf : f.catalog.required("F0")) for (int i=0;i<f.catalog.components("F0",leaf.path("id").asText()).size();i++) records.add(f.leaf("F0","p","r",leaf.path("id").asText(),i,"PASS","2026-10-29T00:00:01Z"));
-        var report = new GateEvaluator().evaluate("F0","p",records,f.catalog,SpecBaseline.parseChain(f.baseline));
+        var report = new GateEvaluator().evaluate("F0","p",records,f.catalog);
         assertThat(report.result()).isEqualTo("PASS"); assertThat(report.allParents().get("AC-38")).isEqualTo("NOT_RUN"); assertThat(report.stageParents().get("AC-38")).isEqualTo("PASS");
     }
     @Test void selectsLastAttemptAndNeverRevivesPreviousPassAfterAbortOrStartedOnly() {
@@ -59,14 +58,7 @@ class GateEvaluatorTest {
         ((ObjectNode)parent.get("buildIdentity")).remove("acceptanceImageDigest"); EvidenceRecord.seal(parent);
         assertThat(result(evaluate("F3","p",parent,done,leaf),"AC-23-ING-ACL")).isEqualTo("NOT_RUN");
     }
-    @Test void rejectsStaleSpecAndAllowsExplicitNewJudgement() throws Exception {
-        ObjectNode p=f.parent("F0","p"), a=f.leaf("F0","p","r","AC-38-F0",0,"PASS","2026-10-29T00:00:01Z"); String old=f.binding().specSha();
-        Files.writeString(f.spec,"new-approved"); String current=Json.sha(Files.readAllBytes(f.spec)); f.baselineChain(List.of(f.entry(1,old,null,"ALL",true),f.entry(2,current,old,List.of("AC-38-F0"),false)));
-        assertThat(result(evaluate("F0","p",p,a),"AC-38-F0")).isEqualTo("NOT_RUN");
-        a.put("measurementSpecSha",old); a.put("rawRunId","r"); a.put("rawResultsSha256","0".repeat(64)); a.put("specSha",current); EvidenceRecord.seal(a);
-        assertThat(result(evaluate("F0","p",p,a),"AC-38-F0")).isEqualTo("PASS");
-        a.put("specSha","f".repeat(64)); EvidenceRecord.seal(a); assertThat(result(evaluate("F0","p",p,a),"AC-38-F0")).isEqualTo("NOT_RUN");
-    }
+
     @Test void requiresRubricForLatestAutomaticAnswerRatherThanAnyOldCompletedTarget() {
         ObjectNode p=f.parent("F1","p"), first=f.run("F1","p","r1","F1","COMPLETED","2026-10-29T00:00:01Z"), next=f.run("F1","p","r2","F1","COMPLETED","2026-10-29T00:00:03Z");
         first.set("rubricTargets",Json.MAPPER.valueToTree(List.of(Map.of("leafId","AC-46-EMPTY","fixtureId","fixture","answerSha256","a".repeat(64))))); EvidenceRecord.seal(first);

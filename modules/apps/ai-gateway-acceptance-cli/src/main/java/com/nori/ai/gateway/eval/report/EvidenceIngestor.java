@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.SpecBinding;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.io.IOException;
@@ -15,14 +14,14 @@ public final class EvidenceIngestor {
     private final EvidenceRepositoryFs repository;
     private final LeafCatalog catalog;
     public EvidenceIngestor(EvidenceRepositoryFs repository, LeafCatalog catalog) { this.repository = repository; this.catalog = catalog; }
-    public int ingest(Path input, String source, String stage, String parent, SpecBinding binding) {
+    public int ingest(Path input, String source, String stage, String parent) {
         if (!Set.of("junit-otr", "acceptance", "measurement", "user-run", "rubric", "ops", "perf", "f0-report", "spec-record").contains(source)) throw new EvalException(2, "EVIDENCE_SOURCE_INVALID");
         List<JsonNode> records = new ArrayList<>();
-        if (source.equals("junit-otr")) return reference(input, stage, parent, binding);
+        if (source.equals("junit-otr")) return reference(input, stage, parent);
         if (Files.isDirectory(input)) {
             try (var files = Files.walk(input)) { for (Path file : files.filter(p -> Files.isRegularFile(p) && p.toString().endsWith(".json")).sorted().toList()) records.addAll(readJson(file)); }
             catch (IOException e) { throw new EvalException(5, "EVIDENCE_READ_FAILED"); }
-        } else if (source.equals("acceptance")) records.addAll(blocks(input, stage, parent, binding));
+        } else if (source.equals("acceptance")) records.addAll(blocks(input, stage, parent));
         else records.addAll(readJson(input));
         for (JsonNode record : records) {
             EvidenceRecord.validate(record, catalog);
@@ -39,19 +38,19 @@ public final class EvidenceIngestor {
         if (node.has("records")) { List<JsonNode> nodes = new ArrayList<>(); node.path("records").forEach(nodes::add); if (node.has("summary")) nodes.add(node.get("summary")); return nodes; }
         return List.of(node);
     }
-    private int reference(Path input, String stage, String parent, SpecBinding binding) {
+    private int reference(Path input, String stage, String parent) {
         JsonNode original = Json.read(input), summary = original.path("summary");
         EvidenceRecord.validate(summary, catalog);
         for (JsonNode record : original.path("records")) EvidenceRecord.validate(record, catalog);
         JsonNode manifest = repository.readAll(stage).stream().filter(n -> n.path("kind").asText().equals("RUN") && n.path("status").asText().equals("PARENT") && n.path("parentRunId").asText().equals(parent)).findFirst().orElseThrow(() -> new EvalException(2, "PARENT_MANIFEST_MISSING"));
         if (!BuildIdentity.matches(manifest.path("buildIdentity"), summary.path("buildIdentity"), "JUNIT_OTR", stage)) throw new EvalException(3, "IDENTITY_MISMATCH");
-        ObjectNode reference = EvidenceRecord.create(binding, Map.ofEntries(Map.entry("kind", "RUN"), Map.entry("status", "REFERENCE"), Map.entry("stage", stage),
+        ObjectNode reference = EvidenceRecord.create(Map.ofEntries(Map.entry("kind", "RUN"), Map.entry("status", "REFERENCE"), Map.entry("stage", stage),
             Map.entry("parentRunId", parent), Map.entry("runId", summary.path("runId").asText()), Map.entry("producer", "JUNIT_OTR"), Map.entry("taskPath", summary.path("taskPath").asText()),
             Map.entry("sourceFile", input.toAbsolutePath().normalize().toString()), Map.entry("sourceFileSha256", Json.sha(Json.bytes(input))), Map.entry("originalContentSha256", summary.path("contentSha256").asText()),
             Map.entry("otrSha256", summary.path("otrSha256").asText()), Map.entry("buildIdentity", summary.path("buildIdentity"))));
         EvidenceRecord.validate(reference, catalog); repository.store(reference); return 1;
     }
-    private List<JsonNode> blocks(Path path, String stage, String parent, SpecBinding binding) {
+    private List<JsonNode> blocks(Path path, String stage, String parent) {
         byte[] bytes = Json.bytes(path); Path hashFile = path.resolveSibling(path.getFileName() + ".sha256");
         String expected = Files.isRegularFile(hashFile) ? new String(Json.bytes(hashFile), StandardCharsets.UTF_8).strip().split("\\s+")[0] : "";
         if (!expected.equals(Json.sha(bytes))) throw new EvalException(5, "EVIDENCE_HASH_MISMATCH");
@@ -66,7 +65,7 @@ public final class EvidenceIngestor {
             if (node.isArray()) node.forEach(records::add); else records.add(node);
         }
         if (records.isEmpty() || invalid) {
-            records.clear(); records.add(EvidenceRecord.create(binding, Map.of("kind", "RUN", "status", "ABORTED", "stage", stage, "parentRunId", parent,
+            records.clear(); records.add(EvidenceRecord.create(Map.of("kind", "RUN", "status", "ABORTED", "stage", stage, "parentRunId", parent,
                 "runId", UUID.randomUUID().toString(), "reasonCode", "ACCEPTANCE_EVIDENCE_MISSING", "producer", "ACCEPTANCE")));
         }
         return records;

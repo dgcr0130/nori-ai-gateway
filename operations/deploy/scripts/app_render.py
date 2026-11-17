@@ -1,6 +1,4 @@
-"""aigw-helm.sh 보조: image digest·SPEC 입력 값 생성, 차트 checkout 검사와 렌더 대조. 출력은 고정 코드와 비밀 아닌 값뿐입니다."""
-import base64
-import gzip
+"""aigw-helm.sh 보조: image digest 값 생성, 차트 checkout 검사와 렌더 대조. 출력은 고정 코드와 비밀 아닌 값뿐입니다."""
 import hashlib
 import json
 import re
@@ -35,9 +33,6 @@ class InputError(Exception):
     pass
 
 
-class SpecMismatch(InputError):
-    """실제 SPEC 바이트 SHA ≠ 기준선(M-10 exit 3)."""
-
 
 def fail(code):
     raise InputError(code)
@@ -64,34 +59,6 @@ def digests(path, out):
                                              sort_keys=True, separators=(',', ':'))
     Path(out).write_text(json.dumps(result), encoding='utf-8')
 
-
-def baseline_sha(path):
-    """기준선 문서의 첫 json 코드 블록 배열 마지막 항목 sha256."""
-    try:
-        text = Path(path).read_text(encoding='utf-8')
-        block = re.search(r'```json\n(.*?)\n```', text, re.S)
-        chain = json.loads(block.group(1)) if block else None
-        sha = chain[-1]['sha256'] if isinstance(chain, list) and chain and isinstance(chain[-1], dict) else None
-    except (OSError, ValueError, KeyError, TypeError):
-        sha = None
-    if not isinstance(sha, str) or not HEX64.match(sha):
-        fail('SPEC_BASELINE_INVALID')
-    return sha
-
-
-def spec(spec_file, baseline, out):
-    """SPEC 실제 바이트 SHA 가 기준선 마지막 항목과 같을 때만 spec-verify 값(gzip base64·SHA)을 쓴다. 본문 출력 0."""
-    try:
-        data = Path(spec_file).read_bytes()
-    except OSError:
-        fail('SPEC_INPUT_MISSING')
-    expected = baseline_sha(baseline)
-    actual = hashlib.sha256(data).hexdigest()
-    if actual != expected:
-        raise SpecMismatch('SPEC_BASELINE_MISMATCH')
-    packed = base64.b64encode(gzip.compress(data, mtime=0)).decode('ascii')
-    Path(out).write_text(json.dumps({'specVerify': {'gzipBase64': packed, 'sha256': actual, 'expectedSha256': expected}}), encoding='utf-8')
-    print(actual)
 
 
 def documents(render):
@@ -131,7 +98,7 @@ def egress_rule(target):
     return {'to': [peer], 'ports': [{'protocol': 'TCP', 'port': target['port']}]}
 
 
-def matrix(render, release, suite, spec_sha, values_file):
+def matrix(render, release, suite, values_file):
     """렌더 결과가 §11.9 그 행과 정확히 같은지: Deployment Secret volume·추론 모드 env·egress 대상·수용 Job Secret·spec-verify.
     egress 기대값은 그 실행의 runconfig 해석 결과(values_file = runconfig.py 출력)의 netpol 대상에서 계산한다."""
     if suite not in ROWS or ROWS[suite][0] != release:
@@ -205,9 +172,6 @@ def matrix(render, release, suite, spec_sha, values_file):
     spec_volume = [v for v in job_pod['spec']['volumes'] if v['name'] == 'spec']
     if 'spec' not in mounts or not mounts['spec'].get('readOnly') or len(spec_volume) != 1 or spec_volume[0]['configMap']['name'] != release + '-spec-verify':
         fail('RENDER_MATRIX_MISMATCH:spec-mount')
-    configmap = one(docs, 'ConfigMap', release + '-spec-verify')
-    if hashlib.sha256(gzip.decompress(base64.b64decode(configmap['binaryData']['spec.md.gz']))).hexdigest() != spec_sha:
-        fail('RENDER_MATRIX_MISMATCH:spec-verify')
 
 
 def deployment_sha(render, release):
@@ -239,11 +203,9 @@ def checkout(digests_path):
 def main():
     command, args = sys.argv[1], sys.argv[2:]
     try:
-        {'digests': digests, 'spec': spec, 'matrix': matrix, 'deployment-sha': deployment_sha, 'checkout': checkout}[command](*args)
+        {'digests': digests, 'matrix': matrix, 'deployment-sha': deployment_sha, 'checkout': checkout}[command](*args)
     except InputError as error:
         print(str(error), file=sys.stderr)
-        if isinstance(error, SpecMismatch):
-            return 3
         return 1 if str(error).startswith('RENDER_MATRIX') else 2
     return 0
 

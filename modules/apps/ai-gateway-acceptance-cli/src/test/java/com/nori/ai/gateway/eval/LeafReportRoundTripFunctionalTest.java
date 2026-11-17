@@ -18,7 +18,7 @@ class LeafReportRoundTripFunctionalTest {
         assertThat(results).containsEntry("AC-24-JOB","PASS").containsEntry("AC-24-AUTHZ","FAIL").containsEntry("AC-24-LOT-ACTIVE","NOT_RUN").containsEntry("AC-24-LOT-MULTI","NOT_RUN").containsEntry("AC-24-LOT-ENDED","FAIL").doesNotContainKey("AC-24-LOT-UNKNOWN");
         assertThat(evidence.path("summary").path("executedTestCount").asInt()).isEqualTo(5);assertThat(evidence.path("summary").path("skipped").asInt()).isEqualTo(1);assertThat(evidence.path("summary").path("aborted").asInt()).isEqualTo(1);
         assertThat(Files.readString(output)).doesNotContain("OTR_SENTINEL","AssertionFailedError","stackTrace","ProbeTest.java:");
-        evidence.path("records").forEach(n->{assertThat(n.path("specSha").asText()).isEqualTo(fixture.fixture.binding().specSha());assertThat(n.path("specShaSource").asText()).isEqualTo("FILE_HASHED");});
+        evidence.path("records").forEach(n -> assertThat(n.has("specSha") || n.has("specShaSource") || n.has("specInputOrigin")).isFalse());
         fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
         fixture.write("sub/src/test/java/probe/ProbeTest.java","package probe; import org.junit.jupiter.api.*; class ProbeTest { @Test @Tag(\"AC-99-UNKNOWN\") void unknown(){Assertions.assertTrue(true);} }\n");
         assertThat(fixture.run(true,":sub:test").getOutput()).contains("UNKNOWN_LEAF_TAG");assertThat(output).doesNotExist();
@@ -29,9 +29,5 @@ class LeafReportRoundTripFunctionalTest {
         fixture.run(true,":sub:test");JsonNode result=Json.read(directory.resolve("sub/build/aigw-evidence/test/leaf-results.json"));assertThat(result.path("records").size()).isEqualTo(2);
         Map<String,String> labels=new HashMap<>();result.path("records").forEach(n->labels.put(n.path("labels").get(0).asText(),n.path("result").asText()));assertThat(labels).containsEntry("MOCK_API","PASS").containsEntry("TC_LIVE","FAIL");fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
     }
-    @Test void missingAndTamperedSpecFailAndDeleteOldSanitizedOutput() throws Exception {
-        TestKitSupport fixture=new TestKitSupport(directory);fixture.passingTest();fixture.run(false,":sub:test");fixture.run(false,":apps:ai-gateway-acceptance-cli:run",fixture.verifyArgs(":sub:test"));
-        Path output=directory.resolve("sub/build/aigw-evidence/test/leaf-results.json");fixture.env.remove("AIGW_SPEC_FILE");assertThat(fixture.run(true,":sub:testLeafEvidence").getOutput()).contains("SPEC_INPUT_MISSING");assertThat(output).doesNotExist();
-        fixture.env.put("AIGW_SPEC_FILE",fixture.fixture.spec.toString());Files.writeString(fixture.fixture.spec,"tampered");assertThat(fixture.run(true,":sub:testLeafEvidence").getOutput()).contains("SPEC_BASELINE_MISMATCH");assertThat(output).doesNotExist();
-    }
+
 }

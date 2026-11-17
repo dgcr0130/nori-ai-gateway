@@ -16,7 +16,7 @@
 
 | 문서 | 내용 |
 |---|---|
-| [spec.md](../../nori-sdd-specs/work-items/005-ai-gateway/spec.md) | 승인 SPEC. 바이트가 바뀌면 기준선 사슬 [acceptance/spec-baseline.md](../acceptance/spec-baseline.md)에 root 승인 항목이 추가될 때까지 `spec-guard`가 실패합니다. |
+| [spec.md](../../nori-sdd-specs/work-items/005-ai-gateway/spec.md) | 승인 SPEC. 제품 시험과 증거 검증은 SPEC 파일·기준선 입력 없이 실행합니다. |
 | [spec-plan.md](../../nori-sdd-specs/work-items/005-ai-gateway/spec-plan.md) | 구현 PLAN. 첫 절에 2026-11-16 구조 정리의 옛 경로 → 새 경로 대응표가 있습니다. |
 | [implementation-log.md](../../nori-sdd-specs/work-items/005-ai-gateway/implementation-log.md) | 구현 기록 |
 | [spec-approvals.md](../../nori-sdd-specs/work-items/005-ai-gateway/spec-approvals.md) | 기준선 seq 2~18 승인 근거 |

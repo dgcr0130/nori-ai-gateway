@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.io.Json;
 import com.nori.ai.gateway.eval.report.*;
-import com.nori.ai.gateway.eval.spec.SpecBaseline;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.*;
@@ -16,7 +15,7 @@ class EvidenceRepositoryFsTest {
     @TempDir Path directory;
 
     GateEvaluator.GateReport evaluate(TestSupport fixture, EvidenceRepositoryFs repository) {
-        return new GateEvaluator().evaluate("F1", "p", repository.readAll("F1"), fixture.catalog, SpecBaseline.parseChain(fixture.baseline));
+        return new GateEvaluator().evaluate("F1", "p", repository.readAll("F1"), fixture.catalog);
     }
 
     @Test void operationalArtifactsDoNotChangeVerdictsOrStoredBytes() throws Exception {

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.*;
 import javax.xml.stream.*;
 import java.io.*;
 import java.nio.file.*;
@@ -19,11 +18,11 @@ public final class OtrLeafExtractor {
         String type = "", className = "", status = "";
         final Set<String> tags = new TreeSet<>();
     }
-    public ObjectNode extract(Path directory, String task, String module, Path baseline, String spec,
+    public ObjectNode extract(Path directory, String task, String module,
                               Path output, String currentFingerprint, boolean requireExecuted, LeafCatalog catalog, Map<String,String> env) {
-        return extract(directory, task, module, baseline, spec, output, currentFingerprint, requireExecuted, catalog, env, null);
+        return extract(directory, task, module, output, currentFingerprint, requireExecuted, catalog, env, null);
     }
-    public ObjectNode extract(Path directory, String task, String module, Path baseline, String spec,
+    public ObjectNode extract(Path directory, String task, String module,
                               Path output, String currentFingerprint, boolean requireExecuted, LeafCatalog catalog, Map<String,String> env, Path runtimeClasspathFile) {
         try { Files.deleteIfExists(output); } catch (IOException e) { throw new EvalException(5, "OUTPUT_CLEANUP_FAILED"); }
         String runtime = env.get("AIGW_RUNTIME_CLASSPATH_SHA256");
@@ -32,11 +31,10 @@ public final class OtrLeafExtractor {
             if (!Files.isRegularFile(runtimeClasspathFile) || !Files.isReadable(runtimeClasspathFile)) throw new EvalException(2, "INPUT_MISSING");
             runtime = Json.sha(Json.bytes(runtimeClasspathFile));
         }
-        SpecBinding binding = new SpecGuard(env).check(spec, null, baseline);
         Path bindingFile = directory.resolve("run-binding.json");
         if (!Files.isRegularFile(bindingFile)) { if (requireExecuted) throw new EvalException(4, "NO_TESTS_EXECUTED"); return null; }
         JsonNode run = Json.read(bindingFile);
-        if (!run.path("inputFingerprint").asText().equals(currentFingerprint) || !run.path("specSha").asText().equals(binding.specSha()) || run.path("recordedAt").asText().isBlank()) throw new EvalException(4, "STALE_TEST_EVIDENCE");
+        if (!run.path("inputFingerprint").asText().equals(currentFingerprint) || run.path("recordedAt").asText().isBlank()) throw new EvalException(4, "STALE_TEST_EVIDENCE");
         List<Path> xml;
         try (var files = Files.walk(directory)) { xml = files.filter(p -> Files.isRegularFile(p) && p.toString().endsWith(".xml")).sorted().toList(); }
         catch (IOException e) { throw new EvalException(4, "OTR_INPUT_INVALID"); }
@@ -68,7 +66,7 @@ public final class OtrLeafExtractor {
         List<ObjectNode> records = new ArrayList<>();
         for (var entry : outcomes.entrySet()) {
             String[] parts = entry.getKey().split("/", 3);
-            records.add(EvidenceRecord.create(binding, Map.ofEntries(Map.entry("kind", "LEAF"), Map.entry("stage", parts[0]), Map.entry("leafId", parts[1]),
+            records.add(EvidenceRecord.create(Map.ofEntries(Map.entry("kind", "LEAF"), Map.entry("stage", parts[0]), Map.entry("leafId", parts[1]),
                 Map.entry("labels", labels.get(entry.getKey())), Map.entry("environment", "local"), Map.entry("producer", "JUNIT_OTR"), Map.entry("componentId", "IT"),
                 Map.entry("taskPath", task), Map.entry("runId", run.path("runId").asText()), Map.entry("result", GateEvaluator.and(entry.getValue())),
                 Map.entry("recordedAt", run.path("recordedAt").asText()),
@@ -82,7 +80,7 @@ public final class OtrLeafExtractor {
         summaryFields.put("executedTestCount", executed); summaryFields.put("passed", passed); summaryFields.put("failed", failed); summaryFields.put("skipped", skipped); summaryFields.put("aborted", aborted); summaryFields.put("skippedTestCount", skipped + aborted);
         summaryFields.put("executedClasses", classes); summaryFields.put("otrSha256", Json.sha(Json.canonical(Json.MAPPER.valueToTree(hashes))));
         summaryFields.put("inputFingerprint", run.path("inputFingerprint").asText()); summaryFields.put("buildIdentity", identity);
-        ObjectNode summary = EvidenceRecord.create(binding, summaryFields);
+        ObjectNode summary = EvidenceRecord.create(summaryFields);
         ObjectNode result = Json.MAPPER.createObjectNode(); result.set("summary", summary); result.set("records", Json.MAPPER.valueToTree(records));
         Json.write(output, result); return result;
     }

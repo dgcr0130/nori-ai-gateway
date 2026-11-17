@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.SpecBinding;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -12,16 +11,15 @@ import java.util.*;
 public final class EvidenceRecord {
     private static final Set<String> FORBIDDEN = Set.of("answer", "prompt", "raw", "token", "jws", "dlg", "message", "stackTrace");
     private static final Set<String> FIELDS = Set.of(
-        "kind", "stage", "suite", "producer", "componentId", "runId", "parentRunId", "specSha", "specShaSource", "specInputOrigin", "recordedAt", "contentSha256",
+        "kind", "stage", "suite", "producer", "componentId", "runId", "parentRunId", "recordedAt", "contentSha256",
         "leafId", "measurementId", "result", "status", "labels", "environment", "reasonCode", "buildIdentity", "measurementSpecSha", "rawRunId", "rawResultsSha256",
         "fixtureId", "jobId", "answerSha256", "rubricTargets", "reviewerRef", "reviewedAt", "verdict", "rubricVersion", "outagePhase", "values", "metrics", "resources", "samples",
         "taskPath", "module", "inputFingerprint", "executedTestCount", "passed", "failed", "skipped", "aborted", "skippedTestCount", "executedClasses", "otrSha256",
         "sourceFile", "sourceFileSha256", "originalContentSha256", "criteriaSha256", "decision", "baselineSeq", "acceptedCount", "preStartTerminalCount", "rejectedCount",
         "terminalCounts", "backfillActive", "queueTimeoutCount", "workerInterruptedCount", "fixedQueryExpectedSha256", "fixedQueryActualSha256");
     private EvidenceRecord() {}
-    public static ObjectNode create(SpecBinding binding, Map<String,?> fields) {
+    public static ObjectNode create(Map<String,?> fields) {
         ObjectNode node = Json.MAPPER.valueToTree(fields);
-        node.put("specSha", binding.specSha()); node.put("specShaSource", binding.specShaSource()); node.put("specInputOrigin", binding.specInputOrigin());
         if (!node.has("recordedAt")) node.put("recordedAt", Instant.now().toString());
         return seal(node);
     }
@@ -35,9 +33,6 @@ public final class EvidenceRecord {
         if (!node.path("contentSha256").asText().equals(Json.sha(Json.canonical(unsigned)))) throw new EvalException(5, "EVIDENCE_HASH_MISMATCH");
         for (var fields = node.fieldNames(); fields.hasNext();) if (!FIELDS.contains(fields.next())) throw new EvalException(2, "EVIDENCE_FIELD_INVALID");
         String kind = Json.required(node, "kind");
-        // SPEC 결속 위반은 빈 값·선언값이어도 일반 식별자 오류보다 먼저 SPEC_SHA_UNVERIFIED로 거부합니다.
-        boolean abortedInput = kind.equals("RUN") && node.path("status").asText().equals("ABORTED") && Set.of("SPEC_INPUT_MISSING", "SPEC_BASELINE_MISMATCH").contains(node.path("reasonCode").asText());
-        if (!abortedInput && (!node.path("specSha").asText().matches("[0-9a-f]{64}") || !node.path("specShaSource").asText().equals("FILE_HASHED"))) throw new EvalException(2, "SPEC_SHA_UNVERIFIED");
         validateMetadata(node, "");
         try { Instant.parse(Json.required(node, "recordedAt")); }
         catch (DateTimeParseException e) { throw new EvalException(2, "EVIDENCE_TIMESTAMP_INVALID"); }

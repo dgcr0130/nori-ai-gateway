@@ -15,7 +15,7 @@ class TestEvidenceVerifyTest {
     TestSupport f;ObjectNode summary;Path output;
     @BeforeEach void fixture() throws Exception {
         f=new TestSupport(directory);summary=f.record(Map.ofEntries(Map.entry("kind","RUN"),Map.entry("status","COMPLETED"),Map.entry("stage","F0"),Map.entry("runId","r"),Map.entry("executedTestCount",1),Map.entry("inputFingerprint","a".repeat(64)),Map.entry("executedClasses",List.of("probe.RealTest")),Map.entry("skippedTestCount",0)));
-        output=directory.resolve("sub/build/aigw-evidence/test/leaf-results.json");save();Json.write(directory.resolve("sub/build/aigw-otr/test/run-binding.json"),Map.of("runId","r","specSha",f.binding().specSha(),"inputFingerprint","a".repeat(64)));Json.write(directory.resolve("build/aigw-fingerprint/_sub_test.json"),Map.of("inputFingerprint","a".repeat(64),"projectDir","sub"));
+        output=directory.resolve("sub/build/aigw-evidence/test/leaf-results.json");save();Json.write(directory.resolve("sub/build/aigw-otr/test/run-binding.json"),Map.of("runId","r","inputFingerprint","a".repeat(64)));Json.write(directory.resolve("build/aigw-fingerprint/_sub_test.json"),Map.of("inputFingerprint","a".repeat(64),"projectDir","sub"));
     }
     void save(){EvidenceRecord.seal(summary);Json.write(output,Map.of("summary",summary,"records",List.of()));}
     void verify(boolean docker,Map<String,List<String>> classes){new TestEvidenceVerifier().verify(directory,List.of(":sub:test"),docker,classes);}

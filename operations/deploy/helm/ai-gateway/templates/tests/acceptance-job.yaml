@@ -16,8 +16,6 @@ spec:
       labels:
         app: ai-gateway-acceptance
         app.kubernetes.io/instance: {{ .Release.Name }}
-      annotations:
-        checksum/spec-verify: {{ .Values.specVerify.sha256 | quote }}
     spec:
       automountServiceAccountToken: false
       restartPolicy: Never
@@ -54,8 +52,6 @@ spec:
             - {name: AIGW_SIGNER_PRIVATE_JWK_FILE, value: /run/aigw/signer/signer-private.jwk}
             - {name: AIGW_SERVICE_TOKEN_FILE, value: /run/aigw/client/service-token}
             - {name: AIGW_HOOK_TOKEN_FILE, value: /run/aigw/client/hook-token}
-            - {name: AIGW_SPEC_GZIP_FILE, value: /run/aigw/spec/spec.md.gz}
-            - {name: AIGW_EXPECTED_SPEC_SHA256, value: {{ .Values.specVerify.expectedSha256 | quote }}}
             # image-digests.json 의 digest·buildIdentity 와 렌더 SHA(비밀 아님, aigw-helm.sh 가 렌더 입력에서 만든 값).
             - {name: AIGW_BUILD_IDENTITY_JSON, value: {{ required "ACCEPTANCE_BUILD_IDENTITY_REQUIRED" .Values.acceptance.buildIdentityJson | quote }}}
             - {name: AIGW_LOKI_READ_URL, value: {{ .Values.acceptance.readback.loki | quote }}}
@@ -82,7 +78,6 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 64Mi}
-        # 부재해도 pod 는 뜨고 SpecInputVerifier 가 RUN ABORTED(SPEC_INPUT_MISSING) 증거를 남긴다(M-10).
         - name: spec
           configMap:
             name: {{ .Release.Name }}-spec-verify

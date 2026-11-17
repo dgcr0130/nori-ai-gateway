@@ -4,14 +4,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.nori.ai.gateway.eval.EvalException;
 import com.nori.ai.gateway.eval.io.Json;
-import com.nori.ai.gateway.eval.spec.SpecBinding;
 import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 
 public final class PerfReporter {
     public ObjectNode report(String stage, String leaf, String parent, List<Path> inputs, Path criteriaFile, Path output,
-                             Path root, SpecBinding binding, LeafCatalog catalog, JsonNode parentManifest) {
+                             Path root, LeafCatalog catalog, JsonNode parentManifest) {
         if (!Set.of("F3", "F4").contains(stage) || !Set.of("AC-23-PERF", "AC-23-LOAD", "AC-24-PERF").contains(leaf) || !parent.matches("[A-Za-z0-9_.:-]{1,128}")) throw new EvalException(2, "PERF_INPUT_INVALID");
         Path target = output.resolve(leaf + "-" + parent.replace(':', '_') + ".json");
         try { Files.deleteIfExists(target); } catch (IOException e) { throw new EvalException(5, "OUTPUT_CLEANUP_FAILED"); }
@@ -19,7 +18,7 @@ public final class PerfReporter {
         Path normalized = criteriaFile.toAbsolutePath().normalize();
         if (!normalized.startsWith(root.toAbsolutePath().normalize().resolve("acceptance/approvals"))) throw new EvalException(2, "PERF_CRITERIA_UNAPPROVED");
         JsonNode criteria = readCriteria(criteriaFile);
-        if (!criteria.path("baselineSeq").isIntegralNumber() || criteria.path("baselineSeq").asInt() != com.nori.ai.gateway.eval.spec.SpecBaseline.parseChain(root.resolve("acceptance/spec-baseline.md")).seq() || !criteria.path("approved").asBoolean() || !criteria.path("specSha").asText().equals(binding.specSha()) || !criteria.path("leafId").asText().equals(leaf)) throw new EvalException(2, "PERF_CRITERIA_UNAPPROVED");
+        if (!criteria.path("approved").asBoolean() || !criteria.path("leafId").asText().equals(leaf)) throw new EvalException(2, "PERF_CRITERIA_UNAPPROVED");
         String approval = Json.required(criteria, "approvalRef"); Path approvalFile = root.resolve(approval).toAbsolutePath().normalize();
         if (!approvalFile.startsWith(root.toAbsolutePath().normalize().resolve("acceptance/approvals")) || !Files.isRegularFile(approvalFile)) throw new EvalException(2, "PERF_CRITERIA_UNAPPROVED");
         Set<String> measurements = new HashSet<>(); for (JsonNode component : catalog.components(stage, leaf)) if (component.path("producer").asText().equals("PERF")) { measurements.add(component.path("measurementId").asText()); component.path("measurementIds").forEach(n -> measurements.add(n.asText())); }
@@ -30,7 +29,7 @@ public final class PerfReporter {
             JsonNode record = Json.read(path); rejectAggregates(record); EvidenceRecord.validate(record, catalog);
             if (!record.path("kind").asText().equals("MEASUREMENT") || !record.path("parentRunId").asText().equals(parent) || !measurements.contains(record.path("measurementId").asText())) continue;
             if (leaf.equals("AC-23-LOAD") && !record.path("backfillActive").asBoolean()) continue;
-            if (!record.path("specSha").asText().equals(binding.specSha()) || !BuildIdentity.matches(parentManifest.path("buildIdentity"), record.path("buildIdentity"), "PERF", stage)) throw new EvalException(3, "IDENTITY_MISMATCH");
+            if (!BuildIdentity.matches(parentManifest.path("buildIdentity"), record.path("buildIdentity"), "PERF", stage)) throw new EvalException(3, "IDENTITY_MISMATCH");
             selected.add(record);
             if (record.path("preStartTerminalCount").asInt() != 0 || record.path("rejectedCount").asInt() != 0) invalidPopulation = true;
             if (stage.equals("F4") && (!record.has("preStartTerminalCount") || !record.has("rejectedCount") || !record.path("acceptedCount").isIntegralNumber() || !record.path("terminalCounts").isObject())) checksComplete = false;
@@ -106,7 +105,7 @@ public final class PerfReporter {
             if (values.isEmpty() || percentile(values, 95) > criteria.path("thresholds").path("A:" + route).path("p95MaxMs").asLong()) candidateWithin = false;
         }
         if (leaf.equals("AC-24-PERF")) fields.put("decision", criteria.path("candidateA").asBoolean() && criteria.path("f0AccuracyQualified").asBoolean() && candidateWithin && result.equals("PASS") ? "PROMOTE_A" : "KEEP_B");
-        ObjectNode record = EvidenceRecord.create(binding, fields); EvidenceRecord.validate(record, catalog); Json.write(target, record); return record;
+        ObjectNode record = EvidenceRecord.create(fields); EvidenceRecord.validate(record, catalog); Json.write(target, record); return record;
     }
     public static long percentile(List<Long> samples, int percentage) {
         if (samples.isEmpty() || percentage < 1 || percentage > 100) throw new EvalException(2, "PERF_RAW_SAMPLES_REQUIRED");

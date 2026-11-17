@@ -13,16 +13,9 @@ default:
 
 # P15final 생산자(task·스크립트·검사 main)와 운영 gate가 없으면 해당 job은 실패합니다.
 # gradlew 는 레포에 실행 권한 없이(100644) 저장되어 있으므로 bash 로 실행한다(작업 트리 chmod 0 — package 의 dirty 검사 유지).
-.aigw-spec-input:
+test:
   before_script:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
-    - 'test -n "$AIGW_APPROVED_SPEC_SHA"'
-    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="spec-input fetch --api-url $CI_API_V4_URL --project-id $CI_PROJECT_ID --sha $AIGW_APPROVED_SPEC_SHA --baseline acceptance/spec-baseline.md --out-dir build/spec-input --auth-header JOB-TOKEN --token-env CI_JOB_TOKEN" --no-daemon'
-    - 'export AIGW_SPEC_FILE="$CI_PROJECT_DIR/build/spec-input/$AIGW_APPROVED_SPEC_SHA/spec.md"'
-    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="spec-guard --spec $AIGW_SPEC_FILE --baseline acceptance/spec-baseline.md" --no-daemon'
-
-test:
-  extends: .aigw-spec-input
   stage: check
   dependencies: []
   script:
@@ -52,7 +45,8 @@ package:
       - build/package/build-identity.json
 
 integration-test:
-  extends: .aigw-spec-input
+  before_script:
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
   stage: verify
   rules:
     - if: '$AIGW_CI_IT_MODE == "runner"'
@@ -67,7 +61,8 @@ integration-test:
     paths: ['**/build/aigw-evidence/**']
 
 integration-evidence:
-  extends: .aigw-spec-input
+  before_script:
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
   stage: verify
   rules:
     - if: '$AIGW_CI_IT_MODE == "evidence"'
@@ -75,7 +70,7 @@ integration-evidence:
   script:
     - 'test "$CI_API_V4_URL" = "https://gitlab.noricloud.org/api/v4"'
     - 'printf ''header = "JOB-TOKEN: %s"\n'' "$CI_JOB_TOKEN" | curl --config - --fail --silent --show-error --proto "=https" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aigw-it-evidence/$CI_COMMIT_SHA/it-evidence.tgz" --output it-evidence.tgz'
-    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="ci-evidence verify --sha $CI_COMMIT_SHA --bundle it-evidence.tgz --required acceptance/required-integration-tests.txt --spec $AIGW_SPEC_FILE --baseline acceptance/spec-baseline.md --expect-build-identity build/package/build-identity.json" --no-daemon'
+    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="ci-evidence verify --sha $CI_COMMIT_SHA --bundle it-evidence.tgz --required acceptance/required-integration-tests.txt --expect-build-identity build/package/build-identity.json" --no-daemon'
 
 integration-mode-guard:
   stage: verify

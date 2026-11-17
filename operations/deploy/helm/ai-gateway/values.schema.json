@@ -648,33 +648,6 @@
         "targets"
       ]
     },
-    "specVerify": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "version": {
-          "const": "v1"
-        },
-        "gzipBase64": {
-          "type": "string",
-          "pattern": "^[A-Za-z0-9+/]*={0,2}$"
-        },
-        "sha256": {
-          "type": "string",
-          "pattern": "^([0-9a-f]{64})?$"
-        },
-        "expectedSha256": {
-          "type": "string",
-          "pattern": "^([0-9a-f]{64})?$"
-        }
-      },
-      "required": [
-        "version",
-        "gzipBase64",
-        "sha256",
-        "expectedSha256"
-      ]
-    },
     "acceptance": {
       "type": "object",
       "additionalProperties": false,
@@ -789,41 +762,8 @@
     "configSecret",
     "netpol",
     "egressProbe",
-    "specVerify",
     "acceptance"
   ],
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "AI Gateway 사전작성 차트 입력 계약",
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "acceptance": {
-            "properties": {
-              "enabled": {
-                "const": true
-              }
-            }
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "specVerify": {
-            "properties": {
-              "gzipBase64": {
-                "minLength": 1
-              },
-              "sha256": {
-                "pattern": "^[0-9a-f]{64}$"
-              },
-              "expectedSha256": {
-                "pattern": "^[0-9a-f]{64}$"
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
+  "title": "AI Gateway 사전작성 차트 입력 계약"
 }

@@ -14,7 +14,6 @@ import javax.xml.stream.*;
  * 실패 메시지·스택·attachment 는 읽지 않는다. eval {@code OtrLeafExtractor} 와 같은 규칙이며 같은 입력의 시험으로 일치를 고정한다.
  */
 public final class EvidenceBlockWriter {
-    public static final String ORIGIN = "ACCEPTANCE_MOUNT";
     private static final String EVENTS = "https://schemas.opentest4j.org/reporting/events/0.2.0";
     private static final String JUNIT = "https://schemas.junit.org/open-test-reporting";
     private static final String CORE = "https://schemas.opentest4j.org/reporting/core/0.2.0";
@@ -25,8 +24,8 @@ public final class EvidenceBlockWriter {
     public record Extraction(List<ObjectNode> leaves, int executed, int passed, int failed, int skipped, int aborted) {
         public Extraction { leaves = List.copyOf(leaves); }
     }
-    /** 레코드 공통 문맥. specSha 가 null 이면 SPEC 입력 실패 회차다. */
-    public record Context(String stage, String suite, String runId, String parentRunId, String specSha, JsonNode buildIdentity) {}
+    /** 레코드 공통 문맥. */
+    public record Context(String stage, String suite, String runId, String parentRunId, JsonNode buildIdentity) {}
 
     private static final class TestEvent { String type = "", className = "", status = ""; final Set<String> tags = new TreeSet<>(); }
 
@@ -37,9 +36,6 @@ public final class EvidenceBlockWriter {
         if (context.runId() != null) node.put("runId", context.runId());
         if (context.parentRunId() != null) node.put("parentRunId", context.parentRunId());
         if (!node.has("producer")) node.put("producer", "ACCEPTANCE");
-        if (context.specSha() != null) {
-            node.put("specSha", context.specSha()); node.put("specShaSource", "FILE_HASHED"); node.put("specInputOrigin", ORIGIN);
-        }
         if (context.buildIdentity() != null && context.buildIdentity().isObject()) node.set("buildIdentity", context.buildIdentity());
         if (!node.has("recordedAt")) node.put("recordedAt", Instant.now().toString());
         return CanonicalJson.seal(node);
@@ -77,7 +73,7 @@ public final class EvidenceBlockWriter {
         var leaves = new ArrayList<ObjectNode>();
         for (var entry : outcomes.entrySet()) {
             String[] parts = entry.getKey().split("/", 3);
-            var leafContext = new Context(parts[0], context.suite(), context.runId(), context.parentRunId(), context.specSha(), context.buildIdentity());
+            var leafContext = new Context(parts[0], context.suite(), context.runId(), context.parentRunId(), context.buildIdentity());
             var fields = new LinkedHashMap<String,Object>();
             fields.put("kind", "LEAF"); fields.put("leafId", parts[1]); fields.put("labels", labels.get(entry.getKey())); fields.put("environment", "verify");
             fields.put("componentId", "ACC:" + context.suite()); fields.put("result", and(entry.getValue()));

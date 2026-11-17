@@ -27,7 +27,7 @@ class CiEvidenceBundleBoundaryTest {
     Path bundle;
     @BeforeEach void fixture() throws Exception { x = new CiEvidenceFixture(directory); bundle = x.pack(); }
 
-    private void verify(Path file) { x.evidence().verify(file, CiEvidenceFixture.SHA, x.required, x.f.binding(), BuildIdentityManifest.load(x.identity)); }
+    private void verify(Path file) { x.evidence().verify(file, CiEvidenceFixture.SHA, x.required, BuildIdentityManifest.load(x.identity)); }
     private Path file(byte[] bytes) {
         Path out = directory.resolve(UUID.randomUUID() + ".tgz");
         try { Files.write(out, bytes); } catch (IOException e) { throw new UncheckedIOException(e); }
