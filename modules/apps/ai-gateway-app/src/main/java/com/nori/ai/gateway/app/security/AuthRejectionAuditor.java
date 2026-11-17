@@ -16,7 +16,7 @@ public final class AuthRejectionAuditor {
         repository.append(new AuthRejectionAppend(requestId,Optional.of(service.ownerSystem()),Optional.empty(),reason));
     }
     public void actorVerified(VerifiedServiceIdentity service, VerifiedSystemScope scope, UUID requestId, AuthRejectionReason reason) {
-        if (reason != AuthRejectionReason.SYSTEM_SCOPE_MISMATCH || scope.boundSystem() != service.ownerSystem() || !scope.requestId().equals(requestId.toString()))
+        if (reason != AuthRejectionReason.SYSTEM_SCOPE_MISMATCH || !java.util.Objects.equals(scope.boundSystem(),service.ownerSystem()) || !scope.requestId().equals(requestId.toString()))
             throw new IllegalArgumentException("검증된 요청 범위가 일치하지 않습니다");
         repository.append(new AuthRejectionAppend(requestId,Optional.of(service.ownerSystem()),Optional.of(scope.actorRef()),reason));
     }

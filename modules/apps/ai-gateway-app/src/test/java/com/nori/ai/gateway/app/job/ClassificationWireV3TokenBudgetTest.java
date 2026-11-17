@@ -3,7 +3,6 @@ package com.nori.ai.gateway.app.job;
 import com.nori.ai.gateway.core.budget.CallType;
 import com.nori.ai.gateway.core.budget.ChatMessage;
 import com.nori.ai.gateway.core.budget.TokenBudgetPolicy;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.expiry.ExpiryCheckpoint;
 import com.nori.ai.gateway.core.job.CancellationToken;
 import com.nori.ai.gateway.core.job.JobRequestInput;
@@ -76,11 +75,11 @@ class ClassificationWireV3TokenBudgetTest {
                 }
                 @Override public List<float[]> embed(List<String> inputs) { throw new UnsupportedOperationException(); }
             };
-            var service = new ClassificationService(client, policy, tokenizer::countText, new ExpiryCheckpoint(new ConversationExpiryGuard(), Clock.fixed(NOW, ZoneOffset.UTC)),
+            var service = new ClassificationService(client, policy, tokenizer::countText, new ExpiryCheckpoint(),
                 LlmCallObserver.NONE, attempt -> {}, resource("prompts/classify-v3.txt"), registryReference());
             var context = Map.<String,Object>of("context", Map.of("timezone", "+09:00", "referenceTime", "2026-10-20T10:00:00+09:00"));
             var result = service.classify(new ClassificationService.Request(new com.nori.ai.gateway.core.scope.VerifiedSystemScope(OwnerSystem.TC, "svc", new com.nori.ai.gateway.core.scope.ActorRef("actor"), "actor",
-                java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1"), "conversation", "job-1", NOW.plusSeconds(600), new CancellationToken(), new JobRequestInput("message", 1, question, context)));
+                java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1"), "conversation", "job-1", new CancellationToken(), new JobRequestInput("message", 1, question, context)));
             assertThat(result).as("최대 wire 는 절삭 없이 통과").isInstanceOf(ClassificationService.Classified.class);
             var classified = ((ClassificationService.Classified) result).classification();
             assertThat(classified.eqp()).isEqualTo(eqp);

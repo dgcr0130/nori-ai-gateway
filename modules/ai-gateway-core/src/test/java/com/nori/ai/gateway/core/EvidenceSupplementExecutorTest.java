@@ -57,7 +57,7 @@ class EvidenceSupplementExecutorTest {
             }
         });
         var dispatcher=new ToolDispatcher(registry,validator,new ToolResultContractValidator(versions),new DispatchInjectionSeam.NoOp(),tools,CLOCK);
-        var expiry=new ExpiryCheckpoint(new ConversationExpiryGuard(),CLOCK);
+        var expiry=new ExpiryCheckpoint();
         var cache=new ToolResultCache(new ToolResultCacheTest.Store(),validator,new ResultAccessEvaluator(),(permissions,documents)->Map.of(),expiry,CLOCK);
         return new WorkflowExecutor(registry,validator,dispatcher,authorization,expiry,CLOCK,cache,new BlockBuilder(new UiSchemaValidator()),new WorkflowExecutorTest.Recording(new ArrayList<>()),
             new LogSummarizer(),new GeneralQueryHelpBuilder(),new EvidenceCoverageEvaluator(),budgets);
@@ -70,7 +70,7 @@ class EvidenceSupplementExecutorTest {
         return new WorkflowPlanBuilder(registry,new EvidencePlanBuilder(EvidenceFixtures.tcProfile())).build(registry.workflow(scope,task).orElseThrow(),registry.view(scope),job);
     }
     private JobContext job(Map<String,Object> classification,Map<String,Object> fields){
-        return new JobContext("request","conversation",scope,"d".repeat(22),NOW.plusSeconds(600),new CancellationToken(),InferenceMode.ENABLED,classification,new JobRequestInput("message",1,"질문",fields));
+        return new JobContext("request","conversation",scope,"d".repeat(22),new CancellationToken(),InferenceMode.ENABLED,classification,new JobRequestInput("message",1,"질문",fields));
     }
     private WorkflowOutcome run(WorkflowExecutor executor,WorkflowExecutionPlan plan){return executor.run(job,plan,new WorkflowAuthorizationPreparationTest.Fixture().resolver);}
     private static EvidenceCoverage history(WorkflowOutcome outcome){return outcome.coverage().stream().filter(c->c.need()==EvidenceNeed.H).findFirst().orElseThrow();}

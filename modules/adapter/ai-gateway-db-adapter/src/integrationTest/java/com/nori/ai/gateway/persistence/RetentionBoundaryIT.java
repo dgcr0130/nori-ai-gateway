@@ -52,19 +52,19 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         }
     }
 
-    @Test void cacheInsertAndConflictUpdateClampToParentWhilePreservingShorterTtlAndPdg() {
+    @Test void cacheInsertAndConflictUpdatePreserveOwnTtlAndPdg() {
         var conversations = bean(ConversationRepository.class);
         var cache = bean(CacheRepository.class);
         var owner = scope(OwnerSystem.TC, "actor", "pdg");
         assertThat(conversations.insert(owner, "conversation")).isTrue();
-        Instant parentExpiry = conversations.find(owner, "conversation").orElseThrow().expiresAt();
+        Instant parentExpiry = BASE.plus(Duration.ofDays(30));
         assertThat(cache.put(owner, "conversation", "key", entry(parentExpiry.plus(Duration.ofDays(1))))).isTrue();
-        assertCacheExpiry(owner, "key", parentExpiry);
+        assertCacheExpiry(owner, "key", parentExpiry.plus(Duration.ofDays(1)));
         Instant shortExpiry = BASE.plusSeconds(10);
         assertThat(cache.put(owner, "conversation", "key", entry(shortExpiry))).isTrue();
         assertCacheExpiry(owner, "key", shortExpiry);
         assertThat(cache.put(owner, "conversation", "key", entry(parentExpiry.plusSeconds(1)))).isTrue();
-        assertCacheExpiry(owner, "key", parentExpiry);
+        assertCacheExpiry(owner, "key", parentExpiry.plusSeconds(1));
         assertThat(cache.put(owner, "conversation", "short-insert", entry(shortExpiry))).isTrue();
         assertCacheExpiry(owner, "short-insert", shortExpiry);
 
@@ -72,22 +72,20 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         assertThat(cache.find(changedPdg, "conversation", "key")).isEmpty();
         assertThat(cache.put(changedPdg, "conversation", "key", entry(shortExpiry))).isTrue();
         assertCacheExpiry(changedPdg, "key", shortExpiry);
-        assertCacheExpiry(owner, "key", parentExpiry);
+        assertCacheExpiry(owner, "key", parentExpiry.plusSeconds(1));
         for (var denied : new VerifiedSystemScope[] {scope(OwnerSystem.WM, "actor", "pdg"), scope(OwnerSystem.TC, "other", "pdg")}) {
             assertThat(cache.find(denied, "conversation", "key")).isEmpty();
             assertThat(cache.put(denied, "conversation", "key", entry(shortExpiry))).isFalse();
         }
         assertThat(cache.put(owner, "missing", "key", entry(shortExpiry))).isFalse();
         assertThat(cache.put(owner, "conversation", "key", entry(BASE))).isFalse();
-        assertCacheExpiry(owner, "key", parentExpiry);
-        assertThat(bean(JdbcClient.class).sql("SELECT count(*) FROM gw.cache_entry WHERE expires_at > "
-            + "(SELECT expires_at FROM gw.conversation WHERE id = 'conversation')").query(Long.class).single()).isZero();
+        assertCacheExpiry(owner, "key", parentExpiry.plusSeconds(1));
         clock.now = shortExpiry;
         assertThat(cache.find(changedPdg, "conversation", "key")).isEmpty();
         assertThat(cache.find(owner, "conversation", "key")).isPresent();
         clock.now = parentExpiry;
-        assertThat(cache.find(owner, "conversation", "key")).isEmpty();
-        assertThat(cache.put(owner, "conversation", "key", entry(parentExpiry.plusSeconds(1)))).isFalse();
+        assertThat(cache.find(owner, "conversation", "key")).isPresent();
+        assertThat(cache.put(owner, "conversation", "key", entry(parentExpiry.plusSeconds(1)))).isTrue();
     }
 
     @Test void cacheInsertAndConflictUpdateNeverRoundRequestedExpiryIntoTheFuture() {
@@ -116,30 +114,7 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         }
     }
 
-    @ParameterizedTest @ValueSource(longs = {-1000, -1, 0, 1, 1000})
-    void conversationReadsWritesAndPurgeRespectStoredExpiryToTheNanosecond(long offsetNanos) {
-        var owner = scope(OwnerSystem.TC, "actor", "pdg");
-        var conversations = bean(ConversationRepository.class);
-        assertThat(conversations.insert(owner, "conversation")).isTrue();
-        Instant expiry = conversations.find(owner, "conversation").orElseThrow().expiresAt();
-        assertThat(bean(CacheRepository.class).put(owner, "conversation", "key", entry(expiry))).isTrue();
-        assertThat(bean(MessageRepository.class).insert(owner, "conversation", message("message", null))).isTrue();
-        clock.now = expiry.plusNanos(offsetNanos);
-        boolean live = offsetNanos < 0;
-        assertThat(conversations.find(owner, "conversation").isPresent()).isEqualTo(live);
-        assertThat(conversations.touch(owner, "conversation")).isEqualTo(live);
-        assertThat(conversations.saveContext(owner, "conversation", "{}")).isEqualTo(live);
-        assertThat(bean(MessageRepository.class).findByConversation(owner, "conversation")).hasSize(live ? 1 : 0);
-        assertThat(bean(CacheRepository.class).find(owner, "conversation", "key").isPresent()).isEqualTo(live);
-        assertThat(bean(RetentionMaintenanceRepository.class).purgeExpiredConversations()).isEqualTo(live ? 0 : 1);
-        assertThat(bean(JdbcClient.class).sql("SELECT count(*) FROM gw.conversation").query(Long.class).single()).isEqualTo(live ? 1 : 0);
-        if (live) {
-            // 경계 직전 정리가 실제로 행을 보존했는지 확인한 뒤 정확한 만료 시각으로 전진합니다.
-            clock.now = expiry;
-            assertThat(conversations.find(owner, "conversation")).isEmpty();
-            assertThat(bean(RetentionMaintenanceRepository.class).purgeExpiredConversations()).isEqualTo(1);
-        }
-    }
+
 
     @ParameterizedTest @ValueSource(longs = {-1000, -1, 0, 1, 1000})
     void unlinkedAuditReadsAndPurgeRespectItsOwnNinetyDayBoundary(long offsetNanos) {
@@ -163,7 +138,7 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         }
     }
 
-    @Test void auditSurvivesConversationExpiryAndPurgeUntilItsOwnExpiry() {
+    @Test void auditSurvivesConversationDeletionUntilItsOwnExpiry() {
         var owner = scope(OwnerSystem.TC, "actor", "pdg");
         var conversations = bean(ConversationRepository.class);
         var audit = bean(AuditRepository.class);
@@ -173,14 +148,14 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         assertThat(bean(JobRepository.class).insert(owner, new JobRepository.NewJob("job", "conversation", null, "digest", "B", "message", Map.of()), null)).isTrue();
         assertThat(audit.insert(owner, event("linked", "conversation", "job"))).isTrue();
         clock.now = BASE.plus(CONVERSATION_TTL);
-        assertThat(conversations.find(owner, "conversation")).isEmpty();
+        assertThat(conversations.find(owner, "conversation")).isPresent();
         assertThat(audit.insert(owner, event("edge", "conversation", "job"))).isTrue();
         clock.now = BASE.plus(Duration.ofDays(31));
         assertThat(audit.findByRequest(owner, "linked")).hasSize(1);
         assertThat(audit.insert(owner, event("expired-parent", "conversation", "job"))).isTrue();
         assertThat(audit.insert(owner, event("unlinked", null, null))).isTrue();
         bean(JdbcClient.class).sql("UPDATE gw.job SET status = 'CANCELLED' WHERE id = 'job'").update();
-        assertThat(retention.purgeExpiredConversations()).isEqualTo(1);
+        assertThat(conversations.delete(owner,"conversation")).isEqualTo(ConversationRepository.DeleteResult.DELETED);
         assertThat(bean(JdbcClient.class).sql("SELECT count(*) FROM gw.job").query(Long.class).single()).isZero();
         assertThat(audit.findByRequest(owner, "linked")).hasSize(1);
         assertThat(audit.insert(owner, event("purged-parent", "conversation", "job"))).isFalse();
@@ -229,7 +204,7 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         assertThat(audit.insert(owner, event("unlinked", null, null))).isTrue();
     }
 
-    @Test void stepClockCreationKeepsExactlyThirtyDaysAndJsonTimeWindowsKeepNanoseconds() {
+    @Test void stepClockCreationAndJsonTimeWindowsKeepNanoseconds() {
         var owner = scope(OwnerSystem.TC, "actor", "pdg");
         Clock ticking = new MutableClock() {
             @Override public Instant instant() { Instant value = now; now = now.plusSeconds(1); return value; }
@@ -237,7 +212,6 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         var conversations = new ConversationRepository(bean(JdbcClient.class), bean(TransactionTemplate.class), ticking);
         assertThat(conversations.insert(owner, "conversation")).isTrue();
         var original = conversations.find(owner, "conversation").orElseThrow();
-        assertThat(Duration.between(original.createdAt(), original.expiresAt())).isEqualTo(CONVERSATION_TTL);
         assertThat(conversations.touch(owner, "conversation")).isTrue();
         String from = "2026-10-31T12:00:00.123456789Z";
         String to = "2026-10-31T13:00:00.987654321Z";
@@ -251,63 +225,12 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
             .satisfies(value -> assertThat(value.resolvedTimeWindow()).contains(from, to));
         assertThat(conversations.find(owner, "conversation")).hasValueSatisfying(value -> {
             assertThat(value.createdAt()).isEqualTo(original.createdAt());
-            assertThat(value.expiresAt()).isEqualTo(original.expiresAt());
         });
     }
 
-    @Test void boundedConversationBatchesCommitIndependentlyAndOnlyTheFailedBatchRollsBack() throws Exception {
-        var owner = scope(OwnerSystem.TC, "actor", "pdg");
-        var conversations = bean(ConversationRepository.class);
-        var retention = bean(RetentionMaintenanceRepository.class);
-        for (int i = 0; i < 7; i++) assertThat(conversations.insert(owner, "c" + i)).isTrue();
-        assertThat(bean(MessageRepository.class).insert(owner, "c6", message("message", null))).isTrue();
-        assertThat(bean(JobRepository.class).insert(owner, new JobRepository.NewJob("active", "c6", null, "digest", "B", "message", Map.of()), null)).isTrue();
-        clock.now = BASE.plus(CONVERSATION_TTL);
-        assertThatThrownBy(() -> retention.purgeExpiredConversationsBatch(0)).isInstanceOf(IllegalArgumentException.class);
-        assertThat(retention.purgeExpiredConversationsBatch(2)).isEqualTo(2);
-        assertThat(committedCount("gw.conversation")).isEqualTo(5);
-        try (var connection = database.connection("postgres"); var statement = connection.createStatement()) {
-            statement.execute("CREATE FUNCTION public.p14_reject_delete() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'p14 batch failure'; END $$");
-            statement.execute("CREATE TRIGGER p14_reject_delete BEFORE DELETE ON gw.conversation FOR EACH ROW WHEN (OLD.id = 'c4') EXECUTE FUNCTION public.p14_reject_delete()");
-        }
-        try {
-            assertThat(retention.purgeExpiredConversationsBatch(2)).isEqualTo(2);
-            assertThat(committedCount("gw.conversation")).isEqualTo(3);
-            assertThatThrownBy(() -> retention.purgeExpiredConversationsBatch(2)).isInstanceOf(org.springframework.dao.DataAccessException.class);
-            // 실패 batch(c4,c5)만 rollback되고 앞 batch 커밋은 남습니다.
-            assertThat(committedCount("gw.conversation")).isEqualTo(3);
-        } finally {
-            try (var connection = database.connection("postgres"); var statement = connection.createStatement()) {
-                statement.execute("DROP TRIGGER p14_reject_delete ON gw.conversation");
-                statement.execute("DROP FUNCTION public.p14_reject_delete()");
-            }
-        }
-        assertThat(retention.purgeExpiredConversations()).isEqualTo(2);
-        assertThat(bean(JdbcClient.class).sql("SELECT id FROM gw.conversation").query(String.class).list()).containsExactly("c6");
-        bean(JdbcClient.class).sql("UPDATE gw.job SET status = 'CANCELLED' WHERE id = 'active'").update();
-        assertThat(retention.purgeExpiredConversations()).isEqualTo(1);
-    }
 
-    @Test void concurrentConversationBatchesSkipLockedRowsAndDeleteEachRowOnce() throws Exception {
-        var owner = scope(OwnerSystem.TC, "actor", "pdg");
-        for (int i = 0; i < 40; i++) assertThat(bean(ConversationRepository.class).insert(owner, "c" + i)).isTrue();
-        clock.now = BASE.plus(CONVERSATION_TTL);
-        var retention = bean(RetentionMaintenanceRepository.class);
-        var total = new java.util.concurrent.atomic.AtomicInteger();
-        var ready = new java.util.concurrent.CountDownLatch(1);
-        try (var workers = java.util.concurrent.Executors.newFixedThreadPool(4)) {
-            var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
-            for (int worker = 0; worker < 4; worker++) futures.add(workers.submit(() -> {
-                ready.await();
-                for (int deleted; (deleted = retention.purgeExpiredConversationsBatch(3)) > 0;) total.addAndGet(deleted);
-                return null;
-            }));
-            ready.countDown();
-            for (var future : futures) future.get(60, java.util.concurrent.TimeUnit.SECONDS);
-        }
-        assertThat(total.get()).isEqualTo(40);
-        assertThat(committedCount("gw.conversation")).isZero();
-    }
+
+
 
     @Test void boundedAuditBatchesKeepTheirOwnNinetyDayCutoffAndTheNoArgumentApiRepeatsBeyondTheDefaultLimit() throws Exception {
         var owner = scope(OwnerSystem.TC, "actor", "pdg");
@@ -326,22 +249,7 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
         assertThatThrownBy(() -> retention.purgeExpiredAuditBatch(-1)).isInstanceOf(IllegalArgumentException.class);
     }
 
-    @Test void noArgumentConversationPurgeRepeatsBeyondTheDefaultLimitAndTheOldestRemainingExpiryIsReadExactly() throws Exception {
-        var owner = scope(OwnerSystem.TC, "actor", "pdg");
-        var conversations = bean(ConversationRepository.class);
-        var retention = bean(RetentionMaintenanceRepository.class);
-        assertThat(retention.findOldestConversationExpiry()).isEmpty();
-        int expired = 2 * RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE + 5;
-        for (int i = 0; i < expired; i++) assertThat(conversations.insert(owner, "bulk-" + i)).isTrue();
-        clock.now = BASE.plusNanos(1000);
-        assertThat(conversations.insert(owner, "later")).isTrue();
-        assertThat(retention.findOldestConversationExpiry()).contains(BASE.plus(CONVERSATION_TTL));
-        clock.now = BASE.plus(CONVERSATION_TTL);
-        assertThat(retention.purgeExpiredConversations()).isEqualTo(expired);
-        assertThat(committedCount("gw.conversation")).isOne();
-        // 남은 가장 오래된 만료는 저장된 microsecond 값 그대로입니다.
-        assertThat(retention.findOldestConversationExpiry()).contains(BASE.plusNanos(1000).plus(CONVERSATION_TTL));
-    }
+
 
     private long committedCount(String table) throws Exception {
         // 다른 연결에서 조회하여 각 batch의 커밋 여부를 확인합니다.
@@ -349,6 +257,19 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
             result.next(); return result.getLong(1);
         }
     }
+    @ParameterizedTest @ValueSource(longs = {-1000,-1,0,1,1000})
+    void cachePurgeUsesItsOwnDeadlineAndPreservesPermanentConversation(long offsetNanos) {
+        var owner=scope(OwnerSystem.valueOf("New-7"),"actor","pdg");
+        var conversations=bean(ConversationRepository.class);var cache=bean(CacheRepository.class);
+        conversations.insert(owner,"permanent");
+        Instant deadline=BASE.plusSeconds(60);
+        assertThat(cache.put(owner,"permanent","key",entry(deadline))).isTrue();
+        clock.now=deadline.plusNanos(offsetNanos);
+        assertThat(bean(RetentionMaintenanceRepository.class).purgeExpiredCacheBatch(1)).isEqualTo(offsetNanos<0?0:1);
+        assertThat(conversations.find(owner,"permanent")).isPresent();
+        assertThat(cache.find(owner,"permanent","key").isPresent()).isEqualTo(offsetNanos<0);
+    }
+
     private void assertCacheExpiry(VerifiedSystemScope owner, String key, Instant expiry) {
         assertThat(bean(CacheRepository.class).find(owner, "conversation", key)).hasValueSatisfying(value -> assertThat(value.expiresAt()).isEqualTo(expiry));
     }

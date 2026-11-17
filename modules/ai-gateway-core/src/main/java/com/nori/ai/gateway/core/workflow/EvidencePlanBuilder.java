@@ -43,7 +43,7 @@ public final class EvidencePlanBuilder {
 
     public EvidencePlan plan(WorkflowDefinition definition, RegistryView view, List<EvidenceNeed> needs, Set<EvidenceNeed> serverAdded, AnswerMode answerMode, StepFactory steps) {
         Objects.requireNonNull(definition); Objects.requireNonNull(view); Objects.requireNonNull(answerMode); Objects.requireNonNull(steps);
-        if (definition.ownerSystem() != profile.ownerSystem() || view.ownerSystem() != profile.ownerSystem()) throw new IllegalArgumentException("근거 프로필 소유 범위가 다릅니다");
+        if (!java.util.Objects.equals(definition.ownerSystem(),profile.ownerSystem()) || !java.util.Objects.equals(view.ownerSystem(),profile.ownerSystem())) throw new IllegalArgumentException("근거 프로필 소유 범위가 다릅니다");
         if (!needs.containsAll(serverAdded)) throw new IllegalArgumentException("서버 보완 코드가 요구 근거에 없습니다");
         Set<String> profileCapabilities = new HashSet<>();
         profile.entries().forEach(entry -> profileCapabilities.add(entry.capabilityId()));

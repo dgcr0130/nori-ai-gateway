@@ -39,7 +39,7 @@ public final class ActorAssertionVerifier {
         var header = jws.getHeader();
         if (!JWSAlgorithm.ES256.equals(header.getAlgorithm())) throw new Rejected(ALGORITHM_NOT_ALLOWED);
         if (hasUntrustedKeyReference(jws)) throw new Rejected(UNTRUSTED_KEY_REFERENCE);
-        JWK key = credentials.key(header.getKeyID());
+        JWK key = credentials.key(service.ownerSystem(),header.getKeyID());
         if (key == null) throw new Rejected(UNKNOWN_KID);
         if (!(key instanceof ECKey ec) || !Curve.P_256.equals(ec.getCurve()) || ec.getAlgorithm() != null && !JWSAlgorithm.ES256.equals(ec.getAlgorithm()))
             throw new Rejected(SIGNATURE_INVALID);
@@ -47,7 +47,7 @@ public final class ActorAssertionVerifier {
         catch (JOSEException failure) { throw new Rejected(SIGNATURE_INVALID); }
         SignedClaims claims = readSignedClaims(jws.getPayload().toBytes());
         var values = claims.values();
-        if (!"tc-ui-backend".equals(values.get("iss"))) throw new Rejected(ISSUER_INVALID);
+        if (!Objects.equals(credentials.issuer(service.ownerSystem()),values.get("iss"))) throw new Rejected(ISSUER_INVALID);
         Object audience = values.get("aud");
         if (!("ai-gateway".equals(audience) || audience instanceof List<?> list && list.size() == 1 && "ai-gateway".equals(list.getFirst())))
             throw new Rejected(AUDIENCE_INVALID);

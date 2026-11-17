@@ -47,12 +47,11 @@ class ArchitectureRulesTest {
         var rules=new LinkedHashMap<String,Set<String>>();
         rules.put("queue.AdmissionLookupRepository.find(com.nori.ai.gateway.core.scope.VerifiedSystemScope,java.lang.String)",Set.of("app.job.IdempotentAdmissionLookup"));
         rules.put("queue.QueueJobRepository.count(java.lang.String)",Set.of("app.job.JobAdmissionService","app.job.JobDispatcher","app.hooks.TestHookController"));
-        rules.put("queue.QueueJobRepository.nonterminal()",Set.of("app.job.JobTimeoutSweeper","app.job.recovery.StartupRecoveryRunner","app.ops.ExpiryEdgeJobCanceller"));
+        rules.put("queue.QueueJobRepository.nonterminal()",Set.of("app.job.JobTimeoutSweeper","app.job.recovery.StartupRecoveryRunner"));
         rules.put("queue.QueueJobRepository.nextQueued()",Set.of("app.job.JobDispatcher"));
         rules.put("queue.QueueJobRepository.start(java.lang.String,java.time.Instant)",Set.of("app.job.JobDispatcher"));
         rules.put("queue.JobDelegationReader.forWorker(java.lang.String)",Set.of("app.job.JobWorker"));
         rules.put("queue.JobTerminalCommitter.commit(java.lang.String,com.nori.ai.gateway.core.job.TerminalSpec)",Set.of("app.job.JobWorker","app.job.JobTimeoutSweeper","app.job.JobCancellationService","app.job.recovery.StartupRecoveryRunner"));
-        rules.put("queue.JobTerminalCommitter.commitExpiredQueued(java.lang.String)",Set.of("app.ops.ExpiryEdgeJobCanceller"));
         rules.put("queue.JobEventPublisher.publish(long)",Set.of("persistence.queue.JobTerminalCommitter"));
         rules.put("queue.JobEventPublisher.publishQueued(java.lang.String)",Set.of("app.job.JobDispatcher"));
         rules.put("queue.JobEventPublisher.publishStarted(java.lang.String)",Set.of("app.job.JobDispatcher"));

@@ -8,7 +8,7 @@
 
 `Authorization: Bearer <서비스 토큰>`의 SHA-256을 기동 시 고정한 토큰 해시와 `MessageDigest.isEqual`로 비교해 단일 owner를 확정합니다. actor 단언은 JSON Body의 `contextRef`로 전달합니다. Body가 없는 조회 등은 `X-Actor-Assertion` 헤더로 같은 JWS를 전달합니다. 두 전달 위치를 동시에 사용하거나 인증 헤더를 중복 전송할 수 없습니다. 이 헤더는 서명된 단언의 전달 위치이며 신뢰 키·사용자 신원의 근거가 아닙니다.
 
-ES256 허용목록 → 기동 때 로드한 공개 JWKS의 kid/EC P-256 선택 → 실제 서명 → `iss=tc-ui-backend` / `aud=ai-gateway` → 정확 시각 → sub/scope/perm/pdg/경로별 dlg → 서비스 owner와 sys 바인딩 순으로 검증합니다. 원본 헤더에 `jku`·`jwk`·`x5u` 키가 있으면 null도 거부하며 네트워크 키 조회·헤더 키 사용은 없습니다. 혼합 JWKS의 정상 RSA 공개키가 있어도 RS256 요청을 허용하지 않습니다.
+ES256 허용목록 → 인증된 시스템의 공개 JWKS에서 (system,kid)/EC P-256 선택 → 실제 서명 → `iss=config.issuer` / `aud=ai-gateway` → 정확 시각 → sub/scope/perm/pdg/경로별 dlg → 서비스 owner와 sys 바인딩 순으로 검증합니다. 원본 헤더에 `jku`·`jwk`·`x5u` 키가 있으면 null도 거부하며 네트워크 키 조회·헤더 키 사용은 없습니다. 혼합 JWKS의 정상 RSA 공개키가 있어도 RS256 요청을 허용하지 않습니다.
 
 필수 클레임은 `iss`, `aud`, `sys`, `sub`, `scope`, `perm`, `pdg`, `iat`, `exp`입니다. sub는 `[A-Za-z0-9_-]{1,64}`, scope는 `READ`, perm은 `[A-Z0-9_]{1,64}` 문자열 배열이며 빈 배열만 유효한 빈 값입니다. pdg는 소문자 SHA-256 64자입니다. Gateway는 pdg를 재계산하지 않습니다.
 
@@ -20,7 +20,7 @@ POST `/v1/query`, `/v1/conversations/{id}/messages`, `/v1/analyses`는 dlg `[A-Z
 
 ## 자격 파일
 
-`ai.gateway.security.service-tokens-file`과 `ai.gateway.security.actor-jwks-file`은 필수입니다. 전자는 `{"<소문자 SHA-256 64자>":"TC"}` 형식이고 owner는 TC/WM/HRM만 허용합니다. 후자는 공개 JWKS입니다. 누락·빈 집합·잘못된 JSON·중복 해시/kid·불법 공개키·알고리즘/curve 불일치·모든 깊이의 `d,p,q,dp,dq,qi,oth,k`는 기동 실패입니다. 파일은 한 번 읽어 불변 상태로 보유하며 교체에는 재기동이 필요합니다. 오류는 고정 한국어 문구로 바꾸고 파서/JCA 원인을 전달하지 않습니다.
+`config/ai-gateway.yaml`의 `ai.gateway.systems`는 대소문자를 구별하는 시스템 ID 맵입니다(`[A-Za-z0-9][A-Za-z0-9_-]{0,63}`). 빈 맵도 유효하며 인증 가능한 시스템은 0개입니다. 각 항목의 `issuer`, `serviceTokenSha256File`, `actorJwksFile`, `reviewPermission`은 필수입니다. 해시 파일은 소문자 SHA-256 64자리 본문이며 시스템 간 중복을 거부합니다. 공개 JWKS의 kid는 시스템 안에서 유일하며 다른 시스템의 같은 kid는 독립된 키입니다. 누락·빈 집합·잘못된 JSON·중복 JSON 키/kid·불법 공개키·알고리즘/curve 불일치·모든 깊이의 `d,p,q,dp,dq,qi,oth,k`는 기동 실패입니다. 알 수 없는 시스템 항목 필드·중복 YAML 키·원천 prefix 권한 충돌도 거부합니다. 파일은 한 번 읽어 불변 상태로 보유하며 교체에는 재기동이 필요합니다. 오류는 고정 한국어 문구로 바꾸고 파서/JCA 원인을 전달하지 않습니다. 006의 초기 TC 자격 경로는 환경에서 공급하며 검토 권한 코드는 004 SPEC이 공급하는 `AI_REVIEW`로 고정합니다. 실제 비밀은 config에 쓰지 않습니다.
 
 ## 거절 감사와 응답
 

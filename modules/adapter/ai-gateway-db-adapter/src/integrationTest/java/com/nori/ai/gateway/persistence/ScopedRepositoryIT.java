@@ -49,16 +49,13 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
         assertThatThrownBy(()->repository.findPreviousResolvedTimeWindow(base,"window-b","window-mb")).isInstanceOf(IllegalStateException.class);
         context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("UPDATE gw.message SET role='user' WHERE id='window-ma'").update();
         assertThat(repository.findPreviousResolvedTimeWindow(base,"window-b","window-mb")).isEmpty();
-        context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("UPDATE gw.conversation SET created_at=:created,expires_at=:now WHERE id='tc'").param("created",Timestamp.from(NOW.minus(Duration.ofDays(30)))).param("now",Timestamp.from(NOW)).update();
-        assertThatThrownBy(()->repository.findPreviousResolvedTimeWindow(base,"window-b","window-mb")).isInstanceOf(IllegalStateException.class);
-        assertThat(repository.updateResolvedTimeWindow(base,"window-b","window-mb",Map.of("from","2026-11-05T00:00Z","to","2026-11-05T01:00Z"))).isFalse();
     }
     @Test void currentCacheOverloadsBindActualStagePdgAndKeepLegacyIsolationUnchanged() {
         var cache=bean(CacheRepository.class);var scope=scope(OwnerSystem.TC,"a");String current="b".repeat(64);
         assertThat(cache.put(scope,"tc","current-cache",current,cache(NOW.plusSeconds(60)))).isTrue();
         assertThat(cache.find(scope,"tc","current-cache",current)).isPresent();assertThat(cache.find(scope,"tc","current-cache")).isEmpty();assertThat(cache.find(scope,"tc","current-cache","c".repeat(64))).isEmpty();
         assertThat(context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("SELECT pdg FROM gw.cache_entry WHERE key_digest='current-cache'").query(String.class).single()).isEqualTo(current);
-        for(String parent:List.of("wm","other","expired","edge")){assertThat(cache.find(scope,parent,"current-cache",current)).isEmpty();assertThat(cache.put(scope,parent,"current-cache",current,cache(NOW.plusSeconds(60)))).isFalse();}
+        for(String parent:List.of("wm","other")){assertThat(cache.find(scope,parent,"current-cache",current)).isEmpty();assertThat(cache.put(scope,parent,"current-cache",current,cache(NOW.plusSeconds(60)))).isFalse();}
         assertThat(cache.find(withPdg(scope,"changed"),"tc","cache-tc")).isEmpty();assertThat(cache.find(scope,"tc","cache-tc")).isPresent();
         assertThatThrownBy(()->cache.find(scope,"tc","current-cache","bad")).isInstanceOf(IllegalArgumentException.class);
     }
@@ -77,7 +74,7 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
         }
         var scope=scope(OwnerSystem.TC,"a");
         assertThat(bean(JobRepository.class).findRequestInput(scope,"j-tc")).hasValueSatisfying(input->assertThat(input.messageId()).isEqualTo("m-tc"));
-        for(String id:List.of("j-wm","j-other","j-expired","j-edge"))assertThat(bean(JobRepository.class).findRequestInput(scope,id)).isEmpty();
+        for(String id:List.of("j-wm","j-other"))assertThat(bean(JobRepository.class).findRequestInput(scope,id)).isEmpty();
     }
     private static final Instant NOW = Instant.parse("2026-11-06T00:00:00Z");
     private PgTestDatabase database;
@@ -102,14 +99,6 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
             populate(entry.getValue(), entry.getKey());
         }
         });
-        try (var connection = database.connection("postgres"); var statement = connection.prepareStatement(
-                "UPDATE gw.conversation SET created_at = ?, expires_at = ? WHERE id = ?")) {
-            for (String id : List.of("expired", "edge")) {
-                statement.setTimestamp(1, Timestamp.from(NOW.minus(Duration.ofDays(30))));
-                statement.setTimestamp(2, Timestamp.from(id.equals("edge") ? NOW : NOW.minusSeconds(1)));
-                statement.setString(3, id); statement.executeUpdate();
-            }
-        }
     }
     private void populate(VerifiedSystemScope scope, String conversation) {
         String job = "j-" + conversation;
@@ -127,7 +116,7 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
     }
     @ParameterizedTest(name="{0}: {1}") @MethodSource("cases")
     void everyRepositoryReadAndWriteEnforcesSystemActorAndParentExpiry(String repository, String conversation) {
-        var scope = scope(OwnerSystem.TC,"a"); String job = "j-" + conversation; boolean allowed = conversation.equals("tc");
+        var scope = scope(OwnerSystem.TC,"a"); String job = "j-" + conversation; boolean allowed = !Set.of("wm","other").contains(conversation);
         switch (repository) {
             case "Conversation" -> {
                 assertThat(bean(ConversationRepository.class).find(scope, conversation).isPresent()).isEqualTo(allowed);
@@ -183,13 +172,13 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
         var scope = scope(OwnerSystem.TC,"a");
         assertThat(bean(ConversationRepository.class).find(scope, "missing")).isEmpty();
         assertThat(bean(ConversationRepository.class).find(scope, "tc")).hasValueSatisfying(value ->
-            assertThat(value.expiresAt()).isEqualTo(value.createdAt().plus(Duration.ofDays(30))));
+            assertThat(value.updatedAt()).isEqualTo(value.createdAt()));
         assertThatThrownBy(() -> bean(ConversationRepository.class).find(null, "tc")).isInstanceOf(NullPointerException.class);
         assertThat(bean(JobEventRepository.class).findAfter(scope, "missing", 0)).isEmpty();
         assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "key")).map(JobRepository.Job::conversationId).contains("tc");
         assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "")).isEmpty();
-        assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "key-expired")).isEmpty();
-        assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "key-edge")).isEmpty();
+        assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "key-expired")).isPresent();
+        assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, "key-edge")).isPresent();
         assertThat(bean(JobRepository.class).findByIdempotencyKey(scope, null)).isEmpty();
         assertThatThrownBy(() -> bean(JobRepository.class).insert(scope, new JobRepository.NewJob("duplicate", "tc", "key", "digest", "B", "m-tc", Map.of()), null))
             .isInstanceOf(org.springframework.dao.DuplicateKeyException.class);
@@ -222,11 +211,12 @@ class ScopedRepositoryIT extends PgIntegrationSupport {
         var queue = bean(com.nori.ai.gateway.persistence.maintenance.QueueMaintenanceRepository.class);
         assertThatThrownBy(queue::lockControl).isInstanceOf(IllegalStateException.class);
         bean(org.springframework.transaction.support.TransactionTemplate.class).executeWithoutResult(status -> queue.lockControl());
-        assertThat(bean(com.nori.ai.gateway.persistence.maintenance.RetentionMaintenanceRepository.class).purgeExpiredConversations()).isZero();
+        assertThat(bean(com.nori.ai.gateway.persistence.maintenance.RetentionMaintenanceRepository.class).purgeExpiredCacheBatch(100)).isZero();
         try (var connection = database.connection(database.user()); var statement = connection.createStatement()) {
             statement.executeUpdate("UPDATE gw.job SET status = 'CANCELLED' WHERE conversation_id IN ('expired','edge')");
         }
-        assertThat(bean(com.nori.ai.gateway.persistence.maintenance.RetentionMaintenanceRepository.class).purgeExpiredConversations()).isEqualTo(2);
+        assertThat(bean(ConversationRepository.class).delete(scope(OwnerSystem.TC,"a"),"expired")).isEqualTo(ConversationRepository.DeleteResult.DELETED);
+        assertThat(bean(ConversationRepository.class).delete(scope(OwnerSystem.TC,"a"),"edge")).isEqualTo(ConversationRepository.DeleteResult.DELETED);
         assertThat(bean(com.nori.ai.gateway.persistence.maintenance.RecoveryMaintenanceRepository.class).databaseSystemIdentifier()).isEmpty();
     }
     private <T> T bean(Class<T> type) { return context.getBean(type); }

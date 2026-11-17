@@ -27,13 +27,13 @@ public final class WorkflowResourceResolverFactory {
             }
             @Override public SourceBinding source(CapabilityManifest manifest,VerifiedSystemScope scope) {
                 verify(scope);var canonical=registry.find(manifest.capabilityId()).orElse(null);
-                boolean allowed=canonical!=null&&canonical.ownerSystem()==scope.boundSystem()&&canonical.sourceAllowlistRef().equals(manifest.sourceAllowlistRef())
+                boolean allowed=canonical!=null&&java.util.Objects.equals(canonical.ownerSystem(),scope.boundSystem())&&canonical.sourceAllowlistRef().equals(manifest.sourceAllowlistRef())
                     &&new OwnedReference(scope.boundSystem(),manifest.sourceAllowlistRef()).belongsTo(scope.boundSystem())&&permissions.find(manifest.sourceAllowlistRef()).isPresent();
                 return new SourceBinding(manifest.ownerSystem(),manifest.sourceAllowlistRef(),allowed);
             }
             @Override public ZoneId timezone(VerifiedSystemScope scope){verify(scope);return zone;}
             @Override public TcSourceAuthorizationPort.DelegatedCall delegatedCall(){return call;}
-            @Override public void beforeRead(){expiry.assertLive(job.conversationExpiresAt(),job.cancellation());}
+            @Override public void beforeRead(){expiry.assertLive(job.cancellation());}
         };
     }
 }

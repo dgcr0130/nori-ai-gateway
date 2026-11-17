@@ -133,7 +133,6 @@ class RetentionProbeWiringIT extends P09QueueSupport {
         assertThat(context.getBean(RetentionPurgeJob.class).started()).isFalse();
         // 복구 완료 전에는 정리·24h 잔류 판정도 없으므로 실패 신호가 없습니다.
         assertThat(context.getBean(MeterRegistry.class).get(com.nori.ai.gateway.app.observability.MetricsCatalog.RETENTION_PURGE_FAILURES).counter().count()).isZero();
-        assertThat(context.getBean(ExpiryEdgeJobCanceller.class).started()).isFalse();
         assertThat(rows()).isEmpty();
         assertThat(context.getBean(LocalLoki.class).starts).isEmpty();
     }

@@ -11,7 +11,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /** 보존 탐침의 실제 관측값만 저장하는 유지보수 저장소다. 호출자는 탐침 스케줄러와 읽기 어댑터로 닫혀 있다. */
 public final class SourceRetentionProbeRepository {
-    private static final Pattern SOURCE_ID = Pattern.compile("sources://[A-Z]{2,3}(?:/[A-Za-z0-9._-]{1,64}){1,4}");
+    private static final Pattern SOURCE_ID = Pattern.compile("sources://[A-Za-z0-9][A-Za-z0-9_-]{0,63}(?:/[A-Za-z0-9._-]{1,64}){1,4}");
     public record Probe(String sourceId, Instant verifiedOldestAt, Instant probeLimitAt, Instant probedAt) {}
     private final JdbcClient jdbc;
     private final TransactionTemplate transactions;

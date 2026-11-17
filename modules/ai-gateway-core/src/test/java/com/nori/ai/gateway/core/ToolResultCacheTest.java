@@ -18,7 +18,7 @@ import static com.nori.ai.gateway.core.DomainFixtures.*;
 class ToolResultCacheTest {
     @Test void knownGitRevisionCanHitAndAChangedRevisionMissesWithoutWeakeningCurrentAuthorization() {
         var fixture=new WorkflowAuthorizationPreparationTest.Fixture();var git=modify(fixture.manifest,"toolKind","GIT");var registry=registry(git,new ContractVersionPolicy());var validator=validator(registry,new PlanInjectionSeam.NoOp());
-        var prepared=(PlanValidator.Prepared)validator.prepare(plan(step()),fixture.scope,fixture.resolver);var store=new Store();var cache=new ToolResultCache(store,validator,new ResultAccessEvaluator(),(permissions,documents)->Map.of(),new ExpiryCheckpoint(new ConversationExpiryGuard(),CLOCK),CLOCK);var job=job(fixture,"conversation");
+        var prepared=(PlanValidator.Prepared)validator.prepare(plan(step()),fixture.scope,fixture.resolver);var store=new Store();var cache=new ToolResultCache(store,validator,new ResultAccessEvaluator(),(permissions,documents)->Map.of(),new ExpiryCheckpoint(),CLOCK);var job=job(fixture,"conversation");
         var inputs=new ToolResultCache.CacheInputs(Optional.empty(),Optional.of("a".repeat(40)),git.sourceFreshnessPolicy());var value=new ToolResultCache.CachedValue(ID,SchemaContracts.JSON.valueToTree(result(git)),new ResultSourceDeps(List.of(new ResultSourceDeps.Source(git.sourceAllowlistRef(),Set.of("EQP_READ"))),List.of()),NOW.plusSeconds(60));
         var put=prepared.newAttempt(step(),fixture.scope,StepAttempt.Purpose.CACHE_PUT);assertThat(cache.put(prepared,put,fixture.grant(put),job,inputs,value)).isTrue();var lookup=prepared.newAttempt(step(),fixture.scope,StepAttempt.Purpose.CACHE_LOOKUP);assertThat(cache.find(prepared,lookup,fixture.grant(lookup),job,inputs)).isPresent();
         var changed=new ToolResultCache.CacheInputs(Optional.empty(),Optional.of("c".repeat(40)),git.sourceFreshnessPolicy());lookup=prepared.newAttempt(step(),fixture.scope,StepAttempt.Purpose.CACHE_LOOKUP);assertThat(cache.find(prepared,lookup,fixture.grant(lookup),job,changed)).isEmpty();assertThat(fixture.authCalls).hasValue(3);assertThat(store.calls).hasSize(3);
@@ -28,8 +28,8 @@ class ToolResultCacheTest {
         public Optional<ToolResultCache.CachedValue> find(VerifiedSystemScope scope,String conversation,String key,String pdg){calls.add(List.of("find",conversation,key,pdg));return Optional.ofNullable(values.get(key));}
         public boolean put(VerifiedSystemScope scope,String conversation,String key,String pdg,ToolResultCache.CachedValue value){calls.add(List.of("put",conversation,key,pdg));values.put(key,value);return true;}
     }
-    private JobContext job(WorkflowAuthorizationPreparationTest.Fixture f,String conversation){return new JobContext("request",conversation,f.scope,"d".repeat(22),NOW.plusSeconds(1000),new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType","LIVE_QUERY"),new JobRequestInput("message",1,"질문",Map.of()));}
-    private ToolResultCache cache(WorkflowAuthorizationPreparationTest.Fixture f,Store store){return new ToolResultCache(store,f.validator,new ResultAccessEvaluator(),(perm,documents)->Map.of(),new ExpiryCheckpoint(new ConversationExpiryGuard(),CLOCK),CLOCK);}
+    private JobContext job(WorkflowAuthorizationPreparationTest.Fixture f,String conversation){return new JobContext("request",conversation,f.scope,"d".repeat(22),new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType","LIVE_QUERY"),new JobRequestInput("message",1,"질문",Map.of()));}
+    private ToolResultCache cache(WorkflowAuthorizationPreparationTest.Fixture f,Store store){return new ToolResultCache(store,f.validator,new ResultAccessEvaluator(),(perm,documents)->Map.of(),new ExpiryCheckpoint(),CLOCK);}
     private ToolResultCache.CacheInputs inputs(){return new ToolResultCache.CacheInputs(Optional.empty(),Optional.empty(),"LIVE");}
     @Test void currentPdgDrivesSameConversationFindPutAndChangedCurrentPdgMisses() {
         var f=new WorkflowAuthorizationPreparationTest.Fixture();var prepared=f.prepared();var store=new Store();var cache=cache(f,store);var job=job(f,"conversation");
@@ -54,9 +54,8 @@ class ToolResultCacheTest {
         var registry=registry(changed,new ContractVersionPolicy());var validator=validator(registry,new PlanInjectionSeam.NoOp());var different=(PlanValidator.Prepared)validator.prepare(plan(step()),f.scope,f.resolver);attempt=different.newAttempt(step(),f.scope,StepAttempt.Purpose.CACHE_LOOKUP);cache.find(different,attempt,f.grant(attempt),job(f,"conversation"),inputs());
         assertThat(store.calls.stream().map(call->call.get(2)).distinct()).hasSize(3);
     }
-    @Test void cancellationAndExpiryStopStoreBeforeReceiptConsumption() {
+    @Test void cancellationStopsStoreBeforeReceiptConsumption() {
         var f=new WorkflowAuthorizationPreparationTest.Fixture();var prepared=f.prepared();var store=new Store();var cache=cache(f,store);var job=job(f,"conversation");job.cancellation().signal(CancellationToken.Reason.CANCELLED);
         var attempt=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.CACHE_LOOKUP);var grant=f.grant(attempt);assertThatThrownBy(()->cache.find(prepared,attempt,grant,job,inputs())).isInstanceOf(IllegalStateException.class);assertThat(store.calls).isEmpty();assertThat(grant.matches(attempt)).isTrue();
-        var expired=new JobContext(job.jobId(),job.conversationId(),job.scope(),job.delegation(),NOW,new CancellationToken(),job.inferenceMode(),job.classification(),job.requestInput());assertThatThrownBy(()->cache.find(prepared,attempt,grant,expired,inputs())).isInstanceOf(ConversationExpiryGuard.ConversationExpired.class);assertThat(store.calls).isEmpty();
     }
 }

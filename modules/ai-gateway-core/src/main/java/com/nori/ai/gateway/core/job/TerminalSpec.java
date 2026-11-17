@@ -32,8 +32,8 @@ public record TerminalSpec(JobStatus jobStatus, ResultStatus resultStatus, Error
     public TerminalSpec withCommitData(CommitData data) {
         return new TerminalSpec(jobStatus,resultStatus,errorCode,eventType,externalSuppressed,resultPayload,resultSourceDeps,terminalCause,Optional.of(data));
     }
-    public enum Cause { NORMAL, EXPIRY_EDGE, QUEUE_TIMEOUT, JOB_TIMEOUT, WORKER_INTERRUPTED,
-        RESTORE_EXPIRED, RESTORE_LIMIT, RESTORE_INTERRUPTED, START_GATE_DENIED, START_GATE_UNAVAILABLE, CANCELLED }
+    public enum Cause { NORMAL, QUEUE_TIMEOUT, JOB_TIMEOUT, WORKER_INTERRUPTED,
+        RESTORE_LIMIT, RESTORE_INTERRUPTED, START_GATE_DENIED, START_GATE_UNAVAILABLE, CANCELLED }
     public TerminalSpec {
         Objects.requireNonNull(commitData);
         if(commitData.isPresent()&&(terminalCause!=Cause.NORMAL||!commitData.get().sourceDeps().equals(dependencies(resultSourceDeps))))throw new IllegalArgumentException("최종 자료 결속이 다릅니다");
@@ -48,7 +48,6 @@ public record TerminalSpec(JobStatus jobStatus, ResultStatus resultStatus, Error
         };
         boolean valid = expectedEvent.equals(eventType) && (resultStatus == null) == (resultPayload == null);
         valid &= switch (terminalCause) {
-            case EXPIRY_EDGE, RESTORE_EXPIRED -> jobStatus == JobStatus.CANCELLED && resultStatus == null && errorCode == null && externalSuppressed;
             case CANCELLED -> jobStatus == JobStatus.CANCELLED && resultStatus == null && errorCode == null && !externalSuppressed;
             case QUEUE_TIMEOUT -> jobStatus == JobStatus.FAILED && resultStatus == ResultStatus.FAILED && errorCode == ErrorCode.QUEUE_TIMEOUT;
             case JOB_TIMEOUT, RESTORE_LIMIT -> jobStatus == JobStatus.TIMED_OUT && resultStatus == ResultStatus.TIMEOUT && errorCode == null;
@@ -63,7 +62,7 @@ public record TerminalSpec(JobStatus jobStatus, ResultStatus resultStatus, Error
                 default -> false;
             };
         };
-        if (terminalCause != Cause.EXPIRY_EDGE && terminalCause != Cause.RESTORE_EXPIRED) valid &= !externalSuppressed;
+        valid &= !externalSuppressed;
         if (resultStatus == null) valid &= resultSourceDeps.isEmpty();
         if (!valid) throw new IllegalArgumentException("승인된 종결 상태 조합이 아닙니다");
     }
@@ -77,7 +76,6 @@ public record TerminalSpec(JobStatus jobStatus, ResultStatus resultStatus, Error
     }
     public static TerminalSpec forCause(Cause cause) {
         return switch (cause) {
-            case EXPIRY_EDGE, RESTORE_EXPIRED -> new TerminalSpec(JobStatus.CANCELLED,null,null,"job.cancelled",true,null,Map.of(),cause);
             case CANCELLED -> new TerminalSpec(JobStatus.CANCELLED,null,null,"job.cancelled",false,null,Map.of(),cause);
             case QUEUE_TIMEOUT -> failure(ResultStatus.FAILED,ErrorCode.QUEUE_TIMEOUT,cause);
             case WORKER_INTERRUPTED, RESTORE_INTERRUPTED -> failure(ResultStatus.FAILED,ErrorCode.WORKER_INTERRUPTED,cause);

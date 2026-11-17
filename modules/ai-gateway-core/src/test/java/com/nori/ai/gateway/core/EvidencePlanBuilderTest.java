@@ -143,7 +143,7 @@ class EvidencePlanBuilderTest {
     }
 
     private JobContext job(Map<String,Object> classification){
-        return new JobContext("request","conversation",scope(),"delegation",NOW.plusSeconds(1000),new CancellationToken(),InferenceMode.ENABLED,classification,
+        return new JobContext("request","conversation",scope(),"delegation",new CancellationToken(),InferenceMode.ENABLED,classification,
             new JobRequestInput("message",1,"질문",Map.of("resourceRefs",List.of(Map.of("type","EQP","ref","EQP_001")))));
     }
     private static Map<String,Object> v3(TaskType task,List<String> needs,List<String> added,String mode){

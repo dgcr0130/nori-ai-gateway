@@ -32,7 +32,7 @@ public final class SourceReadAccess {
     }
     public ResultStatus check(Request request, String expectedRef) {
         Objects.requireNonNull(request);
-        if (request.scope().boundSystem() != OwnerSystem.TC || !expectedRef.equals(request.sourceAllowlistRef())) return ResultStatus.DENIED;
+        if (!java.util.Objects.equals(request.scope().boundSystem(),OwnerSystem.TC) || !expectedRef.equals(request.sourceAllowlistRef())) return ResultStatus.DENIED;
         guard(request);
         if(!request.scope().validAt(clock.instant()))return ResultStatus.DENIED;
         var decision = authorization.authorizeBefore(expectedRef, request.scope(), request.delegatedCall());

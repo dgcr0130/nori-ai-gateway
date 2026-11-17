@@ -44,9 +44,9 @@ public final class ClassificationService {
 
     /** 분류 요청. {@code input} 은 JobContext 에 결속한 바로 그 접수 입력이다. */
     /** {@code scope}·{@code conversationId} 는 호출 시도 감사(LLM_CALL)의 Job 결속에만 쓴다. */
-    public record Request(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope, String conversationId, String jobId, Instant conversationExpiresAt, CancellationToken cancellation, JobRequestInput input) {
+    public record Request(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope, String conversationId, String jobId, CancellationToken cancellation, JobRequestInput input) {
         public Request {
-            Objects.requireNonNull(scope, "scope"); Objects.requireNonNull(conversationId, "conversationId"); Objects.requireNonNull(jobId, "jobId"); Objects.requireNonNull(conversationExpiresAt, "conversationExpiresAt");
+            Objects.requireNonNull(scope, "scope"); Objects.requireNonNull(conversationId, "conversationId"); Objects.requireNonNull(jobId, "jobId");
             Objects.requireNonNull(cancellation, "cancellation"); Objects.requireNonNull(input, "input");
         }
     }
@@ -91,7 +91,7 @@ public final class ClassificationService {
     }
 
     public Result classify(Request request) {
-        expiry.assertLive(request.conversationExpiresAt(), request.cancellation());
+        expiry.assertLive(request.cancellation());
         String question = request.input().maskedQuestion();
         final QRefContext references;
         try { references = QRefContext.extract(question); }
@@ -102,17 +102,17 @@ public final class ClassificationService {
         List<ChatMessage> messages = original;
         int calls = 0;
         for (int attempt = 0; attempt < 2; attempt++) {
-            expiry.assertLive(request.conversationExpiresAt(), request.cancellation());
+            expiry.assertLive(request.cancellation());
             InferenceClient.ChatOutcome outcome;
             try (var scope = observer.open(request.jobId(), CallType.CLASSIFY, messages)) {
                 outcome = inference.chat(CallType.CLASSIFY, messages, budget.requestMaxTokens());
             }
             Verdict verdict = outcome instanceof InferenceClient.Completed completed ? judge(completed, references, zone) : null;
-            // 보낸 호출은 만료·취소와 무관하게 그 시도의 감사를 먼저 남긴다(분류는 축소 단계가 없다).
+            // 보낸 호출은 취소와 무관하게 그 시도의 감사를 먼저 남긴다(분류는 축소 단계가 없다).
             audit.record(LlmCallAudit.attempt(request.scope(), request.conversationId(), request.jobId(), CallType.CLASSIFY, budget.requestMaxTokens(), outcome,
                 verdict == null || verdict.failure() == null ? null : ErrorCode.PLAN_INVALID, List.of()));
-            // 진행 중 만료·취소가 되면 받은 응답을 결과에 쓰지 않는다.
-            expiry.assertLive(request.conversationExpiresAt(), request.cancellation());
+            // 진행 중 취소되면 받은 응답을 결과에 쓰지 않는다.
+            expiry.assertLive(request.cancellation());
             if (outcome instanceof InferenceClient.BudgetExceeded) return new BudgetExceeded(calls);
             calls++;
             if (outcome instanceof InferenceClient.CallFailed) return new Unavailable(calls);

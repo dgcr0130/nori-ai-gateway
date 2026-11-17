@@ -22,23 +22,28 @@ class CredentialFileContractTest {
     @BeforeEach void prepare() throws Exception {
         tokens = directory.resolve("service-tokens.json"); jwks = directory.resolve("jwks.json");
         token = UUID.randomUUID().toString(); signer = StubAssertionSigner.ephemeral("test-eph-credential");
-        Files.writeString(tokens,"{\"" + hash(token) + "\":\"TC\"}");
+        Files.writeString(tokens,hash(token));
         Files.writeString(jwks,new JWKSet(signer.publicJwk()).toString());
+    }
+    static com.nori.ai.gateway.app.config.GatewaySystemsProperties properties(Path digest, Path jwks) {
+        return new com.nori.ai.gateway.app.config.GatewaySystemsProperties(Map.of("TC",
+            new com.nori.ai.gateway.app.config.GatewaySystemsProperties.SystemConfig("tc-ui-backend",digest.toString(),jwks.toString(),
+                null,null,List.of(),List.of(),List.of(),List.of(),List.of(),"AI_REVIEW",Map.of())));
     }
     static String hash(String value) throws Exception { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); }
     void rejected() {
-        assertThatThrownBy(() -> new SecurityCredentialFiles(tokens,jwks)).isInstanceOf(IllegalStateException.class)
+        assertThatThrownBy(() -> new SecurityCredentialFiles(properties(tokens,jwks))).isInstanceOf(IllegalStateException.class)
             .hasMessage("인입 인증 자격 파일이 잘못되었습니다").hasNoCause();
     }
     @Test void loadsMixedPublicKeysOnceAndKeepsOnlyImmutableTrust() throws Exception {
         var rsa = new RSAKeyGenerator(2048).keyID("test-rsa").algorithm(JWSAlgorithm.RS256).generate().toPublicJWK();
         Files.writeString(jwks,new JWKSet(List.of(signer.publicJwk(),rsa)).toString());
-        var credentials = new SecurityCredentialFiles(tokens,jwks);
+        var credentials = new SecurityCredentialFiles(properties(tokens,jwks));
         Files.writeString(tokens,"{}"); Files.delete(jwks);
         assertThat(credentials.authenticate(token).orElseThrow().ownerSystem()).isEqualTo(com.nori.ai.gateway.core.scope.OwnerSystem.TC);
         assertThat(credentials.authenticate(UUID.randomUUID().toString())).isEmpty();
-        assertThat(credentials.key("test-rsa")).isNotNull();
-        assertThat(credentials.key(signer.publicJwk().getKeyID()).isPrivate()).isFalse();
+        assertThat(credentials.key(com.nori.ai.gateway.core.scope.OwnerSystem.TC,"test-rsa")).isNotNull();
+        assertThat(credentials.key(com.nori.ai.gateway.core.scope.OwnerSystem.TC,signer.publicJwk().getKeyID()).isPrivate()).isFalse();
     }
     @Test void rejectsMalformedEmptyUnknownOwnerAndDuplicateTokenKeysWithoutCauses() throws Exception {
         for (String data : List.of("", "{}", "[]", "{", "{\"plain-token\":\"TC\"}", "{\"" + "A".repeat(64) + "\":\"TC\"}",
@@ -47,7 +52,7 @@ class CredentialFileContractTest {
             Files.writeString(tokens,data); rejected();
         }
         Files.delete(tokens); rejected();
-        assertThatThrownBy(() -> new IngressSecurityConfiguration().securityCredentialFiles(new MockEnvironment()))
+        assertThatThrownBy(() -> new IngressSecurityConfiguration().securityCredentialFiles(properties(directory.resolve("missing"),jwks)))
             .hasMessage("인입 인증 자격 파일이 잘못되었습니다").hasNoCause();
     }
     @Test void rejectsPrivateFieldsAtEveryDepthDuplicateKidsIllegalKeysAndAlgCurveMismatch() throws Exception {

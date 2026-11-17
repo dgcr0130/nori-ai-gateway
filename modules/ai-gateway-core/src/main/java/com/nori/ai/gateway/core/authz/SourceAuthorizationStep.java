@@ -67,7 +67,7 @@ public final class SourceAuthorizationStep {
         var binding=attempt.binding();
         if (attempt.mode()!=StepAttempt.Mode.DIRECT_SOURCE) throw new IllegalArgumentException("직결 인가 대상이 아닙니다");
         attempt.claimEvaluation();
-        if (binding.ownerSystem()!=scope.boundSystem() || !binding.actorRef().equals(scope.actorRef()) || !binding.sub().equals(scope.sub())
+        if (!java.util.Objects.equals(binding.ownerSystem(),scope.boundSystem()) || !binding.actorRef().equals(scope.actorRef()) || !binding.sub().equals(scope.sub())
                 || !binding.requestId().equals(scope.requestId()) || !binding.jobId().equals(scope.requestId()) || !call.sub().equals(scope.sub())
                 || binding.manifestRequiredPermissions().isEmpty()) { attempt.close(); return new StepDenied(); }
         var mapping=permissions.find(binding.sourceRef());

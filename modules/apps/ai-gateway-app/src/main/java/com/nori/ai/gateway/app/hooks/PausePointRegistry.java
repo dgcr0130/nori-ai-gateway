@@ -7,7 +7,7 @@ import java.util.concurrent.*;
 public final class PausePointRegistry {
     public enum Point { ADMISSION_FAST_MISS, ADMISSION_AFTER_COMMIT, BEFORE_CLASSIFICATION, TOOL_IN_FLIGHT,
         BEFORE_COMPOSER, TERMINAL_PRECOMMIT, TERMINAL_POSTCOMMIT,
-        DISPATCH_HOLD, SWEEPER_HOLD, EXPIRY_CANCELLER_HOLD, PURGE_HOLD }
+        DISPATCH_HOLD, SWEEPER_HOLD, PURGE_HOLD }
     private record Key(Point point,String jobId) {}
     private static final class Pause { final CountDownLatch reached=new CountDownLatch(1);final CountDownLatch release=new CountDownLatch(1);final java.util.concurrent.atomic.AtomicInteger hits=new java.util.concurrent.atomic.AtomicInteger(); }
     private final ConcurrentMap<Key,Pause> pauses=new ConcurrentHashMap<>();

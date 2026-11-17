@@ -1,0 +1,31 @@
+# 자격 파일 경로와 검토 권한 코드는 배포 환경에서 공급합니다. 비밀 본문은 이 파일에 두지 않습니다.
+ai:
+  gateway:
+    systems:
+      TC:
+        issuer: tc-ui-backend
+        serviceTokenSha256File: ${AI_GATEWAY_TC_SERVICE_TOKEN_SHA256_FILE}
+        actorJwksFile: ${AI_GATEWAY_TC_ACTOR_JWKS_FILE}
+        reviewPermission: AI_REVIEW
+        backendUrl: http://tc-ui-backend.tc.svc:8080
+        gatewayTokenFile: ${AI_GATEWAY_TC_GATEWAY_TOKEN_FILE}
+        tools:
+          - {"id":"tc.eqp.getOperationalSnapshot","description":"설비 운영 상태 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64}},"required":["eqp"],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["EQP_READ"],"timeoutMs":10000}
+          - {"id":"tc.model.read","description":"모델 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":["string","null"],"minLength":1,"maxLength":64}},"required":[],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["MODEL_READ"],"timeoutMs":10000}
+          - {"id":"tc.dlq.list","description":"DLQ 목록 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":["string","null"],"minLength":1,"maxLength":64},"from":{"type":["string","null"],"minLength":1,"maxLength":35},"to":{"type":["string","null"],"minLength":1,"maxLength":35}},"required":[],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["DLQ_READ"],"timeoutMs":10000}
+          - {"id":"tc.commLogs.search","description":"설비별 Gateway·Business 통신 로그와 Source별 보존 완전성 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64},"from":{"type":"string","minLength":1,"maxLength":35},"to":{"type":"string","minLength":1,"maxLength":35}},"required":["eqp","from","to"],"additionalProperties":false},"outputSchema":{"type":"object","properties":{"source":{"enum":["gateway","business"]},"status":{"enum":["SUCCESS","EMPTY","PARTIAL","OUT_OF_RETENTION","SOURCE_UNAVAILABLE"]},"observedAt":{"type":"string","minLength":1,"maxLength":35},"items":{"type":"array","items":{"type":"object","properties":{"occurredAt":{"type":"string","minLength":1,"maxLength":35},"direction":{"type":"string"},"messageType":{"type":"string"}},"required":["occurredAt","direction","messageType"],"additionalProperties":false}},"completeness":{"type":["object","null"],"properties":{"available":{"type":"boolean"},"count":{"type":"integer","minimum":0},"maxEntriesPerKey":{"type":"integer","minimum":1},"oldestRetainedAt":{"type":["string","null"]},"retentionHours":{"type":"integer","minimum":1},"appliedValuesVerified":{"type":"boolean"},"otherDeletionPathsExcluded":{"type":"boolean"},"truncatedRanges":{"type":"array","items":{"type":"object","properties":{"startAt":{"type":"string","minLength":1,"maxLength":35},"endAt":{"type":"string","minLength":1,"maxLength":35}},"required":["startAt","endAt"],"additionalProperties":false}}},"required":["available","count","maxEntriesPerKey","oldestRetainedAt","retentionHours","appliedValuesVerified","otherDeletionPathsExcluded","truncatedRanges"],"additionalProperties":false},"warnings":{"type":"array","items":{"enum":["RETENTION_UNVERIFIED","LLM_UNAVAILABLE"]}},"retentionMeta":{"type":"object","properties":{"missingRanges":{"type":"array","items":{"type":"object","properties":{"startAt":{"type":"string","minLength":1,"maxLength":35},"endAt":{"type":"string","minLength":1,"maxLength":35}},"required":["startAt","endAt"],"additionalProperties":false}},"unverifiedRanges":{"type":"array","items":{"type":"object","properties":{"startAt":{"type":"string","minLength":1,"maxLength":35},"endAt":{"type":"string","minLength":1,"maxLength":35}},"required":["startAt","endAt"],"additionalProperties":false}}},"required":["missingRanges","unverifiedRanges"],"additionalProperties":false}},"required":["source","status","observedAt","items","completeness","warnings","retentionMeta"],"additionalProperties":false},"requiredPermissions":["COMM_LOG_READ"],"timeoutMs":10000}
+        documents:
+          - bucket: nori-tc
+            prefix: 00.rag/
+            requiredPermissions: [AI_DOC_READ]
+        apps:
+          - {name: tc-gateway, namespace: tc, requiredPermissions: [AI_LOG_READ]}
+          - {name: tc-business, namespace: tc, requiredPermissions: [AI_LOG_READ]}
+          - {name: tc-ui-backend, namespace: tc, requiredPermissions: [AI_LOG_READ]}
+          - {name: tc-ui-front, namespace: tc, requiredPermissions: [AI_LOG_READ]}
+        traces:
+          - {service: tc-gateway, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
+          - {service: tc-business, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
+          - {service: tc-ui-backend, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
+        repositories: []
+        glossary: {}

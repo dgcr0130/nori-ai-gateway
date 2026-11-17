@@ -94,8 +94,8 @@ public final class ComposerService {
     }
 
     public Result compose(JobContext job, Input input) {
-        // 만료·취소면 Prompt 조립도 하지 않는다.
-        expiry.assertLive(job.conversationExpiresAt(), job.cancellation());
+        // 취소면 Prompt 조립도 하지 않는다.
+        expiry.assertLive(job.cancellation());
         var draft = new PromptDraft(systemPrompt, "boundSystem: " + job.scope().boundSystem().name(), List.of(), List.of(), input.logSummary(),
             input.rawLogLines(), input.toolResults(), input.question());
         var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> messages(value, input.evidence(), input.coverage()));
@@ -104,7 +104,7 @@ public final class ComposerService {
         List<ChatMessage> messages = reduction.messages();
         int calls = 0;
         for (int attempt = 0; attempt < 2; attempt++) {
-            expiry.assertLive(job.conversationExpiresAt(), job.cancellation());
+            expiry.assertLive(job.cancellation());
             InferenceClient.ChatOutcome outcome;
             try (var scope = observer.open(job.jobId(), CallType.COMPOSER, messages)) {
                 outcome = inference.chat(CallType.COMPOSER, messages, budget.requestMaxTokens());
@@ -113,7 +113,7 @@ public final class ComposerService {
             // 시도마다 같은 축소 단계(첫 조립 기준)를 함께 남긴다. 재시도 입력 계수는 Client 의 호출 직전 계수다.
             audit.record(LlmCallAudit.attempt(job.scope(), job.conversationId(), job.jobId(), CallType.COMPOSER, budget.requestMaxTokens(), outcome,
                 failure == null ? null : ErrorCode.LLM_UNAVAILABLE, reduction.steps()));
-            expiry.assertLive(job.conversationExpiresAt(), job.cancellation());
+            expiry.assertLive(job.cancellation());
             if (outcome instanceof InferenceClient.BudgetExceeded) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, calls, reduction.steps());
             calls++;
             if (outcome instanceof InferenceClient.CallFailed) return failed(ComposerOutcome.LLM_UNAVAILABLE, calls, reduction.steps());

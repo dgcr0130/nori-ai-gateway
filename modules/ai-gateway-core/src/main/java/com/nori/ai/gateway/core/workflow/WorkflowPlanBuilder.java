@@ -32,7 +32,7 @@ public final class WorkflowPlanBuilder {
         return build(definition,view,job,values);
     }
     public WorkflowExecutionPlan build(WorkflowDefinition definition,RegistryView view,JobContext job,Map<String,Object> resolvedWindow) {
-        if(definition.ownerSystem()!=job.scope().boundSystem()||view.ownerSystem()!=job.scope().boundSystem()||!job.jobId().equals(job.scope().requestId())
+        if(!java.util.Objects.equals(definition.ownerSystem(),job.scope().boundSystem())||!java.util.Objects.equals(view.ownerSystem(),job.scope().boundSystem())||!job.jobId().equals(job.scope().requestId())
                 ||!Objects.equals(job.classification().get("taskType"),definition.taskType().name()))throw new IllegalArgumentException("실행 소유 범위가 다릅니다");
         checkOptions(definition,job);
         var resources=resources(job);

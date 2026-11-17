@@ -193,7 +193,7 @@ class AppContextWiringIT extends StackContextSupport {
         try (var connection = database.connection(database.user()); var statement = connection.createStatement()) {
             String latest;
             try (var rows = statement.executeQuery("SELECT version FROM gw_flyway.flyway_schema_history WHERE success AND version IS NOT NULL ORDER BY installed_rank DESC LIMIT 1")) {
-                assertThat(rows.next()).isTrue(); latest = rows.getString(1); assertThat(latest).isEqualTo("7");
+                assertThat(rows.next()).isTrue(); latest = rows.getString(1); assertThat(latest).isEqualTo("8");
             }
             try (var update = connection.prepareStatement("UPDATE gw_flyway.flyway_schema_history SET version = '10' WHERE version = ?")) { update.setString(1,latest); assertThat(update.executeUpdate()).isEqualTo(1); }
         }
@@ -234,7 +234,7 @@ class AppContextWiringIT extends StackContextSupport {
         startApplication();
         assertThat(context.getBeansOfType(org.flywaydb.core.Flyway.class)).isEmpty();
         assertThat(context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("SELECT version FROM gw_flyway.flyway_schema_history WHERE success AND version IS NOT NULL ORDER BY installed_rank")
-            .query(String.class).list()).containsExactly("1","2","3","3.1","4","5","7");
+            .query(String.class).list()).containsExactly("1","2","3","3.1","4","5","7","8");
     }
 
     // ---- P14 Source 생산 조립: 같은 Registrar·factory에 명시 snapshot을 공급한다(운영 classpath 파일·전역 cache·env override 없음) ----

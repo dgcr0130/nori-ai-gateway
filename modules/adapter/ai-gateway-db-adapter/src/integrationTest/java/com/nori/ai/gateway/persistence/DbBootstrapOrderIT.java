@@ -35,13 +35,13 @@ class DbBootstrapOrderIT extends PgIntegrationSupport {
             try (var context = application(database); var connection = database.connection(database.user()); var statement = connection.createStatement()) {
                 assertThat(context.getBean(com.nori.ai.gateway.persistence.schema.SchemaVersionGuard.class)).isNotNull();
                 assertThat(context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("SELECT current_user").query(String.class).single()).isEqualTo(database.user());
-                statement.execute("INSERT INTO gw.conversation VALUES ('c','TC','actor',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + interval '1 day','ACTIVE')");
+                statement.execute("INSERT INTO gw.conversation(id,owner_system,owner_actor_ref,created_at,updated_at,status) VALUES ('c','TC','actor',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,'ACTIVE')");
                 assertThat(statement.executeUpdate("UPDATE gw.conversation SET status = 'ACTIVE' WHERE id = 'c'")).isEqualTo(1);
                 statement.execute("INSERT INTO gw.context VALUES ('c','TC','{}',CURRENT_TIMESTAMP)");
                 assertThat(statement.executeUpdate("DELETE FROM gw.context WHERE conversation_id = 'c'")).isEqualTo(1);
                 try (var rows = statement.executeQuery("SELECT version FROM gw_flyway.flyway_schema_history WHERE success AND version IS NOT NULL ORDER BY installed_rank")) {
                     var versions = new ArrayList<String>(); while (rows.next()) versions.add(rows.getString(1));
-                    assertThat(versions).containsExactly("1", "2", "3", "3.1", "4", "5", "7");
+                    assertThat(versions).containsExactly("1", "2", "3", "3.1", "4", "5", "7", "8");
                 }
                 try (var rows = statement.executeQuery("SELECT DISTINCT tableowner FROM pg_tables WHERE schemaname IN ('gw','kn','gw_flyway')")) {
                     var owners = new ArrayList<String>(); while (rows.next()) owners.add(rows.getString(1));

@@ -27,7 +27,7 @@ public record KnowledgeSearchContext(String requestId, String stepId, OwnerSyste
 
     /** 다른 Job·다른 단계·다른 시스템의 입력이면 거부한다(최근 대화로 보충하지 않음). */
     public void requireBoundTo(String expectedRequestId, String expectedStepId, OwnerSystem expectedOwner) {
-        if (!requestId.equals(expectedRequestId) || !stepId.equals(expectedStepId) || ownerSystem != expectedOwner)
+        if (!requestId.equals(expectedRequestId) || !stepId.equals(expectedStepId) || !java.util.Objects.equals(ownerSystem,expectedOwner))
             throw new IllegalArgumentException("Knowledge 실행 입력의 결속이 다릅니다");
     }
 

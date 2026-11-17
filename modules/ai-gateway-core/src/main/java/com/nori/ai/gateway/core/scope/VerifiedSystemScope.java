@@ -18,7 +18,7 @@ public record VerifiedSystemScope(OwnerSystem boundSystem, String authenticatedS
         if (issuedAt == null || expiresAt == null || !issuedAt.isBefore(expiresAt)) throw new IllegalArgumentException("인증 유효 기간이 잘못되었습니다");
     }
     public void requireOwner(OwnerSystem owner) {
-        if (owner != boundSystem) throw new IllegalArgumentException("소유 시스템이 일치하지 않습니다");
+        if (!java.util.Objects.equals(owner,boundSystem)) throw new IllegalArgumentException("소유 시스템이 일치하지 않습니다");
     }
     public boolean validAt(Instant now) { return !now.isBefore(issuedAt) && now.isBefore(expiresAt); }
 }

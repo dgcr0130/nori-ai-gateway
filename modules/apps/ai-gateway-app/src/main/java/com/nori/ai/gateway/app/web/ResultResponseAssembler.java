@@ -1,6 +1,5 @@
 package com.nori.ai.gateway.app.web;
 
-import com.nori.ai.gateway.core.expiry.ExpiryCheckpoint;
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
 import com.nori.ai.gateway.persistence.repository.*;
@@ -13,11 +12,10 @@ public final class ResultResponseAssembler {
     private final ResultRepository results;
     private final ResultAccessEvaluator evaluator;
     private final KnowledgeDocumentStateReader documents;
-    private final ExpiryCheckpoint expiry;
     private final JsonMapper json=JsonMapper.builder().build();
-    public record Access(JobRepository.Job job,ConversationRepository.Conversation conversation,Map<String,Object> response,boolean allowed) {}
-    public ResultResponseAssembler(JobRepository jobs,ConversationRepository conversations,ResultRepository results,ResultAccessEvaluator evaluator,KnowledgeDocumentStateReader documents,ExpiryCheckpoint expiry) {
-        this.jobs=jobs;this.conversations=conversations;this.results=results;this.evaluator=evaluator;this.documents=documents;this.expiry=expiry;
+    public record Access(VerifiedSystemScope scope,JobRepository.Job job,ConversationRepository.Conversation conversation,Map<String,Object> response,boolean allowed) {}
+    public ResultResponseAssembler(JobRepository jobs,ConversationRepository conversations,ResultRepository results,ResultAccessEvaluator evaluator,KnowledgeDocumentStateReader documents) {
+        this.jobs=jobs;this.conversations=conversations;this.results=results;this.evaluator=evaluator;this.documents=documents;
     }
     public Access assemble(VerifiedSystemScope scope,String jobId) {
         var job=jobs.find(scope,jobId).orElseThrow(UniformNotFound::new);
@@ -52,9 +50,9 @@ public final class ResultResponseAssembler {
                 payload.put("clarification",value.clarification()==null?null:json.readTree(value.clarification()));response.put("result",payload);
             } else response.put("resultAccess","DENIED");
         } else response.put("result",null);
-        expiry.assertLive(conversation.expiresAt());return new Access(job,conversation,response,allowed);
+        return new Access(scope,job,conversation,response,allowed);
     }
-    public void assertLive(Access access) { expiry.assertLive(access.conversation().expiresAt()); }
+    public void assertLive(Access access) { conversations.find(access.scope(),access.conversation().id()).orElseThrow(UniformNotFound::new); }
     private boolean referencesMatch(tools.jackson.databind.JsonNode node,com.nori.ai.gateway.core.scope.OwnerSystem owner) {
         if(node.isObject())for(var field:node.properties()) {
             if(Set.of("ownerSystem","systemId").contains(field.getKey())&&(!field.getValue().isString()||!owner.name().equals(field.getValue().asString())))return false;

@@ -32,7 +32,7 @@ class WorkerRestartEpochIT extends P09QueueSupport {
             restoreMode=Set.of("c","d","h").contains(which);handler=which.equals("f");lateCalls=0;restoreCalls=0;
             boolean data=!Set.of("a","c").contains(which);
             if(data){
-                parent.sql("INSERT INTO gw.conversation(id,owner_system,owner_actor_ref,created_at,updated_at,expires_at,status) VALUES ('epoch-c','TC','actor',:now,:now,:expiry,'ACTIVE')").param("now",java.sql.Timestamp.from(NOW)).param("expiry",java.sql.Timestamp.from(NOW.plusSeconds(1000))).update();
+                parent.sql("INSERT INTO gw.conversation(id,owner_system,owner_actor_ref,created_at,updated_at,status) VALUES ('epoch-c','TC','actor',:now,:now,'ACTIVE')").param("now",java.sql.Timestamp.from(NOW)).update();
                 for(String status:List.of("RUNNING","QUEUED")) {
                     parent.sql("INSERT INTO gw.message(id,conversation_id,owner_system,role,created_at,content_masked,resource_refs,tool_execution_refs) VALUES (:message,'epoch-c','TC','user',:now,'시대 복원 시험','[]','[]')").param("message","epoch-m-"+status).param("now",java.sql.Timestamp.from(NOW)).update();
                     parent.sql("INSERT INTO gw.job(id,conversation_id,owner_system,actor_ref,status,created_at,request_digest,expected_path,request_perm,request_pdg,request_message_id,request_input) VALUES (:id,'epoch-c','TC','actor',:status,:now,'digest','/v1/query',ARRAY['EQP_READ'],:pdg,:message,'{}')").param("id","epoch-"+status).param("status",status).param("now",java.sql.Timestamp.from(NOW)).param("pdg",P09TestPorts.PDG).param("message","epoch-m-"+status).update();

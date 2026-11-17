@@ -33,7 +33,7 @@ public final class ClassificationRegistryText {
     public static List<CapabilityLine> lines(OwnerSystem boundSystem, List<CapabilityManifest> manifests, Predicate<ImplementationPhase> activePhase) {
         List<CapabilityLine> lines = new ArrayList<>();
         for (CapabilityManifest manifest : manifests) {
-            if (manifest.ownerSystem() != boundSystem) continue;
+            if (!java.util.Objects.equals(manifest.ownerSystem(),boundSystem)) continue;
             lines.add(new CapabilityLine(manifest.capabilityId(), manifest.availability() == Availability.IMPLEMENTED && activePhase.test(manifest.implementationPhase()),
                 manifest.implementationPhase()));
         }

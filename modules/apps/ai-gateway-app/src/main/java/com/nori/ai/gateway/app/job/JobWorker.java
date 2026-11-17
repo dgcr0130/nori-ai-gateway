@@ -3,7 +3,6 @@ package com.nori.ai.gateway.app.job;
 import com.nori.ai.gateway.app.config.InferenceModeProperties;
 import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.app.security.ScopeAssembler;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.job.*;
 import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
 import com.nori.ai.gateway.core.result.*;
@@ -15,8 +14,6 @@ import java.util.*;
 public final class JobWorker {
     private final JobDelegationReader delegations;
     private final ScopeAssembler scopes;
-    private final ConversationExpiryGuard expiry;
-    private final Clock clock;
     private final TcSourceAuthorizationPort authorization;
     private final WorkflowExecutor workflow;
     private final JobTerminalCommitter terminal;
@@ -28,21 +25,21 @@ public final class JobWorker {
     private final SlotLedger slots;
     private final com.nori.ai.gateway.core.port.JobRequestInputReader inputs;
     private final Optional<com.nori.ai.gateway.core.llm.ClassificationService> classifier;
-    public JobWorker(JobDelegationReader delegations,ScopeAssembler scopes,ConversationExpiryGuard expiry,Clock clock,
+    public JobWorker(JobDelegationReader delegations,ScopeAssembler scopes,
             TcSourceAuthorizationPort authorization,WorkflowExecutor workflow,JobTerminalCommitter terminal,JobRepository jobs,
             InferenceModeProperties inference,Optional<StructuredClassificationHook> classification,Optional<PausePointRegistry> pauses,Optional<FaultInjector> faults,SlotLedger slots,com.nori.ai.gateway.core.port.JobRequestInputReader inputs,
             Optional<com.nori.ai.gateway.core.llm.ClassificationService> classifier){
-        this.delegations=delegations;this.scopes=scopes;this.expiry=expiry;this.clock=clock;this.authorization=authorization;this.workflow=workflow;
+        this.delegations=delegations;this.scopes=scopes;this.authorization=authorization;this.workflow=workflow;
         this.terminal=terminal;this.jobs=jobs;this.inference=inference;this.classification=classification;this.pauses=pauses;this.faults=faults;this.slots=slots;this.inputs=inputs;this.classifier=classifier;
     }
     public void run(JobScopeRecord job,CancellationToken token){
         token.attachWorker(Thread.currentThread());TerminalSpec result;
         try{
             String delegation=delegations.forWorker(job.jobId()).orElse(null);
-            expiry.assertLive(job.conversationExpiresAt(),clock.instant());
+
             var scope=scopes.forWorker(job);
             var persisted=jobs.find(scope,job.jobId());
-            if(persisted.isEmpty()){expiry.assertLive(job.conversationExpiresAt(),clock.instant());return;}
+            if(persisted.isEmpty())return;
             if(persisted.get().cancelRequestedAt()!=null)token.signal(CancellationToken.Reason.CANCELLED);
             if(token.reason().isPresent())result=cancelled(token);
             else{
@@ -56,34 +53,33 @@ public final class JobWorker {
                     else{
                     faults.ifPresent(f->f.haltAt(job.jobId(),PausePointRegistry.Point.BEFORE_CLASSIFICATION));
                     if(pauses.isPresent())pauses.get().hit(PausePointRegistry.Point.BEFORE_CLASSIFICATION,job.jobId());
-                    expiry.assertLive(job.conversationExpiresAt(),clock.instant());
+
                     var latest=jobs.find(scope,job.jobId());
                     if(latest.isPresent()&&latest.get().cancelRequestedAt()!=null)token.signal(CancellationToken.Reason.CANCELLED);
                     if(token.reason().isPresent())throw new InterruptedException();
                     var input=inputs.findRequestInput(scope,job.jobId()).orElseThrow(()->{
-                        expiry.assertLive(job.conversationExpiresAt(),clock.instant());
+
                         return new IllegalStateException("작업 입력 연결을 확인할 수 없습니다");
                     });
-                    expiry.assertLive(job.conversationExpiresAt(),clock.instant());
+
                     if(token.reason().isPresent())throw new InterruptedException();
                     if(inference.mode()==InferenceMode.ENABLED){
                         // 분류는 JobContext 에 결속할 바로 그 접수 입력(maskedQuestion·요청 Context)만 받는다.
-                        var classifiedOutcome=classifier.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(new com.nori.ai.gateway.core.llm.ClassificationService.Request(scope,job.conversationId(),job.jobId(),job.conversationExpiresAt(),token,input));
+                        var classifiedOutcome=classifier.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(new com.nori.ai.gateway.core.llm.ClassificationService.Request(scope,job.conversationId(),job.jobId(),token,input));
                         result=switch(classifiedOutcome){
-                            case com.nori.ai.gateway.core.llm.ClassificationService.Classified classified->workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,job.conversationExpiresAt(),token,inference.mode(),classified.classification().jobClassification(),input));
+                            case com.nori.ai.gateway.core.llm.ClassificationService.Classified classified->workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,token,inference.mode(),classified.classification().jobClassification(),input));
                             case com.nori.ai.gateway.core.llm.ClassificationService.Rejected rejected->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,rejected.code(),Map.of("clarification",new Clarification(rejected.code(),List.of("q"))));
                             case com.nori.ai.gateway.core.llm.ClassificationService.Unavailable unavailable->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,ErrorCode.LLM_UNAVAILABLE,Map.of());
                             case com.nori.ai.gateway.core.llm.ClassificationService.BudgetExceeded exceeded->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,ErrorCode.INPUT_BUDGET_EXCEEDED,Map.of());
                         };
                     }else{
                         Map<String,Object> classified=classification.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(job.jobId());
-                        result=workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,job.conversationExpiresAt(),token,inference.mode(),classified,input));
+                        result=workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,token,inference.mode(),classified,input));
                     }
                     }
                 }
             }
-        }catch(ConversationExpiryGuard.ConversationExpired expired){token.signal(CancellationToken.Reason.EXPIRED);result=cancelled(token);}
-        catch(InterruptedException interrupted){
+        }catch(InterruptedException interrupted){
             if(token.reason().isEmpty())token.signal(CancellationToken.Reason.CANCELLED);
             result=cancelled(token);
         }catch(Exception failure){
@@ -100,5 +96,5 @@ public final class JobWorker {
         if(interrupted)Thread.currentThread().interrupt();
     }
     private TerminalSpec cancelled(CancellationToken token){return TerminalSpec.forCause(switch(token.reason().orElse(CancellationToken.Reason.CANCELLED)){
-        case EXPIRED->TerminalSpec.Cause.EXPIRY_EDGE;case TIMEOUT->TerminalSpec.Cause.JOB_TIMEOUT;case CANCELLED->TerminalSpec.Cause.CANCELLED;});}
+        case TIMEOUT->TerminalSpec.Cause.JOB_TIMEOUT;case CANCELLED->TerminalSpec.Cause.CANCELLED;});}
 }

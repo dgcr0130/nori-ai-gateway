@@ -29,10 +29,10 @@ public final class CapabilityRegistry {
     public Optional<CapabilityManifest> find(String id) { return Optional.ofNullable(manifests.get(id)); }
     public boolean phaseActive(ImplementationPhase phase) { return activePhases.contains(phase); }
     public Optional<WorkflowDefinition> workflow(VerifiedSystemScope scope, TaskType task) {
-        return workflows.stream().filter(w -> w.ownerSystem() == scope.boundSystem() && w.taskType() == task).findFirst();
+        return workflows.stream().filter(w -> java.util.Objects.equals(w.ownerSystem(),scope.boundSystem()) && w.taskType() == task).findFirst();
     }
     public RegistryView view(VerifiedSystemScope scope) {
-        return new RegistryView(scope.boundSystem(), manifests.values().stream().filter(m -> m.ownerSystem() == scope.boundSystem()
+        return new RegistryView(scope.boundSystem(), manifests.values().stream().filter(m -> java.util.Objects.equals(m.ownerSystem(),scope.boundSystem())
             && m.availability() == Availability.IMPLEMENTED && phaseActive(m.implementationPhase())
             && m.requiredPermission().stream().anyMatch(scope.perm()::contains)
             && m.requiredActorScope().equals("READ")).toList());

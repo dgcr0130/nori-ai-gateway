@@ -37,7 +37,7 @@ public final class MessageRepository extends ScopedJdbc {
             FROM gw.job j JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system
             WHERE j.id=:job AND j.request_message_id=:message AND j.owner_system=:bound AND j.actor_ref=:actor
               AND m.id=j.request_message_id AND m.conversation_id=j.conversation_id AND m.owner_system=:bound AND m.role='user'
-              AND c.owner_system=:bound AND c.owner_actor_ref=:actor AND c.expires_at>:now
+              AND c.owner_system=:bound AND c.owner_actor_ref=:actor
             """).param("job",jobId).param("message",requestMessageId)
             .param("window",com.nori.ai.gateway.core.registry.SchemaContracts.JSON.writeValueAsString(resolvedTimeWindow)).update()==1);
     }
@@ -50,7 +50,7 @@ public final class MessageRepository extends ScopedJdbc {
               JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system
               JOIN gw.message m ON m.id=j.request_message_id AND m.conversation_id=j.conversation_id AND m.owner_system=j.owner_system AND m.role='user'
               WHERE j.id=:job AND j.request_message_id=:message AND j.owner_system=:bound AND j.actor_ref=:actor
-                AND c.owner_system=:bound AND c.owner_actor_ref=:actor AND c.expires_at>:now
+                AND c.owner_system=:bound AND c.owner_actor_ref=:actor
             )
             SELECT a.id AS current_job_id,p.id AS previous_job_id,p.request_message_id AS previous_request_message_id,
                    pm.id AS matched_previous_message_id,pm.resolved_time_window::text AS window_json

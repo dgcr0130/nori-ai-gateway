@@ -34,7 +34,7 @@ class AuthRejectionAuditIT extends PgIntegrationSupport {
             database.bootstrap(); database.migrate();
             try (var context = application(database, ClockConfiguration.class)) {
                 var jdbc = context.getBean(JdbcClient.class);
-                assertThat(jdbc.sql("SELECT version FROM gw_flyway.flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1").query(String.class).single()).isEqualTo("7");
+                assertThat(jdbc.sql("SELECT version FROM gw_flyway.flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1").query(String.class).single()).isEqualTo("8");
                 assertThat(jdbc.sql("SELECT count(*) FROM pg_constraint WHERE conrelid = 'gw.audit_event'::regclass AND contype = 'c' AND convalidated").query(Integer.class).single()).isEqualTo(5);
                 var append = context.getBean(AuthRejectionAppendRepository.class);
                 UUID id = UUID.randomUUID();
@@ -42,22 +42,27 @@ class AuthRejectionAuditIT extends PgIntegrationSupport {
                 append.append(request(id, OwnerSystem.TC, null, AuthRejectionReason.SIGNATURE_INVALID));
                 append.append(request(id, OwnerSystem.TC, "a", AuthRejectionReason.SYSTEM_SCOPE_MISMATCH));
                 append.append(request(id, OwnerSystem.WM, "a", AuthRejectionReason.SYSTEM_SCOPE_MISMATCH));
+                append.append(request(id, OwnerSystem.valueOf("OTHER"), "a", AuthRejectionReason.SYSTEM_SCOPE_MISMATCH));
                 var rows = jdbc.sql("SELECT recorded_at, owner_system, actor_ref, event_type, decision, status, conversation_id, job_id, trace_id, tool_id, source_ref, error_code, timings, token_usage, versions, reduction, service_ref, task_type, result_status FROM gw.audit_event ORDER BY id").query().listOfRows();
-                assertThat(rows).hasSize(4);
+                assertThat(rows).hasSize(5);
                 assertThat(rows.getFirst().get("owner_system")).isNull();
                 assertThat(rows.getFirst().get("actor_ref")).isNull();
                 assertThat(rows.get(1).get("owner_system")).isEqualTo("TC");
                 assertThat(rows.get(1).get("actor_ref")).isNull();
+                assertThat(rows.get(4)).containsEntry("owner_system", "OTHER").containsEntry("actor_ref", "a");
                 for (var row : rows) {
                     assertThat(row.get("event_type")).isEqualTo("AUTH_REJECTED");
                     assertThat(((java.sql.Timestamp)row.get("recorded_at")).toInstant()).isEqualTo(BASE.truncatedTo(java.time.temporal.ChronoUnit.MICROS));
                     for (String column : List.of("conversation_id", "job_id", "trace_id", "tool_id", "source_ref", "error_code", "timings", "token_usage", "versions", "reduction", "service_ref", "task_type", "result_status")) assertThat(row.get(column)).isNull();
                 }
                 try (var connection = database.connection(database.user())) {
-                    for (String[] values : List.of(new String[]{null,null,"TEST"}, new String[]{"TC",null,"TEST"}, new String[]{null,"a","TEST"}, new String[]{null,"a","AUTH_REJECTED"}, new String[]{"OTHER","a","AUTH_REJECTED"})) {
+                    for (String[] values : List.of(new String[]{null,null,"TEST"}, new String[]{"TC",null,"TEST"}, new String[]{null,"a","TEST"}, new String[]{null,"a","AUTH_REJECTED"}, new String[]{"_OTHER","a","AUTH_REJECTED"})) {
                         try (var statement = connection.prepareStatement("INSERT INTO gw.audit_event(recorded_at,owner_system,actor_ref,request_id,event_type) VALUES (now(),?,?,?,?)")) {
                             statement.setString(1,values[0]); statement.setString(2,values[1]); statement.setString(3,id.toString()); statement.setString(4,values[2]);
-                            assertThatThrownBy(statement::executeUpdate).isInstanceOfSatisfying(SQLException.class, failure -> assertThat(failure.getSQLState()).isEqualTo("23514"));
+                            assertThatThrownBy(statement::executeUpdate).isInstanceOfSatisfying(SQLException.class, failure -> {
+                                assertThat(failure.getSQLState()).isEqualTo("23514");
+                                if ("_OTHER".equals(values[0])) assertThat(failure.getMessage()).contains("audit_event_owner_system_check");
+                            });
                         }
                     }
                     // V7: 인증 거절은 새 세 열이 모두 NULL이고, 인입 원점 행은 service와 유효 nonzero hex32 trace가 필요합니다.
@@ -75,7 +80,7 @@ class AuthRejectionAuditIT extends PgIntegrationSupport {
                 }
                 assertThatThrownBy(() -> context.getBean(TransactionTemplate.class).executeWithoutResult(tx -> append.append(request(id,null,null,AuthRejectionReason.SERVICE_TOKEN_MISSING))))
                     .isInstanceOf(IllegalTransactionStateException.class);
-                assertThat(jdbc.sql("SELECT count(*) FROM gw.audit_event").query(Integer.class).single()).isEqualTo(4);
+                assertThat(jdbc.sql("SELECT count(*) FROM gw.audit_event").query(Integer.class).single()).isEqualTo(5);
             }
         }
     }

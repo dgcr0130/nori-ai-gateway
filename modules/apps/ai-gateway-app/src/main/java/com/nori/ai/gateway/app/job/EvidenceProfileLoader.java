@@ -50,7 +50,7 @@ public final class EvidenceProfileLoader {
         keys(root, ROOT_KEYS, "최상위");
         if (!"evidence-profile-v1".equals(string(root, "schema"))) throw new InvalidProfile("schema");
         OwnerSystem owner = owner(string(root, "ownerSystem"));
-        if (owner != expectedOwner) throw new InvalidProfile("ownerSystem 이 대상 시스템과 다릅니다");
+        if (!java.util.Objects.equals(owner,expectedOwner)) throw new InvalidProfile("ownerSystem 이 대상 시스템과 다릅니다");
         if (!root.get("entries").isArray()) throw new InvalidProfile("entries");
         Map<String,CapabilityManifest> capabilityOf = new HashMap<>();
         List<EvidencePlanProfile.Entry> entries = new ArrayList<>();
@@ -63,7 +63,7 @@ public final class EvidenceProfileLoader {
             if (need == EvidenceNeed.C) throw new InvalidProfile("C 는 파생 비교라 원천 항목이 될 수 없습니다(" + id + ")");
             String capabilityId = string(node, "capabilityId");
             CapabilityManifest manifest = registry.find(capabilityId).orElseThrow(() -> new InvalidProfile("Registry 에 없는 Capability(" + id + ")"));
-            if (manifest.ownerSystem() != owner) throw new InvalidProfile("타 owner Capability(" + id + ")");
+            if (!java.util.Objects.equals(manifest.ownerSystem(),owner)) throw new InvalidProfile("타 owner Capability(" + id + ")");
             if (!"READ".equals(manifest.operation()) || manifest.sideEffects() != SideEffects.NONE) throw new InvalidProfile("Mutation Capability(" + id + ")");
             if (!node.get("required").isBoolean()) throw new InvalidProfile("required(" + id + ")");
             List<String> dependsOn = strings(node, "dependsOn");

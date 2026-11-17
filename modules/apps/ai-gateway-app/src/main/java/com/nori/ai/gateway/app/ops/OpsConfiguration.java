@@ -15,14 +15,11 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** 보존 정리·만료 경계·보존 탐침 Job 등록이다. 모두 복구 완료 신호 뒤에만 시작한다. */
+/** 감사·캐시 정리와 보존 탐침 Job 등록이다. 모두 복구 완료 신호 뒤에만 시작한다. */
 @Configuration(proxyBeanMethods = false)
 public class OpsConfiguration {
     @Bean RetentionPurgeJob retentionPurgeJob(RetentionMaintenanceRepository retention, Clock clock, Optional<PausePointRegistry> pauses, MeterRegistry meters) {
         return new RetentionPurgeJob(retention, clock, pauses, meters);
-    }
-    @Bean ExpiryEdgeJobCanceller expiryEdgeJobCanceller(QueueJobRepository jobs, JobTerminalCommitter terminal, SlotLedger slots, Clock clock, Optional<PausePointRegistry> pauses) {
-        return new ExpiryEdgeJobCanceller(jobs, terminal, slots, clock, pauses);
     }
     @Bean SourceRetentionProbeScheduler sourceRetentionProbeScheduler(SourceRetentionProbeRepository probes, ObjectProvider<LokiProbeFactory> factories,
             ObjectProvider<ProbeWindowInput> windows, Clock clock, MeterRegistry meters) {

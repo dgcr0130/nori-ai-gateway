@@ -15,7 +15,7 @@ P09 CODE/LOCAL_TEST 계약입니다. 공식 사용자 API는 P10, TC Mock 위임
 | POST `/__test/pause` | `{point,op:HOLD 또는 RELEASE,jobId?:ID}` → 204, jobId 생략 시 전역 `*` |
 | POST `/__test/sweep-now` | 시간 한도 sweeper 1회 → 204 |
 
-`taskType`은 기존 닫힌 TaskType enum입니다. 정지 지점은 `ADMISSION_FAST_MISS`, `ADMISSION_AFTER_COMMIT`, `BEFORE_CLASSIFICATION`, `TOOL_IN_FLIGHT`, `BEFORE_COMPOSER`, `TERMINAL_PRECOMMIT`, `TERMINAL_POSTCOMMIT`입니다. P09 제품 실행은 접수·분류 전·종결 지점에 연결하고 Tool·Composer 실행 지점은 시험 fake/P13·P20에서 연결합니다. 전역 보류 지점은 `DISPATCH_HOLD`, `SWEEPER_HOLD`, `EXPIRY_CANCELLER_HOLD`, `PURGE_HOLD`이며 뒤의 두 실행자는 P14입니다. `haltAt`의 P09 실제 연결은 분류 전과 terminal 커밋 전·후이며 exit 137을 일으킵니다.
+`taskType`은 기존 닫힌 TaskType enum입니다. 정지 지점은 `ADMISSION_FAST_MISS`, `ADMISSION_AFTER_COMMIT`, `BEFORE_CLASSIFICATION`, `TOOL_IN_FLIGHT`, `BEFORE_COMPOSER`, `TERMINAL_PRECOMMIT`, `TERMINAL_POSTCOMMIT`입니다. P09 제품 실행은 접수·분류 전·종결 지점에 연결하고 Tool·Composer 실행 지점은 시험 fake/P13·P20에서 연결합니다. 전역 보류 지점은 `DISPATCH_HOLD`, `SWEEPER_HOLD`, `PURGE_HOLD`입니다. PURGE_HOLD는 감사·캐시 정리를 보류합니다. `haltAt`의 P09 실제 연결은 분류 전과 terminal 커밋 전·후이며 exit 137을 일으킵니다.
 
 `requestKey`는 접수 요청의 기존 `Idempotency-Key`입니다. `(actorSub,requestKey)` 무장은 60초 절대 TTL이며 동일 키 재무장은 409입니다. 신규 Job INSERT 뒤 같은 접수 tx에서 commit 전에 jobId 결속을 예약합니다. 첫 워커는 afterCommit 깨우기보다 먼저 폴링으로 시작해도 결속을 봅니다. rollback은 결속·정지점을 제거하고 무장을 복원하며 commit은 소비를 확정합니다. 중복 202와 충돌 409는 결속을 호출하지 않습니다. 결속은 해당 Job만 대상으로 하며 다른 actor·Job으로 전파되지 않습니다.
 

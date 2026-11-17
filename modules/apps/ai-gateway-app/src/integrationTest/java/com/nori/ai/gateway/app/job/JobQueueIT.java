@@ -112,13 +112,10 @@ class JobQueueIT extends P09QueueSupport {
             assertThat(List.of(tasks.get(0).get(),tasks.get(1).get())).containsExactlyInAnyOrder(202,503);
         }assertThat(count("job")).isEqualTo(5);assertThat(count("message")).isEqualTo(5);pauses().release(PausePointRegistry.Point.BEFORE_CLASSIFICATION,running.jobId());
     }
-    @Test void startGateDenialUnavailabilityCatalogAndExpiryPreventAllClassification()throws Exception{
+    @Test void startGateDenialUnavailabilityAndCatalogPreventAllClassification()throws Exception{
         for(String gate:List.of("INVALID","DOWN","CATALOG_DOWN")){
             context.getBean(com.nori.ai.gateway.tcmock.MockScenarioStore.class).select(gate.equals("INVALID")?"logout":gate.equals("DOWN")?"authz-down":"catalog-down");var job=admit("actor","gate"+gate,Set.of());await(()->state(job.jobId()).equals("FAILED"));assertResult(job.jobId(),gate.equals("INVALID")?"DENIED":"SOURCE_UNAVAILABLE",null,gate.equals("INVALID")?"START_GATE_DENIED":"START_GATE_UNAVAILABLE");
         }assertThat(observations().workflows).isEmpty();assertThat(calls().count("authorize")).isEqualTo(3);
-        pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");var expired=admit("actor","expired",Set.of());jdbc().sql("UPDATE gw.conversation SET expires_at=:expiry WHERE id=:id").param("expiry",java.sql.Timestamp.from(NOW.plusSeconds(1))).param("id",expired.conversationId()).update();clock().advance(1);
-        pauses().release(PausePointRegistry.Point.DISPATCH_HOLD,"*");await(()->state(expired.jobId()).equals("CANCELLED"));assertThat(calls().count("authorize")).isEqualTo(3);assertThat(jdbc().sql("SELECT count(*) FROM gw.result WHERE job_id=:id").param("id",expired.jobId()).query(Integer.class).single()).isZero();
-        assertThat(jdbc().sql("SELECT external_suppressed FROM gw.job_event WHERE job_id=:id AND type='job.cancelled'").param("id",expired.jobId()).query(Boolean.class).single()).isTrue();
     }
     @Test void terminalRejectsOuterTransactionAndLosingRaceCreatesNoDuplicate()throws Exception{
         pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");var job=admit("actor","terminal-race",Set.of());var committer=context.getBean(JobTerminalCommitter.class);

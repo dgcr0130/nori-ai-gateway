@@ -41,7 +41,7 @@ public final class JobRepository extends ScopedJdbc implements com.nori.ai.gatew
             JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system
             JOIN gw.message m ON m.id=j.request_message_id AND m.conversation_id=j.conversation_id AND m.owner_system=j.owner_system
             WHERE j.id=:job AND j.owner_system=:bound AND j.actor_ref=:actor AND m.owner_system=:bound AND m.role='user'
-            AND c.owner_system=:bound AND c.owner_actor_ref=:actor AND c.expires_at>:now
+            AND c.owner_system=:bound AND c.owner_actor_ref=:actor
             """).param("job",jobId).query((rs,row) -> {
                 Map<String,Object> fields=json.readValue(rs.getString(4),new tools.jackson.core.type.TypeReference<Map<String,Object>>(){});
                 return new com.nori.ai.gateway.core.job.JobRequestInput(rs.getString(1),rs.getLong(2),rs.getString(3),fields);
@@ -56,7 +56,7 @@ public final class JobRepository extends ScopedJdbc implements com.nori.ai.gatew
     private Optional<Job> findMatching(VerifiedSystemScope scope, String predicate, String value) {
         return transaction(() -> scoped(scope, "SELECT " + COLUMNS + " FROM gw.job j JOIN gw.conversation c "
             + "ON c.id = j.conversation_id AND c.owner_system = j.owner_system WHERE " + predicate
-            + " AND j.owner_system = :bound AND j.actor_ref = :actor AND c.owner_system = :bound AND c.owner_actor_ref = :actor AND c.expires_at > :now")
+            + " AND j.owner_system = :bound AND j.actor_ref = :actor AND c.owner_system = :bound AND c.owner_actor_ref = :actor")
             .param("value", value).query((rs, row) -> new Job(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4), rs.getString(5), rs.getString(6),
                 rs.getTimestamp(7).toInstant(), instant(rs.getTimestamp(8)), instant(rs.getTimestamp(9)), rs.getString(10), instant(rs.getTimestamp(11)),
                 rs.getString(12), rs.getString(13), rs.getString(14), rs.getString(15), rs.getString(16))).optional());

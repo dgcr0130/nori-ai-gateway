@@ -6,7 +6,9 @@
 
 | 경로 | 성공 응답 |
 |---|---|
-| `POST /v1/conversations` | 201, 새 대화의 `id`, 소유 범위, 생성·수정·만료 시각, 상태 |
+| `POST /v1/conversations` | 201, 새 대화의 `id`, 소유 범위, 생성·수정 시각, 상태 |
+| `GET /v1/conversations?after=&limit=20` | 200, `items[{id,title,createdAt,updatedAt,status}]`, `nextAfter` |
+| `DELETE /v1/conversations/{id}` | 204, 활성 Job이 있으면 409 `CONVERSATION_ACTIVE` |
 | `GET /v1/conversations/{id}` | 200, `conversation`과 `messages` |
 | `POST /v1/query` | 202, `jobId`, `conversationId`, `messageId`, `queuePosition` |
 | `POST /v1/conversations/{id}/messages` | 같은 202 형식, 경로의 대화에 후속 질문 접수 |
@@ -30,7 +32,7 @@
 
 같은 평가를 결과 GET·각 결과 메시지의 대화 이력·Evidence 원문·블록 export·감사 조회에 적용합니다. 거부 시 Source·권한 코드·문서·개수·사유·답변 일부를 노출하지 않고 Tool·LLM 재호출이나 재생성을 하지 않습니다. 원문 참조의 owner·sourceRef·chunkId·expectedRevision은 저장 Evidence에서 읽으며 URL·query에서 revision을 받지 않습니다. `EvidenceSourceReader`가 비가용이면 미존재 Evidence와 같은 빈 404입니다. P10의 Knowledge 상태/원문 리더는 P23 합류 전 fail-closed 구현 하나씩이며, Knowledge 참조에 UNKNOWN/Unavailable을 반환합니다. 과거 revision을 별도 보관하거나 새 revision 본문으로 옛 근거를 대체하지 않습니다.
 
-타 owner·타 actor·부재·만료 접근은 모두 HTTP 404, 빈 body입니다. 만료는 Gateway Clock의 `now >= conversation.expiresAt`이며 조회 응답 바로 전과 SSE의 이벤트/heartbeat 쓰기마다 동기 guard를 검사합니다. 열린 SSE의 예약 종료는 보조 수단입니다. P13의 Tool·캐시, P20의 Prompt·LLM은 같은 `ExpiryCheckpoint`를 소비하는 후속 단계입니다.
+타 owner·타 actor·부재 접근은 모두 HTTP 404, 빈 body입니다. 대화는 자동 만료·자동 삭제하지 않습니다. 목록은 현재 시스템·사용자로 제한하고 updatedAt/id 내림차순이며 limit은 1~100입니다. title은 가장 이른 user 메시지의 마스킹 본문 앞 100 Unicode 코드포인트이고 질문이 없으면 null입니다. 서버 커서는 시스템·사용자에 서명 결속하며 형식·범위 불일치·위조는 400입니다. 재기동 후 커서는 첫 쪽에서 다시 발급합니다. 질문 저장과 updatedAt 갱신은 같은 트랜잭션입니다. 삭제는 대화 행 잠금 후 QUEUED/RUNNING 부재를 확인하고 대화 묶음을 CASCADE 삭제합니다. 삭제 후 단건·메시지·결과·SSE·근거·내보내기·감사 경로는 404입니다. 영구 지식·스냅샷·피드백 계열은 대화 삭제와 분리합니다. 취소·180초 Job 수명·대기 제한·캐시 자체 만료·감사 90일 보존은 유지합니다.
 
 SSE 연결·재연결은 매 요청 새 actor 단언을 사용합니다. `Last-Event-ID`는 같은 Job·owner·actor의 실제 저장 이벤트 ID일 때만 유효하며, 다르면 스트림을 시작하지 않고 빈 404를 반환합니다. 이후 ID 순으로 재생하며 `external_suppressed` 이벤트는 제외합니다. 전송 data의 허용 키는 `type,jobId,seq,queuePosition,toolId,status,jobStatus,errorCode`이고 답변 본문은 전송하지 않습니다. heartbeat 안전 초기값은 15초이며 `ai.gateway.sse.heartbeat`로 설정합니다. 열린 스트림의 이벤트별 TC 재인가는 F5b 중계 책임입니다.
 

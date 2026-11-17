@@ -6,7 +6,7 @@ groups:
     rules:
       - alert: AIGW-RETENTION-PURGE-FAILED
         # Plan §11.6 "정리 Job 실패 또는 만료 묶음 24h 초과 잔류"의 두 신호는 같은 무라벨 counter다:
-        # RetentionPurgeJob의 batch 실패(rollback 후 다음 주기 재시도), 또는 성공한 주기 뒤 남은 가장 오래된 대화 만료가 그 주기 Gateway Clock보다 24h 넘게 앞선 경우(주기당 1회).
+        # RetentionPurgeJob의 감사 90일·캐시 만료 batch 실패(rollback 후 다음 1시간 주기 재시도).
         expr: increase(aigw_retention_purge_failures_total[1h]) > 0
         labels:
           severity: warning

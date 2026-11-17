@@ -43,7 +43,7 @@ class MigrationApplyIT extends PgIntegrationSupport {
             try(var connection=database.connection(database.user());var sql=connection.createStatement()) {
                 try(var rows=sql.executeQuery("SELECT count(*) FROM gw.audit_event")){assertThat(rows.next()).isTrue();assertThat(rows.getInt(1)).isZero();}
                 try(var rows=sql.executeQuery("SELECT count(*) FROM information_schema.columns WHERE table_schema='gw' AND table_name='audit_event' AND column_name IN ('service_ref','task_type','result_status') AND is_nullable='YES'")){assertThat(rows.next()).isTrue();assertThat(rows.getInt(1)).isEqualTo(3);}
-                try(var rows=sql.executeQuery("SELECT version FROM gw_flyway.flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1")){assertThat(rows.next()).isTrue();assertThat(rows.getString(1)).isEqualTo("7");}
+                try(var rows=sql.executeQuery("SELECT version FROM gw_flyway.flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1")){assertThat(rows.next()).isTrue();assertThat(rows.getString(1)).isEqualTo("8");}
             }
         }
     }
@@ -79,10 +79,10 @@ class MigrationApplyIT extends PgIntegrationSupport {
                 try (var rows = statement.executeQuery("SELECT version, checksum FROM gw_flyway.flyway_schema_history WHERE success AND version IS NOT NULL ORDER BY installed_rank")) {
                     var versions = new java.util.ArrayList<String>();
                     while (rows.next()) { String version = rows.getString(1); versions.add(version); if (checksums.containsKey(version)) assertThat(rows.getInt(2)).isEqualTo(checksums.get(version)); }
-                    assertThat(versions).containsExactly("1", "2", "3", "3.1", "4", "5", "7");
+                    assertThat(versions).containsExactly("1", "2", "3", "3.1", "4", "5", "7", "8");
                 }
                 try (var rows = statement.executeQuery("SELECT tableowner FROM pg_tables WHERE schemaname IN ('gw','kn','gw_flyway')")) {
-                    int count = 0; while (rows.next()) { count++; assertThat(rows.getString(1)).isEqualTo(database.user()); } assertThat(count).isEqualTo(16);
+                    int count = 0; while (rows.next()) { count++; assertThat(rows.getString(1)).isEqualTo(database.user()); } assertThat(count).isEqualTo(26);
                 }
             }
         }

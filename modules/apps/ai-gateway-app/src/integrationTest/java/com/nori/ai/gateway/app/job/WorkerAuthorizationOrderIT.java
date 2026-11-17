@@ -73,8 +73,4 @@ class WorkerAuthorizationOrderIT extends P09QueueSupport {
         }
         assertThat(calls().count("getEqpSnapshot")).isEqualTo(2);assertThat(context.getBean(WorkflowSourceFixture.Server.class).logs).hasValue(0);
     }
-    @Test void conversationExpiryBeforePreflightKeepsAuthorizationAndResultAtZero() throws Exception {
-        pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");var job=live("expiry",Set.of());jdbc().sql("UPDATE gw.conversation SET expires_at=:at WHERE id=:id").param("at",java.sql.Timestamp.from(NOW.plusSeconds(1))).param("id",job.conversationId()).update();clock().advance(1);pauses().release(PausePointRegistry.Point.DISPATCH_HOLD,"*");await(()->state(job.jobId()).equals("CANCELLED"));
-        assertThat(calls().count("authorize")).isZero();assertThat(count("result")).isZero();assertThat(observations().workflows).isEmpty();
-    }
 }

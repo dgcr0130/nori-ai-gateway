@@ -23,14 +23,14 @@ abstract class ScopedJdbc {
             .param("now", Timestamp.from(clock.instant().truncatedTo(ChronoUnit.MICROS)));
     }
     protected <T> T transaction(Supplier<T> action) { return transactions.execute(status -> action.get()); }
-    // 자식 자체의 owner 값만으로 인가하지 않고 정본 부모의 소유권과 만료를 함께 검사합니다.
+    // 자식 자체의 owner 값만으로 인가하지 않고 정본 부모의 존재와 소유권을 함께 검사합니다.
     protected static final String CONVERSATION = """
         SELECT 1 FROM gw.conversation c WHERE c.id = :conversation AND c.owner_system = :bound
-        AND c.owner_actor_ref = :actor AND c.expires_at > :now
+        AND c.owner_actor_ref = :actor
         """;
     protected static final String JOB = """
         SELECT 1 FROM gw.job j JOIN gw.conversation c ON c.id = j.conversation_id AND c.owner_system = j.owner_system
         WHERE j.id = :job AND j.owner_system = :bound AND j.actor_ref = :actor
-        AND c.owner_system = :bound AND c.owner_actor_ref = :actor AND c.expires_at > :now
+        AND c.owner_system = :bound AND c.owner_actor_ref = :actor
         """;
 }

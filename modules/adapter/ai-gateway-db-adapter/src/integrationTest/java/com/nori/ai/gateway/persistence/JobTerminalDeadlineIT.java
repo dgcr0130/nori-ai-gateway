@@ -1,6 +1,5 @@
 package com.nori.ai.gateway.persistence;
 
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.job.TerminalSpec;
 import com.nori.ai.gateway.core.result.JobStatus;
 import com.nori.ai.gateway.core.result.ResultStatus;
@@ -49,7 +48,7 @@ class JobTerminalDeadlineIT extends PgIntegrationSupport {
     }
     private static JobTerminalCommitter committer(ConfigurableApplicationContext context,Clock clock,List<Object> published){
         var jdbc=context.getBean(JdbcClient.class);
-        return new JobTerminalCommitter(jdbc,context.getBean(PlatformTransactionManager.class),clock,new ConversationExpiryGuard(),new JobEventPublisher(jdbc,clock,published::add),
+        return new JobTerminalCommitter(jdbc,context.getBean(PlatformTransactionManager.class),clock,new JobEventPublisher(jdbc,clock,published::add),
             List.of(),Duration.ofSeconds(180),jobId->true);
     }
     private static List<Object> writes(JdbcClient jdbc,String id){
@@ -95,47 +94,7 @@ class JobTerminalDeadlineIT extends PgIntegrationSupport {
         }
     }
 
-    @Test void expiredQueuedCommitWritesOnlyForAStillQueuedExpiredJobAndMissingOriginRollsBack(){
-        try(var database=rawDatabase()){
-            database.bootstrap();database.migrate();
-            try(var context=application(database,AdmissionClock.class)){
-                var jdbc=context.getBean(JdbcClient.class);
-                var manager=context.getBean(PlatformTransactionManager.class);
-                var scope=scope();
-                assertThat(context.getBean(ConversationRepository.class).insert(scope,"expiry-conversation")).isTrue();
-                Instant expiresAt=jdbc.sql("SELECT expires_at FROM gw.conversation WHERE id='expiry-conversation'").query((rs,row)->rs.getTimestamp(1).toInstant()).single();
-                job(context,scope,"expiry-conversation","queued",true);
-                job(context,scope,"expiry-conversation","running",true);
-                job(context,scope,"expiry-conversation","no-origin",false);
-                Boolean started=new TransactionTemplate(manager).execute(tx->new QueueJobRepository(jdbc).start("running",CREATED));assertThat(started).isTrue();
-                var published=new ArrayList<Object>();
 
-                // 실제 만료 전 QUEUED와 Dispatcher가 먼저 RUNNING으로 바꾼 행은 쓰기 없이 false입니다.
-                var live=committer(context,Clock.fixed(expiresAt.minusNanos(1),ZoneOffset.UTC),published);
-                assertThat(live.commitExpiredQueued("queued")).isFalse();
-                assertThat(writes(jdbc,"queued")).containsExactly("QUEUED",0,0,0);
-                var expired=committer(context,Clock.fixed(expiresAt,ZoneOffset.UTC),published);
-                assertThat(expired.commitExpiredQueued("running")).isFalse();
-                // start의 job.started 1행 외 종결 쓰기는 없습니다.
-                assertThat(writes(jdbc,"running")).containsExactly("RUNNING",1,0,0);
-                assertThat(published).isEmpty();
-
-                assertThat(expired.commitExpiredQueued("queued")).isTrue();
-                assertThat(jdbc.sql("SELECT status, error_code, result_ref, delegation_id FROM gw.job WHERE id='queued'").query().singleRow())
-                    .containsEntry("status","CANCELLED").containsEntry("error_code",null).containsEntry("result_ref",null).containsEntry("delegation_id",null);
-                assertThat(jdbc.sql("SELECT type, external_suppressed FROM gw.job_event WHERE job_id='queued' ORDER BY id DESC LIMIT 1").query().singleRow())
-                    .containsEntry("type","job.cancelled").containsEntry("external_suppressed",true);
-                assertThat(writes(jdbc,"queued")).containsExactly("CANCELLED",1,0,1);
-                assertThat(jdbc.sql("SELECT decision FROM gw.audit_event WHERE job_id='queued' AND event_type='JOB_TERMINAL'").query(String.class).single()).isEqualTo("EXPIRY_EDGE");
-                assertThat(expired.commitExpiredQueued("queued")).isFalse();
-                assertThat(writes(jdbc,"queued")).containsExactly("CANCELLED",1,0,1);
-
-                // 접수 감사 원점이 없으면 종결 전체가 되돌아갑니다.
-                assertThatThrownBy(()->expired.commitExpiredQueued("no-origin")).isInstanceOf(IllegalStateException.class);
-                assertThat(writes(jdbc,"no-origin")).containsExactly("QUEUED",0,0,0);
-            }
-        }
-    }
 
     @Test void duplicateAcceptedOriginsStoreNoJobAuditAndRollBackTheTerminalWhileExactlyOneOriginStores(){
         try(var database=rawDatabase()){

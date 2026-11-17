@@ -57,7 +57,7 @@ class StackSmokeIT extends StackContextSupport {
             for (var file : files.filter(path -> path.getFileName().toString().matches("V.+__.+\\.sql")).toList())
                 originals.put(file.getFileName().toString(), java.nio.file.Files.readAllBytes(file));
         }
-        assertThat(copies.keySet()).isEqualTo(originals.keySet()).hasSize(7);
+        assertThat(copies.keySet()).isEqualTo(originals.keySet()).hasSize(8);
         originals.forEach((name, bytes) -> assertThat(copies.get(name)).as(name).isEqualTo(bytes));
         assertThat(originals.keySet().stream().map(name -> org.flywaydb.core.api.MigrationVersion.fromVersion(name.substring(1, name.indexOf("__")).replace('_', '.')))
             .max(org.flywaydb.core.api.MigrationVersion::compareTo).orElseThrow())

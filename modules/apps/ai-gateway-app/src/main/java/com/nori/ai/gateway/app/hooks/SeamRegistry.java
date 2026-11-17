@@ -28,7 +28,7 @@ public final class SeamRegistry implements PlanInjectionSeam, DispatchInjectionS
                 throw new IllegalArgumentException("주입 대상이 잘못되었습니다");
         } else if (directive.capabilityId() == null || !capabilities.contains(directive.capabilityId()) || directive.sourceId() != null
                 || ((directive.kind() == Kind.OWNER_OVERRIDE || directive.kind() == Kind.DISPATCH_OWNER_OVERRIDE || directive.kind() == Kind.RESOURCE_OWNER_OVERRIDE
-                     || directive.kind() == Kind.SOURCE_ALLOWLIST_REF_OVERRIDE) ? directive.ownerSystem() != OwnerSystem.WM : directive.ownerSystem() != null))
+                     || directive.kind() == Kind.SOURCE_ALLOWLIST_REF_OVERRIDE) ? !java.util.Objects.equals(directive.ownerSystem(),OwnerSystem.WM) : directive.ownerSystem() != null))
             throw new IllegalArgumentException("주입 대상이 잘못되었습니다");
     }
     private Optional<Directive> directive(VerifiedSystemScope scope) {

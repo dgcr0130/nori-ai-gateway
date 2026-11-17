@@ -24,7 +24,7 @@ public final class EvidenceAssembler {
             if(!item.isObject())throw invalidKnowledge();
             String owner=metadata(item,"ownerSystem"),ref=metadata(item,"sourceRef"),chunk=metadata(item,"chunkId"),revision=metadata(item,"revision");
             OwnerSystem system;try{system=OwnerSystem.valueOf(owner);}catch(IllegalArgumentException invalid){throw invalidKnowledge();}
-            if(system!=manifest.ownerSystem()||system!=scope.boundSystem()||!new OwnedReference(system,ref).belongsTo(system))throw invalidKnowledge();
+            if(!java.util.Objects.equals(system,manifest.ownerSystem())||!java.util.Objects.equals(system,scope.boundSystem())||!new OwnedReference(system,ref).belongsTo(system))throw invalidKnowledge();
             var hit=new KnowledgeHit(new EvidenceSourceRef(system,ref,chunk,revision),new ResultSourceDeps.DocKey(system.name(),ref,revision));
             String key=system.name()+"\u0000"+chunk;var previous=hits.putIfAbsent(key,hit);
             if(previous!=null&&!previous.equals(hit))throw invalidKnowledge();
@@ -42,7 +42,7 @@ public final class EvidenceAssembler {
     private static IllegalArgumentException invalidKnowledge(){return new IllegalArgumentException("문서 근거 계약을 확인할 수 없습니다");}
     public List<Evidence> validate(List<Evidence> values,VerifiedSystemScope scope) {
         Set<String> ids=new HashSet<>();
-        for(var value:values)if(value.evidenceId()==null||value.evidenceId().isBlank()||!ids.add(value.evidenceId())||value.ownerSystem()!=scope.boundSystem()
+        for(var value:values)if(value.evidenceId()==null||value.evidenceId().isBlank()||!ids.add(value.evidenceId())||!java.util.Objects.equals(value.ownerSystem(),scope.boundSystem())
                 ||value.sourceRef()==null||!value.sourceRef().belongsTo(scope.boundSystem())||value.observedAt()==null||!scope.actorRef().equals(value.actorAccessScope())
                 ||value.deploymentRef()!=null&&!value.deploymentRef().belongsTo(scope.boundSystem()))throw new IllegalArgumentException("근거 연결을 확인할 수 없습니다");
         return List.copyOf(values);

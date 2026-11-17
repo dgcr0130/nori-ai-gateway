@@ -38,13 +38,13 @@ public final class PlanValidator {
         Map<ResourceRef, ResourceResolver.ResourceState> resources = new LinkedHashMap<>();
         for (ResourceRef ref : refs) resources.put(ref, resolver == null ? null : resolver.resolve(ref, scope));
         // 부재 결과는 ⑧에서 판정하며 확인되지 않은 타 시스템 정보를 조회하지 않습니다.
-        if (resources.values().stream().anyMatch(r -> r != null && r.ownerSystem() != null && r.ownerSystem() != scope.boundSystem()))
+        if (resources.values().stream().anyMatch(r -> r != null && r.ownerSystem() != null && !java.util.Objects.equals(r.ownerSystem(),scope.boundSystem())))
             return reject(trace, 3, RejectReason.OWNER_MISMATCH, List.of());
         pass(trace, 3);
         for (CapabilityManifest tool : tools.values()) {
             if (tool == null) continue;
             var binding = resolver == null ? null : resolver.source(tool, scope);
-            if (binding == null || !binding.allowed() || binding.ownerSystem() != scope.boundSystem()
+            if (binding == null || !binding.allowed() || !java.util.Objects.equals(binding.ownerSystem(),scope.boundSystem())
                 || !tool.sourceAllowlistRef().equals(binding.sourceAllowlistRef())) return reject(trace, 4, RejectReason.SOURCE_NOT_ALLOWED, List.of());
         }
         pass(trace, 4);
@@ -109,7 +109,7 @@ public final class PlanValidator {
         return null;
     }
     public static boolean authorized(CapabilityManifest tool, ResourceResolver.CurrentAuthorization current, VerifiedSystemScope scope) {
-        return current != null && current.sessionValid() && current.ownerSystem() == scope.boundSystem()
+        return current != null && current.sessionValid() && java.util.Objects.equals(current.ownerSystem(),scope.boundSystem())
             && tool.sourceAllowlistRef().equals(current.sourceAllowlistRef()) && scope.actorRef().equals(current.actorRef())
             && scope.pdg().equals(current.permissionDigest()) && current.actorScopes().contains(tool.requiredActorScope())
             && tool.requiredPermission().stream().anyMatch(p -> scope.perm().contains(p) && current.permissions().contains(p));
@@ -173,7 +173,7 @@ public final class PlanValidator {
         public boolean owns(com.nori.ai.gateway.core.authz.StepAttempt attempt, VerifiedSystemScope supplied) {
             if (attempt == null || !attempt.belongsTo(identity) || supplied != scope) return false;
             var b=attempt.binding(); var m=manifests.get(b.stepId());
-            return m != null && b.ownerSystem()==scope.boundSystem() && b.actorRef().equals(scope.actorRef()) && b.sub().equals(scope.sub())
+            return m != null && java.util.Objects.equals(b.ownerSystem(),scope.boundSystem()) && b.actorRef().equals(scope.actorRef()) && b.sub().equals(scope.sub())
                 && b.requestId().equals(scope.requestId()) && b.jobId().equals(plan.requestId()) && b.capabilityId().equals(m.capabilityId())
                 && b.sourceRef().equals(m.sourceAllowlistRef()) && b.manifestRequiredPermissions().equals(Set.copyOf(m.requiredPermission()))
                 && b.contractVersion().equals(m.contractVersion()) && b.schemaDigest().equals(m.schemaDigest());

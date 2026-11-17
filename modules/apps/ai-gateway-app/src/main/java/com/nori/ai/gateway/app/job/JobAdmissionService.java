@@ -82,11 +82,12 @@ public final class JobAdmissionService {
             hooks.ifPresent(TestHookRegistry::beginAdmission);
             String conversation=request.conversationId();
             if(conversation==null){conversation=UUID.randomUUID().toString();if(!conversations.insert(scope,conversation))throw new IllegalStateException("대화를 저장할 수 없습니다");}
-            else if(conversations.find(scope,conversation).isEmpty())throw new Rejected(404,null,0);
+            else if(!conversations.lock(scope,conversation))throw new Rejected(404,null,0);
             String jobId=UUID.randomUUID().toString(),messageId=UUID.randomUUID().toString();
             if(hooks.flatMap(h->h.armed(scope.sub(),request.idempotencyKey())).map(TestHookRegistry.Scenario::failSanitizer).orElse(false))throw new IllegalStateException("마스킹 적용을 확인할 수 없습니다");
             var sanitized=sanitizer.sanitize(request.question());
             if(!messages.insert(scope,conversation,new MessageRepository.Message(messageId,"user",sanitized.text(),json.writeValueAsString(request.requestFields().getOrDefault("resourceRefs",List.of())),"[]",null,null)))throw new Rejected(404,null,0);
+            if(!conversations.touchAtMessage(scope,conversation,messageId))throw new Rejected(404,null,0);
             if(!jobs.insert(scope,new JobRepository.NewJob(jobId,conversation,request.idempotencyKey(),digest,request.path(),messageId,request.requestFields()),request.delegation()))throw new Rejected(404,null,0);
             if(!events.insert(scope,jobId,"job.queued","{\"jobId\":\""+jobId+"\"}",false))throw new IllegalStateException("접수 이벤트를 저장할 수 없습니다");
             // 같은 접수 tx에서 인입 요청 span의 traceId로 원점을 남깁니다. 실패하면 접수 전체가 되돌아갑니다.

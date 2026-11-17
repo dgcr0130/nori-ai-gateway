@@ -41,11 +41,11 @@ class MetricLabelCardinalityTest {
         Counter.builder("aigw.llm.retry").tags("call_type", "plan", "reason", "anything").register(registry).increment();
         Counter.builder("aigw.unlisted").register(registry).increment();
         Counter.builder("jvm.threads.live").tags("id", "free text").register(registry).increment();
-        Counter.builder(MetricsCatalog.RETENTION_PURGED_ROWS).tag("kind", "conversation").register(registry).increment();
+        Counter.builder(MetricsCatalog.RETENTION_PURGED_ROWS).tag("kind", "cache").register(registry).increment();
         Counter.builder("hikaricp.connections.pending").tag("pool", "HikariPool-1").register(registry).increment();
         assertThat(registry.getMeters().stream().map(meter -> meter.getId().getName() + meter.getId().getTags()))
             .containsExactlyInAnyOrder("aigw.jobs.terminal[tag(error_code=QUEUE_TIMEOUT), tag(job_status=SUCCEEDED), tag(owner_system=TC)]",
-                MetricsCatalog.RETENTION_PURGED_ROWS + "[tag(kind=conversation)]", "hikaricp.connections.pending[tag(pool=HikariPool-1)]");
+                MetricsCatalog.RETENTION_PURGED_ROWS + "[tag(kind=cache)]", "hikaricp.connections.pending[tag(pool=HikariPool-1)]");
     }
 
     @Test void inferenceReadinessAlertAndRejectionLabelsIncludeTheDigestMismatchAndNothingElse() {

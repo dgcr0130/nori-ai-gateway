@@ -1,14 +1,13 @@
 package com.nori.ai.gateway.app.web;
 
 import com.nori.ai.gateway.app.job.JobAdmissionService;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestControllerAdvice(basePackages="com.nori.ai.gateway.app.web")
 public final class ApiExceptionHandler {
-    @ExceptionHandler({UniformNotFound.class,ConversationExpiryGuard.ConversationExpired.class})
+    @ExceptionHandler(UniformNotFound.class)
     ResponseEntity<Void> notFound() { return ResponseEntity.notFound().build(); }
     @ExceptionHandler(JobAdmissionService.Rejected.class)
     ResponseEntity<?> rejected(JobAdmissionService.Rejected failure) {

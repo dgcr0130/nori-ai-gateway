@@ -35,7 +35,7 @@ public final class ToolResultCache {
         check(prepared,attempt,grant,job,StepAttempt.Purpose.CACHE_LOOKUP);String key=key(prepared,attempt,grant,inputs);
         grant.consume(attempt,StepAttempt.Purpose.CACHE_LOOKUP);
         if(key==null)return Optional.empty();
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
+        expiry.assertLive(job.cancellation());
         var value=store.find(job.scope(),prepared.plan().conversationId(),key,grant.currentPdg());
         return value.filter(item->item.capabilityId().equals(attempt.binding().capabilityId())&&clock.instant().isBefore(item.expiresAt())
             &&access.evaluate(job.scope().perm(),item.sourceDeps(),documents.states(job.scope().perm(),Set.copyOf(item.sourceDeps().knowledgeDocuments())))==ResultAccessEvaluator.Decision.ALLOW);
@@ -45,13 +45,13 @@ public final class ToolResultCache {
         if(!value.capabilityId().equals(attempt.binding().capabilityId()))throw new IllegalArgumentException("캐시 자료 연결이 다릅니다");
         grant.consume(attempt,StepAttempt.Purpose.CACHE_PUT);
         if(key==null)return false;
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
-        Instant expires=clock.instant().plusSeconds(60);if(job.conversationExpiresAt().isBefore(expires))expires=job.conversationExpiresAt();if(value.expiresAt().isBefore(expires))expires=value.expiresAt();
+        expiry.assertLive(job.cancellation());
+        Instant expires=clock.instant().plusSeconds(60);if(value.expiresAt().isBefore(expires))expires=value.expiresAt();
         if(!clock.instant().isBefore(expires))return false;
         return store.put(job.scope(),prepared.plan().conversationId(),key,grant.currentPdg(),new CachedValue(value.capabilityId(),value.value(),value.sourceDeps(),expires));
     }
     private void check(PlanValidator.Prepared prepared,StepAttempt attempt,StepGrant grant,JobContext job,StepAttempt.Purpose purpose) {
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
+        expiry.assertLive(job.cancellation());
         if(attempt.purpose()!=purpose||!prepared.plan().conversationId().equals(job.conversationId())||!job.jobId().equals(prepared.plan().requestId())
                 ||!validator.authorizedStep(prepared,attempt,grant,job.scope())||attempt.mode()!=StepAttempt.Mode.DIRECT_SOURCE)throw new IllegalArgumentException("캐시 인가 연결이 다릅니다");
     }

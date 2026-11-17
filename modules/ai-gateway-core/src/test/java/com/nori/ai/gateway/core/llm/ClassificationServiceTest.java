@@ -3,7 +3,6 @@ package com.nori.ai.gateway.core.llm;
 import com.nori.ai.gateway.core.budget.CallType;
 import com.nori.ai.gateway.core.budget.ChatMessage;
 import com.nori.ai.gateway.core.budget.TokenBudgetPolicy;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.job.CancellationToken;
 import com.nori.ai.gateway.core.job.JobRequestInput;
 import com.nori.ai.gateway.core.port.InferenceClient;
@@ -31,7 +30,7 @@ class ClassificationServiceTest {
         return new ClassificationService(client, TokenBudgetPolicy.current(), CODEPOINTS, expiry(clock), observer, audits::add, PROMPT, "boundSystem: X\n");
     }
     private ClassificationService.Request request(String question, Map<String,Object> fields) {
-        return new ClassificationService.Request(SCOPE, "conversation", "job-1", NOW.plusSeconds(600), new CancellationToken(), new JobRequestInput("message", 1, question, fields));
+        return new ClassificationService.Request(SCOPE, "conversation", "job-1", new CancellationToken(), new JobRequestInput("message", 1, question, fields));
     }
     /** 분류 wire v3 고정 fixture: n 은 상위 작업 최소 근거(KQ=N, LQ=S, INC=H, GQ·UNS=[]), a=B. 다른 값은 {@link #wire(String,String,String,String,String,String,String)}. */
     private static String wire(String t, String eqp, String from, String to, String qRef) {
@@ -158,20 +157,10 @@ class ClassificationServiceTest {
         assertThat(client.sent.getFirst().messages().get(1).content()).startsWith("{\"context\":{\"referenceTime\":null,\"selectedResourceRefs\":[],\"timeWindow\":null,\"timezone\":null}");
     }
 
-    @Test void expiryBeforeAssemblyStopsTheCallAndExpiryDuringTheCallDiscardsTheResponse() {
-        var before = new ScriptedClient(reply(wire("GQ", null, null, null, null)));
-        clock.now = NOW.plusSeconds(600);
-        assertThatThrownBy(() -> service(before).classify(request("질문", CONTEXT))).isInstanceOf(ConversationExpiryGuard.ConversationExpired.class);
-        assertThat(before.sent).isEmpty();
-        clock.now = NOW;
-        var during = new ScriptedClient(reply(wire("GQ", null, null, null, null)));
-        during.onSend = sent -> clock.now = NOW.plusSeconds(600);
-        assertThatThrownBy(() -> service(during).classify(request("질문", CONTEXT))).isInstanceOf(ConversationExpiryGuard.ConversationExpired.class);
-        assertThat(during.sent).hasSize(1);
-        clock.now = NOW;
+    @Test void cancellationBeforeAssemblyStopsTheCall() {
         var cancelled = new ScriptedClient(reply(wire("GQ", null, null, null, null)));
         var token = new CancellationToken(); token.signal(CancellationToken.Reason.CANCELLED);
-        assertThatThrownBy(() -> service(cancelled).classify(new ClassificationService.Request(SCOPE, "conversation", "job-1", NOW.plusSeconds(600), token, new JobRequestInput("message", 1, "질문", CONTEXT))))
+        assertThatThrownBy(() -> service(cancelled).classify(new ClassificationService.Request(SCOPE, "conversation", "job-1", token, new JobRequestInput("message", 1, "질문", CONTEXT))))
             .isInstanceOf(IllegalStateException.class);
         assertThat(cancelled.sent).isEmpty();
     }

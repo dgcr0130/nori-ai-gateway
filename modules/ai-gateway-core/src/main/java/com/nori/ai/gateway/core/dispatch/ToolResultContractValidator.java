@@ -11,7 +11,7 @@ public final class ToolResultContractValidator {
     public ToolResultEnvelope validate(ToolResultEnvelope result, CapabilityManifest manifest) {
         boolean valid = result != null && manifest.capabilityId().equals(result.capabilityId())
             && manifest.contractVersion().equals(result.contractVersion()) && manifest.schemaDigest().equals(result.schemaDigest())
-            && versions.accepts(result.contractVersion(), result.schemaDigest()) && result.ownerSystem() == manifest.ownerSystem()
+            && versions.accepts(result.contractVersion(), result.schemaDigest()) && java.util.Objects.equals(result.ownerSystem(),manifest.ownerSystem())
             && result.status() != null && result.observedAt() != null && result.toolExecutionId() != null && !result.toolExecutionId().isBlank()
             && result.traceId() != null && !result.traceId().isBlank() && result.metadata() != null
             && result.metadata().sourceRef() != null && result.metadata().sourceRef().belongsTo(manifest.ownerSystem())
@@ -23,7 +23,7 @@ public final class ToolResultContractValidator {
             valid = result.blocks().stream().allMatch(b -> optionalRef(b.dataRef(), manifest.ownerSystem())
                 && (b.content() == null || SchemaContracts.matches(manifest.outputSchema(), b.content())))
                 && result.claims().stream().allMatch(c -> c.verdict() != null && refs(c.evidenceRefs(), manifest.ownerSystem()))
-                && result.evidence().stream().allMatch(e -> e.ownerSystem() == manifest.ownerSystem() && e.sourceRef() != null
+                && result.evidence().stream().allMatch(e -> java.util.Objects.equals(e.ownerSystem(),manifest.ownerSystem()) && e.sourceRef() != null
                     && e.sourceRef().belongsTo(manifest.ownerSystem()) && manifest.sourceAllowlistRef().equals(e.sourceRef().ref())
                     && optionalRef(e.deploymentRef(), manifest.ownerSystem()) && e.actorAccessScope() != null && e.observedAt() != null);
         }

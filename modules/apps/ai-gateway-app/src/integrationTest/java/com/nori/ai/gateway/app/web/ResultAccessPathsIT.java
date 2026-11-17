@@ -50,7 +50,8 @@ class ResultAccessPathsIT extends ApiWebSupport {
         var current=scope("actor");var wm=new com.nori.ai.gateway.core.scope.VerifiedSystemScope(com.nori.ai.gateway.core.scope.OwnerSystem.WM,current.authenticatedServiceRef(),current.actorRef(),current.sub(),current.perm(),current.pdg(),current.issuedAt(),current.expiresAt(),current.requestId());
         var foreign=inRequestSpan(()->context.getBean(com.nori.ai.gateway.app.job.JobAdmissionService.class).accept(wm,new com.nori.ai.gateway.app.job.JobAdmissionService.AdmissionRequest("/v1/query",null,"타 시스템 질문",Map.of(),"export-foreign",registeredDlg("actor"))));
         var foreignResponse=request("GET","/v1/analyses/"+foreign.jobId()+"/blocks/"+blockId+"/export","actor",null,null,false);assertThat(foreignResponse.statusCode()).isEqualTo(404);assertThat(foreignResponse.body()).isEmpty();
-        jdbc().sql("UPDATE gw.conversation SET expires_at=:expiry WHERE id=:id").param("expiry",java.sql.Timestamp.from(NOW.plusSeconds(1))).param("id",allowed.conversationId()).update();clock().advance(1);
+        jdbc().sql("UPDATE gw.job SET status='CANCELLED',delegation_id=NULL WHERE id=:id").param("id",allowed.jobId()).update();
+        assertThat(context.getBean(ConversationRepository.class).delete(scope("actor"),allowed.conversationId())).isEqualTo(ConversationRepository.DeleteResult.DELETED);
         var expired=request("GET","/v1/analyses/"+allowed.jobId()+"/blocks/"+blockId+"/export","actor",null,null,false);assertThat(expired.statusCode()).isEqualTo(404);assertThat(expired.body()).isEmpty();
     }
     @Test void malformedNonemptyDependenciesFailClosedAndCurrentSourcePermissionsUseAndSemantics() throws Exception {

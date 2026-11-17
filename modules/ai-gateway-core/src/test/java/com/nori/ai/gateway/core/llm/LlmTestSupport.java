@@ -2,7 +2,6 @@ package com.nori.ai.gateway.core.llm;
 
 import com.nori.ai.gateway.core.budget.CallType;
 import com.nori.ai.gateway.core.budget.ChatMessage;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.expiry.ExpiryCheckpoint;
 import com.nori.ai.gateway.core.port.InferenceClient;
 import java.time.Clock;
@@ -59,5 +58,5 @@ final class LlmTestSupport {
     /** 분류 요청·Composer Job 의 검증된 신원(감사 결속용 시험 값). */
     static final com.nori.ai.gateway.core.scope.VerifiedSystemScope SCOPE = new com.nori.ai.gateway.core.scope.VerifiedSystemScope(com.nori.ai.gateway.core.scope.OwnerSystem.TC, "svc",
         new com.nori.ai.gateway.core.scope.ActorRef("actor"), "actor", java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1");
-    static ExpiryCheckpoint expiry(Clock clock) { return new ExpiryCheckpoint(new ConversationExpiryGuard(), clock); }
+    static ExpiryCheckpoint expiry(Clock clock) { return new ExpiryCheckpoint(); }
 }

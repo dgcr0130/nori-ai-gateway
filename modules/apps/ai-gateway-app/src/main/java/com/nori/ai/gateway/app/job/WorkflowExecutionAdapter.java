@@ -28,7 +28,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         this.composer=Objects.requireNonNull(composer);this.logSummarizer=Objects.requireNonNull(logSummarizer);this.pauses=Objects.requireNonNull(pauses);
     }
     @Override public TerminalSpec execute(JobContext job) throws InterruptedException {
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
+        expiry.assertLive(job.cancellation());
         TaskType task=TaskType.valueOf((String)job.classification().get("taskType"));
         audit.writeForJob(AuditEvent.jobClassified(job.scope(),job.conversationId(),job.jobId(),task));
         var definition=registry.workflow(job.scope(),task).orElse(null);
@@ -39,15 +39,15 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         try {
             resolved=windows.resolve(job.classification(),context,()->{
                 try{return messages.findPreviousResolvedTimeWindow(job.scope(),job.jobId(),job.requestInput().messageId());}
-                catch(RuntimeException failure){expiry.assertLive(job.conversationExpiresAt(),job.cancellation());throw failure;}
+                catch(RuntimeException failure){expiry.assertLive(job.cancellation());throw failure;}
             },definition);
         }catch(TimeWindowResolver.Failure invalid){return finishClarification(job,invalid.code(),List.of("timeWindow"));}
         if(resolved.window().isPresent()) {
             try {
                 if(!messages.updateResolvedTimeWindow(job.scope(),job.jobId(),job.requestInput().messageId(),resolved.values())) {
-                    expiry.assertLive(job.conversationExpiresAt(),job.cancellation());throw new IllegalStateException("요청 시간 구간을 저장할 수 없습니다");
+                    expiry.assertLive(job.cancellation());throw new IllegalStateException("요청 시간 구간을 저장할 수 없습니다");
                 }
-            }catch(RuntimeException failure){expiry.assertLive(job.conversationExpiresAt(),job.cancellation());throw failure;}
+            }catch(RuntimeException failure){expiry.assertLive(job.cancellation());throw failure;}
         }
         var plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());
         ZoneId zone=context.get("timezone") instanceof String value?ZoneId.of(value):null;
@@ -72,7 +72,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         return complete(job,spec,null,Map.of(),object(job.requestInput().requestFields().get("context")));
     }
     private TerminalSpec complete(JobContext job,TerminalSpec initial,WorkflowOutcome outcome,Map<String,Object> window,Map<String,Object> inputContext) {
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
+        expiry.assertLive(job.cancellation());
         boolean clarification=initial.resultPayload().containsKey("clarification");
         var pairs=new ArrayList<TerminalSpec.StoredEvidence>();
         if(outcome!=null&&!clarification) {

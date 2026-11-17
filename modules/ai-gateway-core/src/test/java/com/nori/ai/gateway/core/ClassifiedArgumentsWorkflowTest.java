@@ -16,7 +16,7 @@ class ClassifiedArgumentsWorkflowTest {
     private final WorkflowPlanBuilder builder = new WorkflowPlanBuilder(registry);
     private static final Map<String,Object> WINDOW = Map.of("from", "2026-11-04T00:00Z", "to", "2026-11-04T01:00Z");
     private JobContext job(Map<String,Object> classification, Map<String,Object> fields) {
-        return new JobContext("request", "conversation", scope(), "delegation", NOW.plusSeconds(1000), new CancellationToken(), InferenceMode.ENABLED, classification, new JobRequestInput("message", 1, "질문", fields));
+        return new JobContext("request", "conversation", scope(), "delegation", new CancellationToken(), InferenceMode.ENABLED, classification, new JobRequestInput("message", 1, "질문", fields));
     }
     private WorkflowDefinition live() { return workflows().stream().filter(w -> w.taskType() == TaskType.LIVE_QUERY).findFirst().orElseThrow(); }
 

@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.util.*;
 
 public final class CancellationToken {
-    public enum Reason { CANCELLED, TIMEOUT, EXPIRED }
+    public enum Reason { CANCELLED, TIMEOUT }
     public interface InFlightCall {
         void abort();
         boolean awaitTermination(Duration timeout) throws InterruptedException;
@@ -20,7 +20,7 @@ public final class CancellationToken {
     public synchronized void completed(InFlightCall call) { calls.remove(call); }
     public synchronized Optional<Reason> reason() { return Optional.ofNullable(reason); }
     public synchronized void signal(Reason value) {
-        if (reason == null || value == Reason.EXPIRED) reason = Objects.requireNonNull(value);
+        if (reason == null) reason = Objects.requireNonNull(value);
         for (InFlightCall call : calls) call.abort();
         if (worker != null) worker.interrupt();
     }

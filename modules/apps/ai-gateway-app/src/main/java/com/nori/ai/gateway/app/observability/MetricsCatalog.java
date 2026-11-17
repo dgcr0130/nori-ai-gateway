@@ -61,14 +61,14 @@ public final class MetricsCatalog {
         spec("aigw.ingest.events", Meter.Type.COUNTER, "outcome", of("INDEXED", "SKIPPED_SAME_KEY", "ACL_UPDATED", "CATALOG_REMOVED", "TOMBSTONED",
             "RECREATED", "STALE_DISCARDED", "SOURCE_INCONSISTENT", "UNSUPPORTED_FORMAT", "FAILED")),
         spec("aigw.ingest.tx", Meter.Type.TIMER),
-        spec(RETENTION_PURGED_ROWS, Meter.Type.COUNTER, "kind", of("conversation", "audit")),
+        spec(RETENTION_PURGED_ROWS, Meter.Type.COUNTER, "kind", of("audit", "cache")),
         // §11.6 AIGW-RETENTION-PURGE-FAILED 판정과 P14 탐침 실패 보고용 무라벨 지표입니다.
         spec(RETENTION_PURGE_FAILURES, Meter.Type.COUNTER),
         spec(RETENTION_PROBE_FAILURES, Meter.Type.COUNTER),
         // §10.2 aigw_audit_write_failures_total: 일반 감사 저장 실패를 라벨 없이 셉니다.
         spec(AUDIT_WRITE_FAILURES, Meter.Type.COUNTER),
         spec("aigw.sse.connections", Meter.Type.GAUGE),
-        spec("aigw.sse.closed", Meter.Type.COUNTER, "reason", of("EXPIRED", "CLIENT", "TERMINAL")),
+        spec("aigw.sse.closed", Meter.Type.COUNTER, "reason", of("CLIENT", "TERMINAL")),
         // P12 Source 전용 관측의 세 low-cardinality 태그입니다.
         spec(SOURCE_REQUESTS, Meter.Type.TIMER, "source_id", of("loki", "tempo", "gitlab"), "method", of("GET"),
             "status_class", of("1xx", "2xx", "3xx", "4xx", "5xx", "IO_ERROR")))
@@ -79,17 +79,22 @@ public final class MetricsCatalog {
     public static Map<String,Spec> specs() { return SPECS; }
 
     public static boolean accepts(Meter.Id id, CapabilityRegistry registry) {
+        return accepts(id,registry,java.util.Set.of("TC","WM","HRM"));
+    }
+    private static boolean accepts(Meter.Id id, CapabilityRegistry registry, java.util.Set<String> systems) {
         Spec spec = SPECS.get(id.getName());
         if (spec == null) return id.getName().startsWith(HIKARI_PREFIX) && id.getTags().stream().allMatch(tag -> tag.getKey().equals("pool") && POOL.matcher(tag.getValue()).matches());
         if (spec.type() != id.getType()) return false;
         return id.getTags().stream().allMatch(tag -> tag.getKey().equals(TOOL_ID) && spec.labels().containsKey(TOOL_ID)
             ? registry.find(tag.getValue()).filter(manifest -> manifest.toolId().equals(tag.getValue())).isPresent()
-            : spec.accepts(tag.getKey(), tag.getValue()));
+            : tag.getKey().equals("owner_system") && spec.labels().containsKey("owner_system") ? systems.contains(tag.getValue()) : spec.accepts(tag.getKey(), tag.getValue()));
     }
-    public static MeterFilter filter(CapabilityRegistry registry) {
+    public static MeterFilter filter(CapabilityRegistry registry) { return filter(registry, java.util.Set.of("TC","WM","HRM")); }
+    public static MeterFilter filter(CapabilityRegistry registry, java.util.Set<String> systems) {
+        var owners = java.util.Set.copyOf(systems);
         Objects.requireNonNull(registry);
         return new MeterFilter() {
-            @Override public MeterFilterReply accept(Meter.Id id) { return accepts(id, registry) ? MeterFilterReply.NEUTRAL : MeterFilterReply.DENY; }
+            @Override public MeterFilterReply accept(Meter.Id id) { return accepts(id, registry, owners) ? MeterFilterReply.NEUTRAL : MeterFilterReply.DENY; }
             @Override public DistributionStatisticConfig configure(Meter.Id id, DistributionStatisticConfig config) {
                 Spec spec = SPECS.get(id.getName());
                 if (spec == null || spec.type() != Meter.Type.TIMER) return config;
@@ -103,7 +108,7 @@ public final class MetricsCatalog {
         for (int i = 0; i < labels.length; i += 2) map.put((String) labels[i], (Pattern) labels[i + 1]);
         return new Spec(name, type, map);
     }
-    private static Pattern owners() { return names(OwnerSystem.values()); }
+    private static Pattern owners() { return of("TC", "WM", "HRM"); }
     private static Pattern names(Enum<?>[] values) { return of(Arrays.stream(values).map(Enum::name).toArray(String[]::new)); }
     private static Pattern of(String... values) { return Pattern.compile(Arrays.stream(values).map(Pattern::quote).collect(Collectors.joining("|", "(?:", ")"))); }
 }

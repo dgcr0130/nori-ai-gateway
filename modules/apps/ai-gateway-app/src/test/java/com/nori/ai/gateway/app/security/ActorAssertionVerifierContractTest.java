@@ -29,9 +29,9 @@ class ActorAssertionVerifierContractTest {
         key = new ECKeyGenerator(Curve.P_256).keyID("test-malformed").generate();
         var p384 = new ECKeyGenerator(Curve.P_384).keyID("test-p384").generate().toPublicJWK();
         var tokens = directory.resolve("tokens.json"); var jwks = directory.resolve("jwks.json");
-        Files.writeString(tokens,"{\"" + CredentialFileContractTest.hash("unit-token") + "\":\"TC\"}");
+        Files.writeString(tokens,CredentialFileContractTest.hash("unit-token"));
         Files.writeString(jwks,new JWKSet(List.of(key.toPublicJWK(),p384)).toString());
-        var credentials = new SecurityCredentialFiles(tokens,jwks);
+        var credentials = new SecurityCredentialFiles(CredentialFileContractTest.properties(tokens,jwks));
         service = credentials.authenticate("unit-token").orElseThrow();
         verifier = new ActorAssertionVerifier(credentials,Clock.fixed(NOW,ZoneOffset.UTC),new RouteClassifier());
         request = new MockHttpServletRequest("POST","/v1/query");
@@ -65,7 +65,7 @@ class ActorAssertionVerifierContractTest {
         var earlier = new ActorAssertionVerifier(credentials(),Clock.fixed(Instant.EPOCH,ZoneOffset.UTC),new RouteClassifier()).verify(sign(values),service,request);
         assertThat(earlier.issuedAt()).isEqualTo(Instant.ofEpochSecond(-2,876543211));
     }
-    SecurityCredentialFiles credentials() { return new SecurityCredentialFiles(directory.resolve("tokens.json"),directory.resolve("jwks.json")); }
+    SecurityCredentialFiles credentials() { return new SecurityCredentialFiles(CredentialFileContractTest.properties(directory.resolve("tokens.json"),directory.resolve("jwks.json"))); }
     @Test void rejectsMissingNullAndWrongTypeTimeClaimsWithoutCoercionOrCauses() throws Exception {
         for (String name : List.of("iat","exp")) {
             var values = claims(); values.remove(name); reject(values,ASSERTION_TIME_INVALID);
@@ -129,4 +129,28 @@ class ActorAssertionVerifierContractTest {
                 failure -> assertThat(failure.reason()).isEqualTo(ASSERTION_TIME_INVALID)).hasNoCause();
         }
     }
+    @Test void sameKidIsScopedBySystemAndIssuerWhileOtherUsersKeepTheirOwnIdentity() throws Exception {
+        var otherKey=new ECKeyGenerator(Curve.P_256).keyID(key.getKeyID()).generate();
+        var digest=directory.resolve("other.sha256"); var jwks=directory.resolve("other.jwks");
+        Files.writeString(digest,CredentialFileContractTest.hash("other-token"));
+        Files.writeString(jwks,new JWKSet(otherKey.toPublicJWK()).toString());
+        var first=CredentialFileContractTest.properties(directory.resolve("tokens.json"),directory.resolve("jwks.json")).systems().get("TC");
+        var other=new com.nori.ai.gateway.app.config.GatewaySystemsProperties.SystemConfig("new-issuer",digest.toString(),jwks.toString(),null,null,List.of(),List.of(),List.of(),List.of(),List.of(),"AI_REVIEW",Map.of());
+        var credentials=new SecurityCredentialFiles(new com.nori.ai.gateway.app.config.GatewaySystemsProperties(Map.of("TC",first,"New-7",other)));
+        var verifier=new ActorAssertionVerifier(credentials,Clock.fixed(NOW,ZoneOffset.UTC),new RouteClassifier());
+        var values=claims(); values.put("iss","new-issuer");values.put("sys","New-7"); values.put("sub","other-user");
+        var signed=new JWSObject(new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(otherKey.getKeyID()).build(),new Payload(JSONObjectUtils.toJSONString(values)));
+        signed.sign(new ECDSASigner(otherKey));
+        var identity=credentials.authenticate("other-token").orElseThrow();
+        assertThat(verifier.verify(signed.serialize(),identity,request).actor().value()).isEqualTo("other-user");
+        assertThatThrownBy(()->verifier.verify(signed.serialize(),service,request)).isInstanceOfSatisfying(ActorAssertionVerifier.Rejected.class,f->assertThat(f.reason()).isEqualTo(SIGNATURE_INVALID));
+        String wrongKey=sign(values);
+        assertThatThrownBy(()->verifier.verify(wrongKey,identity,request)).isInstanceOfSatisfying(ActorAssertionVerifier.Rejected.class,f->assertThat(f.reason()).isEqualTo(SIGNATURE_INVALID));
+        values=claims(); values.put("iss","new-issuer");
+        String wrongIssuer=sign(values);
+        assertThatThrownBy(()->verifier.verify(wrongIssuer,service,request)).isInstanceOfSatisfying(ActorAssertionVerifier.Rejected.class,f->assertThat(f.reason()).isEqualTo(ISSUER_INVALID));
+        Files.writeString(digest,CredentialFileContractTest.hash("unit-token"));
+        assertThatThrownBy(()->new SecurityCredentialFiles(new com.nori.ai.gateway.app.config.GatewaySystemsProperties(Map.of("TC",first,"New-7",other)))).isInstanceOf(IllegalStateException.class).hasNoCause();
+    }
+
 }

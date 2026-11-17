@@ -16,25 +16,20 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import org.springframework.context.event.EventListener;
 
-/**
- * 대화 30일·감사 90일 정리 Job이다. 복구 완료 신호 뒤에만 시작하고 Gateway Clock 기준 1시간 주기로 실행한다.
- * 각 batch는 저장소의 짧은 자체 tx로 끝나며, 삭제 0이 될 때까지 순차 반복한다. 정리 실패와, 성공한 주기 뒤에도 만료 후 24h를 넘겨 남은 대화는
- * 같은 무라벨 실패 counter와 고정 코드로 그 주기에 한 번 알린다(AIGW-RETENTION-PURGE-FAILED).
- */
+/** 감사 90일과 캐시 자체 만료를 복구 완료 후 1시간 주기로 정리합니다. */
 public final class RetentionPurgeJob implements AutoCloseable {
     static final Duration PERIOD = Duration.ofHours(1);
-    static final Duration RESIDUAL_LIMIT = Duration.ofHours(24);
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().name("retention-purge-", 0).factory());
     private final RetentionMaintenanceRepository retention;
     private final Clock clock;
     private final Optional<PausePointRegistry> pauses;
-    private final Counter conversations, audit, failures;
+    private final Counter cache, audit, failures;
     private volatile boolean started;
     private Instant nextRunAt;
 
     public RetentionPurgeJob(RetentionMaintenanceRepository retention, Clock clock, Optional<PausePointRegistry> pauses, MeterRegistry meters) {
         this.retention = Objects.requireNonNull(retention); this.clock = Objects.requireNonNull(clock); this.pauses = Objects.requireNonNull(pauses);
-        conversations = purgedRows(meters, "conversation"); audit = purgedRows(meters, "audit");
+        cache = purgedRows(meters, "cache"); audit = purgedRows(meters, "audit");
         failures = Counter.builder(MetricsCatalog.RETENTION_PURGE_FAILURES).register(meters);
     }
     @EventListener public void start(ReadinessGate.RecoveryCompleted event) {
@@ -54,13 +49,11 @@ public final class RetentionPurgeJob implements AutoCloseable {
             signalFailure();
         }
     }
-    /** 보류 지점이 걸려 있으면 그 주기를 건너뛰고 false를 반환한다. 정리가 끝난 뒤 남은 가장 오래된 만료가 now보다 24h 넘게 앞서면 한 번 알린다. */
+    /** 보류 지점이 걸려 있으면 그 주기를 건너뜁니다. */
     private boolean purgeNow(Instant now) {
         if (pauses.map(registry -> registry.held(PausePointRegistry.Point.PURGE_HOLD)).orElse(false)) return false;
-        for (int deleted; (deleted = retention.purgeExpiredConversationsBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;) conversations.increment(deleted);
+        for (int deleted; (deleted = retention.purgeExpiredCacheBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;) cache.increment(deleted);
         for (int deleted; (deleted = retention.purgeExpiredAuditBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;) audit.increment(deleted);
-        // 정각은 초과가 아니며 저장 정밀도로 내리지 않고 Instant로 비교합니다.
-        if (retention.findOldestConversationExpiry().filter(expiresAt -> now.isAfter(expiresAt.plus(RESIDUAL_LIMIT))).isPresent()) signalFailure();
         return true;
     }
     private void signalFailure() {

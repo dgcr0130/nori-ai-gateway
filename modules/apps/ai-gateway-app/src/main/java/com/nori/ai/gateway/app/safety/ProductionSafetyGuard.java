@@ -50,14 +50,18 @@ public class ProductionSafetyGuard {
     }
 
     /** actor JWKS 에 시험 서명 키(kid 접두 {@code test-})가 있으면 위반이다. 판정할 수 없는 파일도 운영에서는 허용하지 않는다. */
+    public record TrustFile(String actorJwksFile) {}
     private static Optional<String> testKeyViolation(Binder binder) {
-        String file = binder.bind("ai.gateway.security.actor-jwks-file", String.class).orElse(null);
-        if (file == null) return Optional.empty();
+        var systems = binder.bind("ai.gateway.systems", org.springframework.boot.context.properties.bind.Bindable.mapOf(String.class,TrustFile.class)).orElse(Map.of());
+        for (var system : systems.values()) {
+            String file = system.actorJwksFile();
+            if (file == null) continue;
         try {
             JsonNode keys = JsonMapper.builder().build().readTree(Files.readString(Path.of(file))).path("keys");
             if (!keys.isArray()) return Optional.of("ACTOR_JWKS_UNREADABLE");
             for (JsonNode key : keys) if (key.path("kid").asString("").startsWith("test-")) return Optional.of("TEST_SIGNER_KEY_TRUSTED");
-            return Optional.empty();
         } catch (RuntimeException | java.io.IOException failure) { return Optional.of("ACTOR_JWKS_UNREADABLE"); }
+        }
+        return Optional.empty();
     }
 }

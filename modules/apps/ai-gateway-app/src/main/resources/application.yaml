@@ -8,6 +8,7 @@ spring:
   config:
     import:
       - optional:file:config/ai-gateway-db.properties
+      - optional:file:config/ai-gateway.yaml
 management:
   endpoint:
     health:

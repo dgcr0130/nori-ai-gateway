@@ -24,9 +24,9 @@ public final class CacheRepository extends ScopedJdbc {
         return transaction(() -> scoped(scope, """
             INSERT INTO gw.cache_entry(key_digest, owner_system, actor_ref, pdg, conversation_id, capability_id, value, source_deps, expires_at)
             SELECT :key, :bound, :actor, :pdg, :conversation, :capability, CAST(:value AS jsonb), CAST(:deps AS jsonb),
-                LEAST(:expires, c.expires_at)
+                :expires
             FROM gw.conversation c WHERE c.id = :conversation AND c.owner_system = :bound
-                AND c.owner_actor_ref = :actor AND c.expires_at > :now AND :expires > :now
+                AND c.owner_actor_ref = :actor AND :expires > :now
             """ + " ON CONFLICT (key_digest, owner_system, actor_ref, pdg) DO UPDATE SET "
             + "conversation_id = EXCLUDED.conversation_id, capability_id = EXCLUDED.capability_id, value = EXCLUDED.value, "
             + "source_deps = EXCLUDED.source_deps, expires_at = EXCLUDED.expires_at")

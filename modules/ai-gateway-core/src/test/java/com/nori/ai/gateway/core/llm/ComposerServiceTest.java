@@ -6,7 +6,6 @@ import com.nori.ai.gateway.core.budget.PromptDraft;
 import com.nori.ai.gateway.core.budget.PromptReducer;
 import com.nori.ai.gateway.core.budget.PromptTokenCounting;
 import com.nori.ai.gateway.core.budget.TokenBudgetPolicy;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.job.CancellationToken;
 import com.nori.ai.gateway.core.job.InferenceMode;
 import com.nori.ai.gateway.core.job.JobContext;
@@ -42,7 +41,7 @@ class ComposerServiceTest {
     }
     private JobContext job() {
         var scope = new VerifiedSystemScope(OwnerSystem.TC, "svc", new ActorRef("actor"), "actor", java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1");
-        return new JobContext("job-1", "conversation", scope, "dlg", NOW.plusSeconds(600), new CancellationToken(), InferenceMode.ENABLED, Map.of("taskType", "LIVE_QUERY"), new JobRequestInput("m", 1, "설비 상태 알려줘", Map.of()));
+        return new JobContext("job-1", "conversation", scope, "dlg", new CancellationToken(), InferenceMode.ENABLED, Map.of("taskType", "LIVE_QUERY"), new JobRequestInput("m", 1, "설비 상태 알려줘", Map.of()));
     }
     private static ComposerService.Input input(List<String> rawLines, String toolText) {
         return new ComposerService.Input(List.of(new ComposerService.EvidenceDigest("TC_BUSINESS", "2026-11-05T00:00:00Z", "2026-11-05T00:00:01Z"), new ComposerService.EvidenceDigest("LOKI_LOG", null, "2026-11-05T00:00:02Z")),
@@ -133,10 +132,10 @@ class ComposerServiceTest {
         assertThat(audits).hasSize(2).allSatisfy(audit -> { assertThat(audit.status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.FAILED); assertThat(audit.errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.LLM_UNAVAILABLE); });
     }
 
-    @Test void expiryBeforeAssemblyMeansNoPromptCountAndNoCall() {
+    @Test void cancellationBeforeAssemblyMeansNoPromptCountAndNoCall() {
         var client = new ScriptedClient(reply("정상이다[e1]."));
-        clock.now = NOW.plusSeconds(600);
-        assertThatThrownBy(() -> service(client, 2_816).compose(job(), input(List.of(), "{}"))).isInstanceOf(ConversationExpiryGuard.ConversationExpired.class);
+        var job=job(); job.cancellation().signal(com.nori.ai.gateway.core.job.CancellationToken.Reason.CANCELLED);
+        assertThatThrownBy(() -> service(client, 2_816).compose(job, input(List.of(), "{}"))).isInstanceOf(IllegalStateException.class);
         assertThat(counted).hasValue(0);
         assertThat(client.sent).isEmpty();
         assertThat(observed).isEmpty();

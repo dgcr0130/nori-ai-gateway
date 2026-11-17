@@ -9,7 +9,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 public final class QueueJobRepository {
     private final JdbcClient jdbc;
-    private static final String COLUMNS = "j.owner_system,j.actor_ref,j.request_perm,j.request_pdg,j.id,j.created_at,j.conversation_id,c.expires_at,j.status";
+    private static final String COLUMNS = "j.owner_system,j.actor_ref,j.request_perm,j.request_pdg,j.id,j.created_at,j.conversation_id,j.status";
     public QueueJobRepository(JdbcClient jdbc) { this.jdbc = jdbc; }
     public int count(String status) {
         if (!Set.of("QUEUED","RUNNING").contains(status)) throw new IllegalArgumentException("큐 상태가 잘못되었습니다");
@@ -38,6 +38,6 @@ public final class QueueJobRepository {
     private static JobScopeRecord map(ResultSet rs, int row) throws SQLException {
         return new JobScopeRecord(OwnerSystem.valueOf(rs.getString(1)),rs.getString(2),
             Set.copyOf(Arrays.asList((String[])rs.getArray(3).getArray())),rs.getString(4),rs.getString(5),rs.getTimestamp(6).toInstant(),
-            rs.getString(7),rs.getTimestamp(8).toInstant(),rs.getString(9));
+            rs.getString(7),rs.getString(8));
     }
 }

@@ -11,11 +11,13 @@ import org.springframework.core.env.Environment;
 
 @Configuration(proxyBeanMethods = false)
 public class IngressSecurityConfiguration {
-    @Bean SecurityCredentialFiles securityCredentialFiles(Environment environment) {
+    @Bean com.nori.ai.gateway.app.config.GatewaySystemsProperties gatewaySystemsProperties(Environment environment) {
         try {
-            return new SecurityCredentialFiles(Path.of(environment.getRequiredProperty("ai.gateway.security.service-tokens-file")),
-                Path.of(environment.getRequiredProperty("ai.gateway.security.actor-jwks-file")));
-        } catch (RuntimeException failure) { throw new IllegalStateException("인입 인증 자격 파일이 잘못되었습니다"); }
+            return com.nori.ai.gateway.app.config.GatewaySystemsProperties.load(environment);
+        } catch (RuntimeException failure) { throw new IllegalStateException("시스템 설정이 잘못되었습니다"); }
+    }
+    @Bean SecurityCredentialFiles securityCredentialFiles(com.nori.ai.gateway.app.config.GatewaySystemsProperties properties) {
+        return new SecurityCredentialFiles(properties);
     }
     @Bean RouteClassifier routeClassifier() { return new RouteClassifier(); }
     @Bean ActorAssertionVerifier actorAssertionVerifier(SecurityCredentialFiles credentials, Clock clock, RouteClassifier routes) { return new ActorAssertionVerifier(credentials,clock,routes); }

@@ -43,10 +43,9 @@ public class CoreBeansConfiguration {
     @Bean com.nori.ai.gateway.core.result.ResultAccessEvaluator resultAccessEvaluator() { return new com.nori.ai.gateway.core.result.ResultAccessEvaluator(); }
     @Bean com.nori.ai.gateway.core.result.KnowledgeDocumentStateReader knowledgeDocumentStateReader() { return new com.nori.ai.gateway.core.result.FailClosedKnowledgeDocumentStateReader(); }
     @Bean com.nori.ai.gateway.core.result.EvidenceSourceReader evidenceSourceReader() { return new com.nori.ai.gateway.core.result.FailClosedEvidenceSourceReader(); }
-    @Bean com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiryCheckpoint(com.nori.ai.gateway.core.expiry.ConversationExpiryGuard guard,Clock clock) { return new com.nori.ai.gateway.core.expiry.ExpiryCheckpoint(guard,clock); }
+    @Bean com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiryCheckpoint() { return new com.nori.ai.gateway.core.expiry.ExpiryCheckpoint(); }
     @Bean com.nori.ai.gateway.core.sanitize.ContentSanitizer contentSanitizer() { return new com.nori.ai.gateway.core.sanitize.ContentSanitizer(); }
     @Bean com.nori.ai.gateway.core.audit.AuditFieldAllowlist auditFieldAllowlist(com.nori.ai.gateway.core.sanitize.ContentSanitizer sanitizer, CapabilityRegistry registry) { return new com.nori.ai.gateway.core.audit.AuditFieldAllowlist(sanitizer, registry); }
-    @Bean com.nori.ai.gateway.core.expiry.ConversationExpiryGuard conversationExpiryGuard() { return new com.nori.ai.gateway.core.expiry.ConversationExpiryGuard(); }
     @Bean com.nori.ai.gateway.core.job.GenerationSemaphore generationSemaphore(CapacityProfile capacity) { return new com.nori.ai.gateway.core.job.GenerationSemaphore(capacity.generationConcurrency()); }
     @Bean com.nori.ai.gateway.core.budget.TokenBudgetPolicy tokenBudgetPolicy() { return com.nori.ai.gateway.core.budget.TokenBudgetPolicy.current(); }
     @Bean com.nori.ai.gateway.core.budget.PromptReducer promptReducer(com.nori.ai.gateway.core.budget.PromptTokenCounting counter, com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy) { return new com.nori.ai.gateway.core.budget.PromptReducer(counter, policy); }

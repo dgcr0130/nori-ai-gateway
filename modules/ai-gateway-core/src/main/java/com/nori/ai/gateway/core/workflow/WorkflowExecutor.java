@@ -34,7 +34,7 @@ public final class WorkflowExecutor {
         this.summarizer=summarizer;this.help=help;this.coverage=Objects.requireNonNull(coverage);
     }
     public WorkflowOutcome run(JobContext job,WorkflowExecutionPlan plan,WorkflowResourceResolver resolver) {
-        expiry.assertLive(job.conversationExpiresAt(),job.cancellation());
+        expiry.assertLive(job.cancellation());
         List<WorkflowOutcome.Trace> traces=new ArrayList<>();
         Set<String> selected=new HashSet<>();plan.steps().forEach(step->selected.add(step.definition().stepId()));
         for(var step:plan.definition().steps())if(!selected.contains(step.stepId()))traces.add(new WorkflowOutcome.Trace(step.stepId(),WorkflowOutcome.TraceOutcome.OPTIONAL_STEP_OMITTED));
@@ -113,7 +113,7 @@ public final class WorkflowExecutor {
             ToolResultEnvelope result=null;boolean hit=false;
             boolean cacheable=definition.cacheable()&&(manifest.toolKind()!=ToolKind.GIT||inputs.sourceRevision().isPresent());
             if(cacheable) {
-                expiry.assertLive(job.conversationExpiresAt(),job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.CACHE_LOOKUP);
+                expiry.assertLive(job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.CACHE_LOOKUP);
                 var decision=authorization.authorizeStep(attempt,job.scope(),resolver.delegatedCall());
                 if(decision instanceof SourceAuthorizationStep.StepGrant grant) {
                     var cached=cache.find(prepared,attempt,grant,job,inputs);if(cached.isPresent()){result=SchemaContracts.JSON.treeToValue(cached.get().value(),ToolResultEnvelope.class);deps.inherit(cached.get().sourceDeps());hit=true;}
@@ -122,14 +122,14 @@ public final class WorkflowExecutor {
             if(result==null) {
                 // 실제 dispatcher 직전 Job Tool 호출 한도(SPEC §28.8: 전체 12·같은 Tool 3·Knowledge search 2).
                 if(!calls.tryAcquire(manifest.capabilityId(),manifest.toolKind())){traces.add(new WorkflowOutcome.Trace(definition.stepId(),WorkflowOutcome.TraceOutcome.TOOL_LIMIT_REACHED));continue;}
-                expiry.assertLive(job.conversationExpiresAt(),job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.DISPATCH);
+                expiry.assertLive(job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.DISPATCH);
                 ToolDispatcher.InvocationOutcome invoked;var trace=new java.util.concurrent.atomic.AtomicReference<ExecutionContext.DispatchTrace>();
                 try {
                     if(attempt.mode()==StepAttempt.Mode.BACKEND_READ_REQUIRED)invoked=dispatcher.dispatchBusiness(prepared,attempt,job.scope(),new ExecutionContext(resolver,trace::set));
                     else {
                         var decision=authorization.authorizeStep(attempt,job.scope(),resolver.delegatedCall());
                         if(!(decision instanceof SourceAuthorizationStep.StepGrant grant)){result=failure(manifest,decision instanceof SourceAuthorizationStep.StepUnavailable?ResultStatus.SOURCE_UNAVAILABLE:ResultStatus.DENIED);invoked=null;}
-                        else {expiry.assertLive(job.conversationExpiresAt(),job.cancellation());invoked=dispatcher.dispatchCurrent(prepared,attempt,job.scope(),grant,executionContext(job,plan,prepared,attempt,resolver,bindings,trace::set));}
+                        else {expiry.assertLive(job.cancellation());invoked=dispatcher.dispatchCurrent(prepared,attempt,job.scope(),grant,executionContext(job,plan,prepared,attempt,resolver,bindings,trace::set));}
                     }
                 } catch(WorkflowResourceResolver.ReadFailure failure){result=failure(manifest,failure.status());invoked=null;}
                 if(invoked==null)recorder.blocked(job,manifest.capabilityId(),result.status(),Optional.empty());
@@ -152,7 +152,7 @@ public final class WorkflowExecutor {
             if(!hits.isEmpty())deps.inherit(new ResultSourceDeps(List.of(),hits.stream().map(com.nori.ai.gateway.core.evidence.EvidenceAssembler.KnowledgeHit::document).distinct().toList()));
             if(result.dataRef()!=null&&!result.blocks().isEmpty())bindings.put(step.stepId(),new StepBinding(job.scope().boundSystem(),result.dataRef(),result.blocks().getFirst().content()));
             if(cacheable&&!hit&&observed) {
-                expiry.assertLive(job.conversationExpiresAt(),job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.CACHE_PUT);
+                expiry.assertLive(job.cancellation());var attempt=prepared.newAttempt(step,job.scope(),StepAttempt.Purpose.CACHE_PUT);
                 var decision=authorization.authorizeStep(attempt,job.scope(),resolver.delegatedCall());
                 if(decision instanceof SourceAuthorizationStep.StepGrant grant)cache.put(prepared,attempt,grant,job,inputs,new ToolResultCache.CachedValue(manifest.capabilityId(),SchemaContracts.JSON.valueToTree(result),new ResultSourceDeps(List.of(new ResultSourceDeps.Source(manifest.sourceAllowlistRef(),Set.copyOf(manifest.requiredPermission()))),List.of()),clock.instant().plusSeconds(60)));
             }

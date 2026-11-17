@@ -33,7 +33,7 @@ public final class AuthRejectionAppendRepository {
                 VALUES (:recorded, :owner, :actor, :request, :event, :decision, :status)
                 """)
                 .param("recorded", Timestamp.from(clock.instant().truncatedTo(ChronoUnit.MICROS)))
-                .param("owner", request.ownerSystem().map(Enum::name).orElse(null), Types.VARCHAR)
+                .param("owner", request.ownerSystem().map(com.nori.ai.gateway.core.scope.OwnerSystem::name).orElse(null), Types.VARCHAR)
                 .param("actor", request.actorRef().map(actor -> actor.value()).orElse(null), Types.VARCHAR)
                 .param("request", request.requestId().toString())
                 .param("event", AuditEventType.AUTH_REJECTED.name())

@@ -11,6 +11,6 @@ public final class JobEventStreamController {
     @GetMapping(value="/v1/analyses/{jobId}/events",produces="text/event-stream")
     public SseEmitter events(HttpServletRequest request,@PathVariable String jobId,@RequestHeader(value="Last-Event-ID",required=false)String lastEventId) {
         var scope=ApiRequestInput.scope(request);var access=responses.assemble(scope,jobId);responses.assertLive(access);
-        return hub.connect(scope,jobId,access.conversation().expiresAt(),lastEventId);
+        return hub.connect(scope,jobId,lastEventId);
     }
 }

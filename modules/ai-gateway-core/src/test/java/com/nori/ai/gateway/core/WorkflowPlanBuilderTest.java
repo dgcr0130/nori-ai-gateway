@@ -14,7 +14,7 @@ import static com.nori.ai.gateway.core.DomainFixtures.*;
 class WorkflowPlanBuilderTest {
     private final CapabilityRegistry registry=new CapabilityRegistry(new ManifestLoader().loadClasspath("manifests/tc/index.json"),workflows(),Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy());
     private final WorkflowPlanBuilder builder=new WorkflowPlanBuilder(registry);
-    private JobContext job(TaskType task,Map<String,Object> fields){return new JobContext("request","conversation",scope(),"delegation",NOW.plusSeconds(1000),new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",task.name()),new JobRequestInput("message",1,"질문",fields));}
+    private JobContext job(TaskType task,Map<String,Object> fields){return new JobContext("request","conversation",scope(),"delegation",new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",task.name()),new JobRequestInput("message",1,"질문",fields));}
     private WorkflowDefinition workflow(TaskType task){return workflows().stream().filter(w->w.taskType()==task).findFirst().orElseThrow();}
     @Test void omittedNullAndTrueOptionsKeepNormalCarrierWhileFalseBlocksOnlyRequiredTools() {
         for(var fields:List.of(Map.<String,Object>of(),Collections.<String,Object>singletonMap("options",null),Map.<String,Object>of("options",Collections.singletonMap("allowTools",null)),Map.<String,Object>of("options",Map.of("allowTools",true))))assertThatCode(()->builder.checkOptions(workflow(TaskType.LIVE_QUERY),job(TaskType.LIVE_QUERY,fields))).doesNotThrowAnyException();

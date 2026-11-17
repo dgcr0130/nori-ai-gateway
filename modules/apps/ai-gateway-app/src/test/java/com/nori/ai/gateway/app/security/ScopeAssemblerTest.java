@@ -23,7 +23,7 @@ class ScopeAssemblerTest {
     @Test void workerScopeAllowsExactJobDeadlineAndRejectsItsSuccessor(){
         Instant created=Instant.parse("2026-11-06T00:00:00Z");
         var job=new JobScopeRecord(OwnerSystem.TC,"actor",Set.of(),"a".repeat(64),"job",created,
-            "conversation",created.plus(Duration.ofDays(30)),"RUNNING");
+            "conversation","RUNNING");
         var scope=new ScopeAssembler().forWorker(job);
         var workflow=new WorkflowDefinition(OwnerSystem.TC,TaskType.GENERAL_QUERY,List.of(),
             WorkflowDefinition.AnswerSource.REGISTRY_VIEW,null);

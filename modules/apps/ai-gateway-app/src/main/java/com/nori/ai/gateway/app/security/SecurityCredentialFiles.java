@@ -16,33 +16,41 @@ import tools.jackson.databind.json.JsonMapper;
 public final class SecurityCredentialFiles {
     private static final Set<String> PRIVATE_FIELDS = Set.of("d","p","q","dp","dq","qi","oth","k");
     private final List<TokenBinding> tokens;
-    private final Map<String,JWK> keys;
+    private record KeyId(OwnerSystem system, String kid) {}
+    private final Map<KeyId,JWK> keys;
+    private final Map<OwnerSystem,String> issuers;
     private record TokenBinding(byte[] digest, OwnerSystem owner) {}
 
-    public SecurityCredentialFiles(Path serviceTokensFile, Path actorJwksFile) {
+    public SecurityCredentialFiles(com.nori.ai.gateway.app.config.GatewaySystemsProperties properties) {
         try {
             var mapper = JsonMapper.builder(JsonFactory.builder().disable(tools.jackson.core.TokenStreamFactory.Feature.CHARSET_DETECTION)
                     .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
                 .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
-            var tokenJson = mapper.readTree(read(serviceTokensFile));
-            if (!tokenJson.isObject() || tokenJson.isEmpty()) throw new IllegalArgumentException();
             var loadedTokens = new ArrayList<TokenBinding>();
-            for (var entry : tokenJson.properties()) {
-                if (!entry.getKey().matches("[0-9a-f]{64}") || !entry.getValue().isString()) throw new IllegalArgumentException();
-                loadedTokens.add(new TokenBinding(HexFormat.of().parseHex(entry.getKey()), OwnerSystem.valueOf(entry.getValue().asString())));
+            var loadedKeys = new LinkedHashMap<KeyId,JWK>();
+            var loadedIssuers = new LinkedHashMap<OwnerSystem,String>();
+            var digests = new HashSet<String>();
+            for (var entry : properties.systems().entrySet()) {
+                var owner = OwnerSystem.valueOf(entry.getKey()); var config = entry.getValue();
+                String digest = new String(read(Path.of(config.serviceTokenSha256File())), StandardCharsets.UTF_8).strip();
+                if (!digest.matches("[0-9a-f]{64}") || !digests.add(digest)) throw new IllegalArgumentException();
+                loadedTokens.add(new TokenBinding(HexFormat.of().parseHex(digest),owner));
+                loadedIssuers.put(owner,config.issuer());
+                if (config.gatewayTokenFile() != null) {
+                    String token = new String(read(Path.of(config.gatewayTokenFile())),StandardCharsets.UTF_8).strip();
+                    if (token.isEmpty() || !token.matches("[A-Za-z0-9._~+/-]+=*")) throw new IllegalArgumentException();
+                }
+                var jwks = mapper.readTree(read(Path.of(config.actorJwksFile()))); rejectPrivate(jwks);
+                if (!jwks.isObject() || jwks.get("keys") == null || !jwks.get("keys").isArray() || jwks.get("keys").isEmpty()) throw new IllegalArgumentException();
+                for (var node : jwks.get("keys")) {
+                    JWK key = JWK.parse(mapper.writeValueAsString(node)); validatePublicKey(key);
+                    if (key.getKeyID() == null || key.getKeyID().isBlank()
+                            || loadedKeys.putIfAbsent(new KeyId(owner,key.getKeyID()),key) != null) throw new IllegalArgumentException();
+                }
             }
-            var jwks = mapper.readTree(read(actorJwksFile));
-            rejectPrivate(jwks);
-            if (!jwks.isObject() || jwks.get("keys") == null || !jwks.get("keys").isArray() || jwks.get("keys").isEmpty()) throw new IllegalArgumentException();
-            var loadedKeys = new LinkedHashMap<String,JWK>();
-            for (var node : jwks.get("keys")) {
-                JWK key = JWK.parse(mapper.writeValueAsString(node));
-                validatePublicKey(key);
-                if (key.getKeyID() == null || key.getKeyID().isBlank() || loadedKeys.putIfAbsent(key.getKeyID(), key) != null) throw new IllegalArgumentException();
-            }
-            tokens = List.copyOf(loadedTokens); keys = Map.copyOf(loadedKeys);
+            tokens = List.copyOf(loadedTokens); keys = Map.copyOf(loadedKeys); issuers = Map.copyOf(loadedIssuers);
         } catch (Exception failure) {
-            // 파서와 JCA 예외에는 입력 키·파일 경로가 포함될 수 있으므로 원인을 전달하지 않습니다.
+            // 파서가 읽은 자격 값을 예외 원인으로 공개하지 않습니다.
             throw new IllegalStateException("인입 인증 자격 파일이 잘못되었습니다");
         }
     }
@@ -83,5 +91,6 @@ public final class SecurityCredentialFiles {
         for (var binding : tokens) if (MessageDigest.isEqual(digest,binding.digest())) owner = binding.owner();
         return owner == null ? Optional.empty() : Optional.of(new VerifiedServiceIdentity(owner,"service:" + owner.name()));
     }
-    JWK key(String kid) { return kid == null ? null : keys.get(kid); }
+    JWK key(OwnerSystem system, String kid) { return kid == null ? null : keys.get(new KeyId(system,kid)); }
+    String issuer(OwnerSystem system) { return issuers.get(system); }
 }

@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
  */
 public final class AllowlistLogFilter extends Filter<ILoggingEvent> {
     static final Set<String> PRODUCT_CODES = Set.of("RESTORE_PATH_REQUIRED", "RETENTION_PROBE_FAILED", "RETENTION_PURGE_FAILED",
-        "EXPIRY_CANCEL_FAILED", "AUDIT_WRITE_FAILED", "INFERENCE_ALERT_RAISED_MODEL_LOADING", "INFERENCE_ALERT_RAISED_INFERENCE_UNAVAILABLE",
+        "AUDIT_WRITE_FAILED", "INFERENCE_ALERT_RAISED_MODEL_LOADING", "INFERENCE_ALERT_RAISED_INFERENCE_UNAVAILABLE",
         "INFERENCE_ALERT_RAISED_MODEL_CONTEXT_MISMATCH", "INFERENCE_ALERT_RAISED_MODEL_DIGEST_MISMATCH", "INFERENCE_ALERT_CLEARED");
     static final String PRODUCT_LOGGER_PREFIX = "com.nori.ai.gateway.";
     /** OTel appender가 capture하는 MDC 키다. 값은 {@link #allowsMdc}의 닫힌 값만 통과한다. */
@@ -51,7 +51,7 @@ public final class AllowlistLogFilter extends Filter<ILoggingEvent> {
         return switch (key) {
             case "requestId", "conversationId", "jobId" -> UUID.matcher(value).matches();
             case "traceId" -> TRACE.matcher(value).matches() && !value.equals("0".repeat(32));
-            case "ownerSystem" -> named(OwnerSystem.values(), value);
+            case "ownerSystem" -> value.matches("[A-Za-z0-9][A-Za-z0-9_-]{0,63}");
             case "status" -> named(ResultStatus.values(), value) || named(JobStatus.values(), value);
             case "errorCode" -> named(ErrorCode.values(), value);
             case "decision" -> named(RejectReason.values(), value) || named(TerminalSpec.Cause.values(), value);

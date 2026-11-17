@@ -19,7 +19,7 @@ class ProductionSafetyGuardTest {
         environment.setActiveProfiles("prod");
         Path jwks = directory.resolve("jwks.json");
         Files.writeString(jwks, "{\"keys\":[{\"kty\":\"EC\",\"kid\":\"prod-2026\",\"crv\":\"P-256\",\"x\":\"a\",\"y\":\"b\"}]}");
-        environment.setProperty("ai.gateway.security.actor-jwks-file", jwks.toString());
+        environment.setProperty("ai.gateway.systems[TC].actor-jwks-file", jwks.toString());
         environment.setProperty("ai.gateway.inference.mode", "ENABLED");
         return environment;
     }
@@ -58,7 +58,7 @@ class ProductionSafetyGuardTest {
         var testKey = prod();
         Files.writeString(directory.resolve("jwks.json"), "{\"keys\":[{\"kid\":\"prod-1\"},{\"kid\":\"test-20261107\"}]}");
         assertThat(violations(testKey)).containsExactly("TEST_SIGNER_KEY_TRUSTED");
-        var unreadable = prod(); unreadable.setProperty("ai.gateway.security.actor-jwks-file", directory.resolve("missing.json").toString());
+        var unreadable = prod(); unreadable.setProperty("ai.gateway.systems[TC].actor-jwks-file", directory.resolve("missing.json").toString());
         assertThat(violations(unreadable)).containsExactly("ACTOR_JWKS_UNREADABLE");
     }
 

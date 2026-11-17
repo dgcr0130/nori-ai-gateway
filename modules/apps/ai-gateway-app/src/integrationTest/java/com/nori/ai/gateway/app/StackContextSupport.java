@@ -36,14 +36,15 @@ public abstract class StackContextSupport {
             if (signer == null) signer = StubAssertionSigner.ephemeral("test-eph-stack");
             if (serviceToken == null) { byte[] bytes = new byte[32]; new SecureRandom().nextBytes(bytes); serviceToken = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes); }
             String digest = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(serviceToken.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-            Files.writeString(securityDirectory.resolve("service-tokens.json"),"{\"" + digest + "\":\"TC\"}");
+            Files.writeString(securityDirectory.resolve("service-tokens.json"),digest);
             Files.writeString(securityDirectory.resolve("jwks.json"),new JWKSet(trustedPublicKeys()).toString());
         } catch (Exception failure) { throw new IllegalStateException("시험 인입 자격을 준비할 수 없습니다"); }
     }
     protected List<JWK> trustedPublicKeys() { return List.of(signer.publicJwk()); }
     protected Map<String,Object> securityProperties() {
-        return Map.of("ai.gateway.security.service-tokens-file",securityDirectory.resolve("service-tokens.json").toString(),
-            "ai.gateway.security.actor-jwks-file",securityDirectory.resolve("jwks.json").toString());
+        return Map.of("ai.gateway.systems[TC].service-token-sha256-file",securityDirectory.resolve("service-tokens.json").toString(),
+            "ai.gateway.systems[TC].actor-jwks-file",securityDirectory.resolve("jwks.json").toString(),"ai.gateway.systems[TC].issuer","tc-ui-backend",
+            "ai.gateway.systems[TC].review-permission","AI_REVIEW");
     }
     protected WebApplicationType applicationType() { return WebApplicationType.NONE; }
     protected Map<String,Object> extraApplicationProperties() { return Map.of(); }
@@ -66,6 +67,7 @@ public abstract class StackContextSupport {
         if (applicationType() == WebApplicationType.SERVLET) { properties.put("server.address","127.0.0.1"); properties.put("server.port",0); }
         var arguments = new java.util.ArrayList<>(List.of(
                 "--spring.flyway.enabled=false",
+                "--spring.config.import=optional:file:config/ai-gateway-db.properties",
                 "--ai.gateway.recovery.restore-mode=" + properties.getOrDefault("ai.gateway.recovery.restore-mode",false),
                 "--spring.kafka.bootstrap-servers=127.0.0.1:1",
                 "--spring.kafka.listener.auto-startup=false",

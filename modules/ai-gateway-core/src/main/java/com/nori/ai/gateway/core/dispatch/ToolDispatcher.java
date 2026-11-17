@@ -48,7 +48,7 @@ public final class ToolDispatcher {
         CapabilityManifest tool = target.tool();
         if (!tool.equals(registered) || target.resources().size() != states.size()) return reject(step, scope, registered, context, RejectReason.PLAN_INVALID, ResultStatus.FAILED, ErrorCode.CONTRACT_INVALID, null);
         var source = target.source();
-        if (source == null || !source.allowed() || source.ownerSystem() != scope.boundSystem() || !tool.sourceAllowlistRef().equals(source.sourceAllowlistRef()))
+        if (source == null || !source.allowed() || !java.util.Objects.equals(source.ownerSystem(),scope.boundSystem()) || !tool.sourceAllowlistRef().equals(source.sourceAllowlistRef()))
             return reject(step, scope, registered, context, RejectReason.SOURCE_NOT_ALLOWED, ResultStatus.DENIED, null, null);
         if (prepared == null ? !PlanValidator.authorized(tool, context.resolver().authorize(tool, step, scope), scope)
             : attempt.mode()==com.nori.ai.gateway.core.authz.StepAttempt.Mode.DIRECT_SOURCE && !validator.authorizedStep(prepared,attempt,grant,scope))
@@ -146,7 +146,7 @@ public final class ToolDispatcher {
         var ordered=prepared.plan().plan().stream().map(PlanStep::stepId).filter(actual::contains).toList();
         if(!actual.equals(ordered))throw new IllegalArgumentException("단계 자료 순서가 다릅니다");
         inputs.bindings().forEach((key,binding)->{
-            if(!ancestors.contains(key)||prepared.manifest(key).toolKind()!=ToolKind.TRACE||binding.ownerSystem()!=scope.boundSystem()||!binding.dataRef().belongsTo(scope.boundSystem()))throw new IllegalArgumentException("단계 자료 소유 범위가 다릅니다");
+            if(!ancestors.contains(key)||prepared.manifest(key).toolKind()!=ToolKind.TRACE||!java.util.Objects.equals(binding.ownerSystem(),scope.boundSystem())||!binding.dataRef().belongsTo(scope.boundSystem()))throw new IllegalArgumentException("단계 자료 소유 범위가 다릅니다");
         });
     }
     private void collectAncestors(PlanStep step,PlanEnvelope plan,Set<String> ancestors) {
@@ -156,7 +156,7 @@ public final class ToolDispatcher {
             RejectReason reason, ResultStatus status, ErrorCode error, Clarification clarification) {
         context.trace().accept(new ExecutionContext.DispatchTrace(step.stepId(), reason, error));
         // 실제 실행 대상이 다른 소유자여도 응답은 인증된 원래 범위만 가집니다.
-        if (registered.ownerSystem() != scope.boundSystem()) return unsupported(step, scope);
+        if (!java.util.Objects.equals(registered.ownerSystem(),scope.boundSystem())) return unsupported(step, scope);
         return results.failure(registered, status, error, clarification);
     }
     private ToolResultEnvelope unsupported(PlanStep step, VerifiedSystemScope scope) {

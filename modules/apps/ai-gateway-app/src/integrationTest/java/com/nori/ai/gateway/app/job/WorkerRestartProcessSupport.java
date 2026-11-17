@@ -30,6 +30,7 @@ abstract class WorkerRestartProcessSupport extends StackContextSupport {
     protected Map<String,String> properties(Instant at){
         harness.watch(serviceToken);harness.watch(database.passwordFor(database.user()));
         var p=new LinkedHashMap<String,String>();securityProperties().forEach((k,v)->p.put(k,v.toString()));
+        p.put("spring.config.import","optional:file:config/ai-gateway-db.properties");
         p.putAll(Map.of("spring.datasource.url",database.jdbcUrl(),"spring.datasource.username",database.user(),"spring.datasource.password",database.passwordFor(database.user()),"server.address","127.0.0.1","server.port","0","spring.flyway.enabled","false"));
         p.putAll(Map.of("ai.gateway.capacity.max-running-jobs","1","ai.gateway.capacity.generation-concurrency","1","ai.gateway.capacity.queued-depth","4","ai.gateway.capacity.queue-wait-limit","60s","ai.gateway.capacity.job-lifetime-limit","180s","ai.gateway.inference.mode","disabled"));
         p.putAll(Map.of("ai.gateway.test-hooks.enabled","true","ai.gateway.test-hooks.token-sha256-file",securityDirectory.resolve("hook.sha256").toString(),"ai.gateway.test-hooks.clock.mode","FROZEN","ai.gateway.test-hooks.clock.initial",at.toString(),"ai.gateway.tcmock.state-dir",state.toString()));
@@ -73,8 +74,8 @@ abstract class WorkerRestartProcessSupport extends StackContextSupport {
         return new com.nori.ai.gateway.persistence.repository.JobRepository(JdbcClient.create(source),tx,Clock.fixed(NOW.plusSeconds(1),ZoneOffset.UTC)).findRequestInput(scope,job).orElseThrow();
     }
     protected com.nori.ai.gateway.core.scope.VerifiedSystemScope restoredScope(String job) {
-        var persisted=jdbc.sql("SELECT j.owner_system,j.actor_ref,j.request_perm,j.request_pdg,j.id,j.created_at,j.conversation_id,c.expires_at,j.status FROM gw.job j JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system WHERE j.id=:id")
-            .param("id",job).query((rs,n)->new com.nori.ai.gateway.persistence.queue.JobScopeRecord(com.nori.ai.gateway.core.scope.OwnerSystem.valueOf(rs.getString(1)),rs.getString(2),Set.copyOf(Arrays.asList((String[])rs.getArray(3).getArray())),rs.getString(4),rs.getString(5),rs.getTimestamp(6).toInstant(),rs.getString(7),rs.getTimestamp(8).toInstant(),rs.getString(9))).single();
+        var persisted=jdbc.sql("SELECT j.owner_system,j.actor_ref,j.request_perm,j.request_pdg,j.id,j.created_at,j.conversation_id,j.status FROM gw.job j JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system WHERE j.id=:id")
+            .param("id",job).query((rs,n)->new com.nori.ai.gateway.persistence.queue.JobScopeRecord(com.nori.ai.gateway.core.scope.OwnerSystem.valueOf(rs.getString(1)),rs.getString(2),Set.copyOf(Arrays.asList((String[])rs.getArray(3).getArray())),rs.getString(4),rs.getString(5),rs.getTimestamp(6).toInstant(),rs.getString(7),rs.getString(8))).single();
         return new com.nori.ai.gateway.app.security.ScopeAssembler().forWorker(persisted);
     }
     @Override @AfterEach protected void close(){try{if(harness!=null){harness.close();assertThat(harness.sentinelCount()).isZero();}}finally{super.close();}}

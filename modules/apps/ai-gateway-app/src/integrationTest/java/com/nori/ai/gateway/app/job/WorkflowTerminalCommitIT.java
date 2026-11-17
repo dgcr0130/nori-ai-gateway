@@ -2,7 +2,6 @@ package com.nori.ai.gateway.app.job;
 
 import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.app.security.ScopeAssembler;
-import com.nori.ai.gateway.core.expiry.ConversationExpiryGuard;
 import com.nori.ai.gateway.core.job.*;
 import com.nori.ai.gateway.core.port.JobRequestInputReader;
 import com.nori.ai.gateway.core.registry.TaskType;
@@ -41,7 +40,7 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
         var queue=context.getBean(QueueJobRepository.class);context.getBean(TransactionTemplate.class).executeWithoutResult(tx->assertThat(queue.start(accepted.jobId(),clock().instant())).isTrue());
         var row=queue.nonterminal().stream().filter(value->value.jobId().equals(accepted.jobId())).findFirst().orElseThrow();var workerScope=context.getBean(ScopeAssembler.class).forWorker(row);
         var request=context.getBean(JobRequestInputReader.class).findRequestInput(workerScope,accepted.jobId()).orElseThrow();
-        var job=new JobContext(accepted.jobId(),accepted.conversationId(),workerScope,delegation,row.conversationExpiresAt(),new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",TaskType.LIVE_QUERY.name()),request);
+        var job=new JobContext(accepted.jobId(),accepted.conversationId(),workerScope,delegation,new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",TaskType.LIVE_QUERY.name()),request);
         return new Prepared(accepted,job);
     }
     private Produced produce(String key) throws Exception {
@@ -49,7 +48,7 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
         assertThat(spec.commitData()).isPresent();assertThat(spec.commitData().orElseThrow().evidence()).isNotEmpty();return new Produced(prepared.accepted(),spec);
     }
     private JobTerminalCommitter committer(List<TerminalCommitObserver> observers) {
-        return new JobTerminalCommitter(jdbc(),context.getBean(PlatformTransactionManager.class),clock(),context.getBean(ConversationExpiryGuard.class),context.getBean(JobEventPublisher.class),observers,Duration.ofSeconds(180),context.getBean(SlotLedger.class)::terminated,
+        return new JobTerminalCommitter(jdbc(),context.getBean(PlatformTransactionManager.class),clock(),context.getBean(JobEventPublisher.class),observers,Duration.ofSeconds(180),context.getBean(SlotLedger.class)::terminated,
             context.getBean(ConversationRepository.class),context.getBean(MessageRepository.class),context.getBean(EvidenceRepository.class),context.getBean(ToolExecutionRepository.class));
     }
     private void noFinalData(Produced value) {
@@ -80,24 +79,12 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
         var scope=data.scope();for(var wrongScope:List.of(new com.nori.ai.gateway.core.scope.VerifiedSystemScope(com.nori.ai.gateway.core.scope.OwnerSystem.WM,scope.authenticatedServiceRef(),scope.actorRef(),scope.sub(),scope.perm(),scope.pdg(),scope.issuedAt(),scope.expiresAt(),scope.requestId()),new com.nori.ai.gateway.core.scope.VerifiedSystemScope(scope.boundSystem(),scope.authenticatedServiceRef(),new com.nori.ai.gateway.core.scope.ActorRef("other"),"other",scope.perm(),scope.pdg(),scope.issuedAt(),scope.expiresAt(),scope.requestId()),otherData.scope())) {
             var forged=new TerminalSpec.CommitData(wrongScope,data.jobId(),data.conversationId(),data.requestMessageId(),data.jobSeq(),data.evidence(),data.assistantMessage(),data.context(),data.summary(),data.sourceDeps());assertThatThrownBy(()->context.getBean(JobTerminalCommitter.class).commit(value.accepted().jobId(),changed(value,forged))).isInstanceOf(IllegalArgumentException.class);noFinalData(value);
         }
-        assertThatThrownBy(()->new JobTerminalCommitter(jdbc(),context.getBean(PlatformTransactionManager.class),clock(),context.getBean(ConversationExpiryGuard.class),context.getBean(JobEventPublisher.class),List.of(),Duration.ofSeconds(180),context.getBean(SlotLedger.class)::terminated).commit(value.accepted().jobId(),value.spec())).isInstanceOf(IllegalStateException.class);noFinalData(value);
+        assertThatThrownBy(()->new JobTerminalCommitter(jdbc(),context.getBean(PlatformTransactionManager.class),clock(),context.getBean(JobEventPublisher.class),List.of(),Duration.ofSeconds(180),context.getBean(SlotLedger.class)::terminated).commit(value.accepted().jobId(),value.spec())).isInstanceOf(IllegalStateException.class);noFinalData(value);
         assertThat(context.getBean(JobTerminalCommitter.class).commit(other.accepted().jobId(),other.spec())).isTrue();var collision=copy(data,data.requestMessageId(),data.jobSeq(),List.of(otherData.evidence().getFirst()),data.assistantMessage());
         assertThatThrownBy(()->context.getBean(JobTerminalCommitter.class).commit(value.accepted().jobId(),changed(value,collision))).isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);noFinalData(value);assertThat(state(value.accepted().jobId())).isEqualTo("RUNNING");assertThat(state(other.accepted().jobId())).isEqualTo("SUCCEEDED");
     }
-    @Test void expiryInsideTheFinalBatchRollsBackEveryNewRowAndCommitsOnlyOneSuppressedExpiryEvent() throws Exception {
-        var value=produce("batch-expiry");jdbc().sql("UPDATE gw.conversation SET expires_at=:at WHERE id=:conversation").param("at",java.sql.Timestamp.from(NOW.plusSeconds(1))).param("conversation",value.accepted().conversationId()).update();
-        var advance=new TerminalCommitObserver(){public void beforeCommit(String job){if(job.equals(value.accepted().jobId())&&state(job).equals("SUCCEEDED"))clock().advance(1);}public void afterCommit(String job){}};
-        assertThat(committer(List.of(advance)).commit(value.accepted().jobId(),value.spec())).isTrue();assertThat(state(value.accepted().jobId())).isEqualTo("CANCELLED");
-        assertThat(count("result")).isZero();assertThat(jdbc().sql("SELECT count(*) FROM gw.evidence").query(Integer.class).single()).isZero();assertThat(jdbc().sql("SELECT count(*) FROM gw.message WHERE role='assistant'").query(Integer.class).single()).isZero();
-        for(String table:List.of("context","conversation_summary"))assertThat(jdbc().sql("SELECT count(*) FROM gw."+table).query(Integer.class).single()).isZero();
-        assertThat(jdbc().sql("SELECT decision FROM gw.audit_event WHERE job_id=:job AND event_type='JOB_TERMINAL'").param("job",value.accepted().jobId()).query(String.class).single()).isEqualTo("EXPIRY_EDGE");assertJobAuditLineage(value.accepted().jobId(),true);assertThat(jdbc().sql("SELECT external_suppressed FROM gw.job_event WHERE job_id=:job AND type='job.cancelled'").param("job",value.accepted().jobId()).query(Boolean.class).single()).isTrue();
-        assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution WHERE job_id=:job").param("job",value.accepted().jobId()).query(Integer.class).single()).isOne();
-    }
-    @Test void expiryBetweenTheLockedPolicyCheckAndValidateDataUsesExpiryEdgeInsteadOfABindingFailure() throws Exception {
-        var value=produce("validation-expiry");jdbc().sql("UPDATE gw.conversation SET expires_at=:at WHERE id=:conversation").param("at",java.sql.Timestamp.from(clock().instant().plusSeconds(1))).param("conversation",value.accepted().conversationId()).update();
-        var trip=context.getBean(ClockTrip.class);trip.arm();assertThat(context.getBean(JobTerminalCommitter.class).commit(value.accepted().jobId(),value.spec())).isTrue();assertThat(trip.thread).isNull();assertThat(state(value.accepted().jobId())).isEqualTo("CANCELLED");
-        assertThat(count("result")).isZero();assertThat(jdbc().sql("SELECT count(*) FROM gw.evidence").query(Integer.class).single()).isZero();assertThat(jdbc().sql("SELECT decision FROM gw.audit_event WHERE job_id=:job AND event_type='JOB_TERMINAL'").param("job",value.accepted().jobId()).query(String.class).single()).isEqualTo("EXPIRY_EDGE");assertJobAuditLineage(value.accepted().jobId(),true);
-    }
+
+
     @Test void actualBusinessReadRuntimeAndErrorAreRecordedMinimallyAndTheSameOriginalObjectIsRethrown() throws Exception {
         int count=0;for(Throwable original:List.of(new IllegalStateException("SENTINEL:runtime-call"),new AssertionError("SENTINEL:error-call"))) {
             var prepared=prepare("actual-call-failure-"+count++);context.getBean(CallFault.class).next.set(original);

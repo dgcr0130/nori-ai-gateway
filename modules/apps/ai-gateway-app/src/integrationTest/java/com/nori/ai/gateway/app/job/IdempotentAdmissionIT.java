@@ -2,6 +2,7 @@ package com.nori.ai.gateway.app.job;
 
 import com.nori.ai.gateway.app.hooks.*;
 import java.util.*;
+import java.time.Duration;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
@@ -15,8 +16,8 @@ class IdempotentAdmissionIT extends P09QueueSupport {
         assertThat(accept("other","same","질문",null,dlg()).jobId()).isNotEqualTo(first.jobId());
         var wm=new com.nori.ai.gateway.core.scope.VerifiedSystemScope(com.nori.ai.gateway.core.scope.OwnerSystem.WM,"wm",new com.nori.ai.gateway.core.scope.ActorRef("actor"),"actor",Set.of(),P09TestPorts.PDG,NOW,NOW.plusSeconds(60),java.util.UUID.randomUUID().toString());
         assertThat(inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(wm,new JobAdmissionService.AdmissionRequest("/v1/query",null,"질문",Map.of(),"same",registeredDlg("actor")))).jobId()).isNotEqualTo(first.jobId());
-        jdbc().sql("UPDATE gw.conversation SET expires_at=:expiry WHERE id=:id").param("expiry",java.sql.Timestamp.from(NOW.plusSeconds(1))).param("id",first.conversationId()).update();clock().advance(1);var expiredBefore=counts();
-        assertThatThrownBy(()->accept("actor","same","질문",null,registeredDlg("actor"))).isInstanceOfSatisfying(JobAdmissionService.Rejected.class,e->assertThat(e.status()).isEqualTo(404));assertThat(counts()).isEqualTo(expiredBefore);
+        clock().advance(Duration.ofDays(31).toSeconds());
+        assertThat(accept("actor","same","질문",null,dlg()).jobId()).isEqualTo(first.jobId());
     }
     @Test void admitRaceAtQueueBoundary()throws Exception{
         var running=admit("actor","running",Set.of(PausePointRegistry.Point.BEFORE_CLASSIFICATION));await(()->state(running.jobId()).equals("RUNNING"));for(int i=0;i<3;i++)admit("actor","fill"+i,Set.of());
