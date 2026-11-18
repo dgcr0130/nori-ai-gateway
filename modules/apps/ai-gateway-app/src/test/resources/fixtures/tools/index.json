@@ -1,0 +1,12 @@
+[
+  "fixtures/tools/tc.eqp.getOperationalSnapshot.json",
+  "fixtures/tools/tc.commLogs.search.json",
+  "fixtures/tools/fixture.event.read.json",
+  "fixtures/tools/tc.dlq.list.json",
+  "fixtures/tools/logs.search.json",
+  "fixtures/tools/trace.search.json",
+  "fixtures/tools/git.searchCode.json",
+  "fixtures/tools/document.search.json",
+  "fixtures/tools/document.getSource.json",
+  "fixtures/tools/tc.model.read.json"
+]

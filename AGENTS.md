@@ -40,13 +40,13 @@ NORI 공용 AI Gateway(Java 21, Spring Boot 4, Gradle 멀티 모듈, 헥사고�
 | `:ai-gateway-core` | `modules/ai-gateway-core` | 순수 도메인·use case·port. Spring·JDBC·HTTP 무의존(ArchUnit) |
 | `:adapter:ai-gateway-db-adapter` | `modules/adapter/ai-gateway-db-adapter` | JdbcClient 저장소·큐·Knowledge 저장소. 모든 일반 저장소 public 메서드 첫 인자 `VerifiedSystemScope` |
 | `:adapter:ai-gateway-inference-adapter`(추론+tokenizer), `:adapter:ai-gateway-loki-adapter`, `:adapter:ai-gateway-tempo-adapter`, `:adapter:ai-gateway-gitlab-adapter`, P24 의 `:adapter:ai-gateway-kafka-adapter`·`:adapter:ai-gateway-object-storage-adapter` | `modules/adapter/<이름>` | 외부 시스템별 읽기 전용 adapter. adapter 사이 의존 0 |
-| `:adapter:ai-gateway-source-support`(패키지 `integration.source`) | `modules/adapter/ai-gateway-source-support` | loki·tempo·gitlab adapter 가 함께 쓰는 Source HTTP·관측·접근 검사·TC 앱 목록. core 에만 의존하고, Source adapter 는 이 모듈과 core 에만 의존한다 |
-| `:adapter:ai-gateway-tc-mock-adapter` | `modules/adapter/ai-gateway-tc-mock-adapter` | F1~F4 의 TC 업무 API·인가 API Mock(core port 구현) |
+| `:adapter:ai-gateway-source-support`(패키지 `integration.source`) | `modules/adapter/ai-gateway-source-support` | loki·tempo·gitlab adapter 가 함께 쓰는 Source HTTP·관측·접근 검사·시스템별 조회 위치. core 에만 의존하고, Source adapter 는 이 모듈과 core 에만 의존한다 |
+| `:adapter:ai-gateway-system-adapter` | `modules/adapter/ai-gateway-system-adapter` | 등록 시스템의 표준 업무 조회 HTTP port 구현. core에만 제품 의존하며 시스템별 주소·자격은 앱에서 공급한다 |
 | `:apps:ai-gateway-app` | `modules/apps/ai-gateway-app` | 단일 조립 루트(Boot 앱·web·보안·Job 워커·시험 전용 hook). web 은 분리하지 않는다 |
 | `:apps:ai-gateway-acceptance-app` | `modules/apps/ai-gateway-acceptance-app` | 배포 환경 대상 수용 하네스(application plugin·installDist, k8s Job 이미지) |
 | `:apps:ai-gateway-acceptance-cli` | `modules/apps/ai-gateway-acceptance-cli` | 수용 기준 점검 CLI(`test-evidence`·`ingest`·`gate`·`record`·`perf`·`ci-evidence`). 패키지 `com.nori.ai.gateway.eval` |
 
-- 금지 의존: core → 다른 모듈/Spring/JDBC, adapter ↔ adapter, tc-mock → db/integration/app, 수용 기준 점검 CLI(`eval` 패키지) → gateway 모듈. ArchUnit 시험이 강제한다.
+- 금지 의존: core → 다른 모듈/Spring/JDBC, adapter ↔ adapter, 수용 기준 점검 CLI(`eval` 패키지) → gateway 모듈. ArchUnit 시험이 강제한다.
 - 빈 등록은 `@ComponentScan` 없이 각 모듈 `*ModuleConfiguration` 의 `@Import` 로 명시한다. 새 `@Component`·`@Service`·`@RestController` 를 추가하면 같은 모듈 `*ModuleConfiguration` 의 import 와 `@Import` 를 함께 바꾼다. core 타입 빈은 app 의 `CoreBeansConfiguration` `@Bean` 으로만 등록한다. `ModuleConfigurationCompletenessTest` 가 누락을 FAIL 로 잡는다.
 - 운영 도구는 `operations/`, Dockerfile 은 `operations/deploy/docker/`, helm 차트는 `operations/deploy/helm/ai-gateway/`(U6 에서 `nori-tc-exec` 에서 이관), 배포 스크립트·runconfig 는 `operations/deploy/scripts/`, 배포 점검 스크립트는 `operations/deploy-checks/`, 배포 설정은 루트 `config/ai-gateway-*.properties`, runbook 은 `docs/runbooks/` 다.
 - 수용 기준과 결과는 `acceptance/` 다: 필수 통합 시험 목록 `required-integration-tests.txt`, 질문 세트 `question-sets/`, 배포 입력·성능 기준 승인 기록 `approvals/`, 단계별 결과 `results/<단계 폴더>/`(F1 `gateway-foundation`, F2 `llm-integration`, F3 `rag-integration`, F4 `tc-integration`), 종료된 추론 진단 기록 `history/inference-diagnosis/`.

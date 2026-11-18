@@ -39,8 +39,9 @@ public final class LokiLogConnector {
     }
     private LogResult searchGuarded(SourceReadAccess.Request request,LogQuery query) {
         Objects.requireNonNull(query);
+        if(request.locations().apps().isEmpty())return result(ResultStatus.DENIED);
         if (query.limit() > properties.maxLinesTotal()) throw new IllegalArgumentException("조회 건수가 전체 상한을 초과했습니다");
-        ResultStatus granted = access.check(request, LokiSourcePolicy.SOURCE_REF);
+        ResultStatus granted = access.check(request, request.sourceAllowlistRef());
         if (granted != ResultStatus.SUCCESS) return result(granted);
         long deadline = http.deadline(properties.stepDeadline());
         var items = new ArrayList<LogLine>(); var missing = new ArrayList<TimeWindow>(); var warnings = new HashSet<Warning>();
@@ -48,8 +49,10 @@ public final class LokiLogConnector {
         Map<String, TimeWindow> appWindows = new LinkedHashMap<>();
         try {
             Instant classifiedAt = clock.instant();
-            for (String app : TcSourcePolicy.APPS) {
-                var oldest = retention.find(LokiSourcePolicy.retentionSourceId(app));
+            for (var location : request.locations().apps()) {
+                String app=location.namespace()+"/"+location.name();
+                if(!request.scope().perm().containsAll(location.requiredPermissions()))return result(ResultStatus.DENIED);
+                var oldest = retention.find(LokiSourcePolicy.retentionSourceId(request.scope().boundSystem().name(),location.namespace(),location.name()));
                 var classification = new RetentionClassifier().classify(window, oldest.<SourceRetentionAttributes>map(
                     value -> new SourceRetentionAttributes.VerifiedOldest(value.verifiedOldestAt())).orElseGet(SourceRetentionAttributes.Unverified::new), classifiedAt);
                 if (classification instanceof RetentionClassifier.OutOfRetention outside) missing.addAll(outside.missingRanges());
@@ -66,31 +69,33 @@ public final class LokiLogConnector {
         int rejected = 0;
         Instant end = window.endAt();
         while (end.isAfter(window.startAt())) {
+            if(items.size()>=query.limit()){missing.add(new TimeWindow(window.startAt(),end));return finish(items,missing,warnings,rejected);}
             Instant candidate = end.minus(properties.splitInterval());
             Instant start = candidate.isBefore(window.startAt()) ? window.startAt() : candidate;
-            for (String app : TcSourcePolicy.APPS) {
+            for (var location : request.locations().apps()) {
+                String app=location.namespace()+"/"+location.name();
                 TimeWindow appWindow = appWindows.get(app);
                 if (appWindow == null || !appWindow.startAt().isBefore(end)) continue;
                 Instant appStart = appWindow.startAt().isAfter(start) ? appWindow.startAt() : start;
                 TimeWindow subwindow = new TimeWindow(appStart, end);
-                if (items.size() >= query.limit() || http.expired(deadline)) {
+                if (http.expired(deadline)) {
                     missing.add(new TimeWindow(window.startAt(), end));
                     return finish(items, missing, warnings, rejected);
                 }
                 // 긴 조회 중 폐기된 현재 권한도 다음 Source 호출 전에 다시 확인합니다.
-                ResultStatus authorized = access.check(request, LokiSourcePolicy.SOURCE_REF);
+                ResultStatus authorized = access.check(request, request.sourceAllowlistRef());
                 if (authorized != ResultStatus.SUCCESS) return result(authorized);
                 try {
-                    Batch batch = query(http, app, query.terms(), subwindow, properties.limitPerQuery(), "backward", deadline,()->access.require(request,LokiSourcePolicy.SOURCE_REF));
+                    Batch batch = query(http, location.name(),location.namespace(), query.terms(), subwindow, properties.limitPerQuery(), "backward", deadline,()->access.require(request,request.sourceAllowlistRef()));
                     rejected += batch.rejectedLabels();
                     if (batch.rawCount() >= properties.limitPerQuery() && batch.oldestAt() != null && appStart.isBefore(batch.oldestAt()))
                         missing.add(new TimeWindow(appStart, batch.oldestAt()));
-                    int available = query.limit() - items.size();
-                    List<LogLine> sorted = batch.items().stream().sorted(Comparator.comparing(LogLine::occurredAt).reversed()).toList();
-                    items.addAll(sorted.subList(0, Math.min(available, sorted.size())));
-                    if (sorted.size() > available) {
-                        Instant retainedOldest = items.getLast().occurredAt();
-                        if (appStart.isBefore(retainedOldest)) missing.add(new TimeWindow(appStart, retainedOldest));
+                    items.addAll(batch.items());
+                    items.sort(Comparator.comparing(LogLine::occurredAt).reversed());
+                    if(items.size()>query.limit()) {
+                        items.subList(query.limit(),items.size()).clear();
+                        Instant retainedOldest=items.getLast().occurredAt();
+                        if(appStart.isBefore(retainedOldest))missing.add(new TimeWindow(appStart,retainedOldest));
                     }
                 } catch (SourceHttpClient.Failure failure) {
                     if (!failure.deadline()) return result(ResultStatus.SOURCE_UNAVAILABLE);
@@ -113,11 +118,11 @@ public final class LokiLogConnector {
         var sorted = items.stream().sorted(Comparator.comparing(LogLine::occurredAt).reversed()).toList();
         return new LogResult(merged.isEmpty() ? (items.isEmpty() ? ResultStatus.EMPTY : ResultStatus.SUCCESS) : ResultStatus.PARTIAL, sorted, merged, warnings, rejected);
     }
-    static Batch query(SourceHttpClient http, String app, List<String> terms, TimeWindow window, int limit, String direction, long deadline) {
-        return query(http,app,terms,window,limit,direction,deadline,()->{});
+    static Batch query(SourceHttpClient http, String app,String namespace, List<String> terms, TimeWindow window, int limit, String direction, long deadline) {
+        return query(http,app,namespace,terms,window,limit,direction,deadline,()->{});
     }
-    private static Batch query(SourceHttpClient http,String app,List<String> terms,TimeWindow window,int limit,String direction,long deadline,Runnable beforeAttempt) {
-        var uri = http.uri(List.of("loki", "api", "v1", "query_range"), Map.of("query", LokiSourcePolicy.selector(app, terms),
+    private static Batch query(SourceHttpClient http,String app,String namespace,List<String> terms,TimeWindow window,int limit,String direction,long deadline,Runnable beforeAttempt) {
+        var uri = http.uri(List.of("loki", "api", "v1", "query_range"), Map.of("query", LokiSourcePolicy.selector(app,namespace, terms),
             "start", SourceHttpClient.nanos(window.startAt()), "end", SourceHttpClient.nanos(window.endAt()), "limit", limit, "direction", direction));
         JsonNode root = http.json(uri, null, deadline,beforeAttempt).body();
         if (!"success".equals(root.path("status").asText()) || !"streams".equals(root.path("data").path("resultType").asText())
@@ -126,7 +131,7 @@ public final class LokiLogConnector {
         for (JsonNode stream : root.path("data").path("result")) {
             JsonNode labels = stream.path("stream"); JsonNode values = stream.path("values");
             if (!values.isArray()) throw new SourceHttpClient.Failure(false, false);
-            boolean allowed = app.equals(labels.path("app").asText()) && "tc".equals(labels.path("namespace").asText());
+            boolean allowed = app.equals(labels.path("app").asText()) && namespace.equals(labels.path("namespace").asText());
             for (JsonNode row : values) {
                 if (!row.isArray() || row.size() < 2 || !row.get(0).isTextual() || !row.get(1).isTextual()) throw new SourceHttpClient.Failure(false, false);
                 Instant at = instant(row.get(0).asText());

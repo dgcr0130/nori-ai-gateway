@@ -5,7 +5,7 @@ import com.nori.ai.gateway.app.config.*;
 import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.app.job.recovery.*;
 import com.nori.ai.gateway.core.job.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+import com.nori.ai.gateway.core.port.SystemQueryPort;
 import com.nori.ai.gateway.core.sanitize.ContentSanitizer;
 import com.nori.ai.gateway.persistence.queue.JobTerminalCommitter;
 import java.time.Clock;
@@ -32,12 +32,12 @@ class P09AppContextWiringIT extends P09QueueSupport {
         }};}
     }
     @Test void realCoreBeansSingleClockAndActualAdmissionWorkerPath()throws Exception{
-        for(Class<?> type:List.of(ContentSanitizer.class,GenerationSemaphore.class,WorkflowExecutor.class,TcSourceAuthorizationPort.class,JobWorker.class,JobTerminalCommitter.class,Clock.class))assertThat(context.getBeansOfType(type)).hasSize(1);
+        for(Class<?> type:List.of(ContentSanitizer.class,GenerationSemaphore.class,WorkflowExecutor.class,SystemQueryPort.class,JobWorker.class,JobTerminalCommitter.class,Clock.class))assertThat(context.getBeansOfType(type)).hasSize(1);
         Clock clock=context.getBean(Clock.class);assertThat(clock.instant()).isEqualTo(NOW);
         // 만료 전용 Worker 시각 대신 남아 있는 Job 수명 관리 객체의 단일 Clock 공유를 확인합니다.
         for(Class<?> type:List.of(JobDispatcher.class,JobTimeoutSweeper.class,JobTerminalCommitter.class,RecoveryModeRouter.class,StartupRecoveryRunner.class,com.nori.ai.gateway.app.security.ActorAssertionVerifier.class))assertThat(org.springframework.test.util.ReflectionTestUtils.getField(context.getBean(type),"clock")).isSameAs(clock);
         assertThat(context.getBean(InferenceReadiness.class).ready()).isTrue();var accepted=admit("actor","wiring",Set.of());await(()->state(accepted.jobId()).equals("SUCCEEDED"));
-        assertThat(observations().workflows).singleElement().satisfies(j->{assertThat(j.scope().perm()).containsExactlyInAnyOrder("EQP_READ","MODEL_READ");assertThat(j.inferenceMode()).isEqualTo(InferenceMode.DISABLED);});
+        assertThat(observations().workflows).singleElement().satisfies(j->{assertThat(j.scope().perm()).containsExactlyInAnyOrder("EQP_READ","MODEL_READ","AI_LOG_READ","AI_TRACE_READ");assertThat(j.inferenceMode()).isEqualTo(InferenceMode.DISABLED);});
         assertThat(context.getBeansOfType(com.nori.ai.gateway.core.dispatch.ToolExecutor.class).values()).extracting(com.nori.ai.gateway.core.dispatch.ToolExecutor::toolKind).containsExactlyInAnyOrder(com.nori.ai.gateway.core.registry.ToolKind.BUSINESS,com.nori.ai.gateway.core.registry.ToolKind.LOG,com.nori.ai.gateway.core.registry.ToolKind.TRACE,com.nori.ai.gateway.core.registry.ToolKind.GIT);
         context.getBean(ReadinessGate.class).down();int before=count("job");
         assertThat(postQuery("actor","before-ready","질문").statusCode()).isEqualTo(503);assertThat(count("job")).isEqualTo(before);
@@ -56,7 +56,7 @@ class P09AppContextWiringIT extends P09QueueSupport {
         context.close();context=null;
         // 공용 로컬 시험은 운영 기본 OTLP endpoint로 내보내지 않습니다(application.yaml 값보다 우선하는 명령행 인자).
         try(var production=new SpringApplicationBuilder(AiGatewayApplication.class).web(WebApplicationType.NONE).profiles("verify").properties(props)
-                .run("--ai.gateway.otlp.metrics.enabled=false","--ai.gateway.otlp.traces.enabled=false","--ai.gateway.otlp.logs.enabled=false")) {
+                .run("--spring.config.import=optional:file:config/ai-gateway-db.properties","--ai.gateway.otlp.metrics.enabled=false","--ai.gateway.otlp.traces.enabled=false","--ai.gateway.otlp.logs.enabled=false")) {
             assertThat(production.getBeansOfType(WorkflowExecutor.class)).hasSize(1);assertThat(production.getBean(WorkflowExecutor.class)).isExactlyInstanceOf(WorkflowExecutionAdapter.class);assertThat(production.getBean(InferenceReadiness.class).ready()).isFalse();
         }
         failLate=true;

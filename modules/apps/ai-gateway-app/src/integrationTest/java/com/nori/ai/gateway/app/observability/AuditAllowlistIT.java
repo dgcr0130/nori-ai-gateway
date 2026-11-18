@@ -105,7 +105,7 @@ class AuditAllowlistIT extends StackContextSupport {
         String conversation = UUID.randomUUID().toString(), job = UUID.randomUUID().toString();
         assertThatThrownBy(() -> recorder.write(new AuditEvent(scope, AuditEventType.AUTH_REJECTED, null, null, null, null, null, null, null, null, null, null))).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> recorder.writeForJob(AuditEvent.toolCall(scope, conversation, job, "tc.SENTINEL.audit", null, ResultStatus.SUCCESS, null, 1))).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> recorder.writeForJob(AuditEvent.toolCall(scope, conversation, job, "tc.logs.search", "sources://TC/logs/SENTINEL-audit-ref@example.com", ResultStatus.SUCCESS, null, 1)))
+        assertThatThrownBy(() -> recorder.writeForJob(AuditEvent.toolCall(scope, conversation, job, "logs.search", "sources://TC/logs/SENTINEL-audit-ref@example.com", ResultStatus.SUCCESS, null, 1)))
             .isInstanceOf(IllegalArgumentException.class);
         assertThat(failures.count()).isEqualTo(before + 3);
         var jdbc = context.getBean(JdbcClient.class);

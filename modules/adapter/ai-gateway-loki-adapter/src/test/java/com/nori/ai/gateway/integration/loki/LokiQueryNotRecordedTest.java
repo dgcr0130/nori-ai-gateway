@@ -17,7 +17,7 @@ public class LokiQueryNotRecordedTest {
         for (int status : List.of(200, 400, 500)) try (var stub = new ConnectorTestSupport(); var capture = new Capture()) {
             stub.responder = req -> new Response(status, status == 200 ? emptyLoki() : sentinel + stub.base());
             var connector = new LokiLogConnector(new SourceHttpClient(stub.base(), "loki", capture.observations), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-            var result = connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000));
+            var result = connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000));
             assertThat(result.status()).isEqualTo(status == 200 ? ResultStatus.EMPTY : ResultStatus.SOURCE_UNAVAILABLE);
             capture.assertNoSecret(sentinel, stub.base().toString());
             assertThat(capture.spanAttributes).isNotEmpty();
@@ -29,7 +29,7 @@ public class LokiQueryNotRecordedTest {
         try (var socket = new ServerSocket(0, 0, InetAddress.getByName("127.0.0.1"))) { unavailable = URI.create("http://127.0.0.1:" + socket.getLocalPort()); }
         try (var capture = new Capture()) {
             var connector = new LokiLogConnector(new SourceHttpClient(unavailable, "loki", capture.observations), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-            assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000)).status())
+            assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000)).status())
                 .isEqualTo(ResultStatus.SOURCE_UNAVAILABLE);
             capture.assertNoSecret(sentinel, unavailable.toString());
             assertThat(capture.spanAttributes.stream().filter(value -> value.contains("Failure")).count()).isEqualTo(2);
@@ -40,7 +40,7 @@ public class LokiQueryNotRecordedTest {
         try (var stub = new ConnectorTestSupport(); var capture = new Capture()) {
             stub.responder = req -> new Response(200, "{\"" + sentinel + "\":");
             var connector = new LokiLogConnector(new SourceHttpClient(stub.base(), "loki", capture.observations), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-            assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000)).status())
+            assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(sentinel), 1000)).status())
                 .isEqualTo(ResultStatus.SOURCE_UNAVAILABLE);
             capture.assertNoSecret(sentinel, stub.base().toString());
         }
@@ -52,7 +52,7 @@ public class LokiQueryNotRecordedTest {
             var connector = new LokiLogConnector(stub.http("loki"), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
             for (var level : List.of(java.util.logging.Level.FINE, java.util.logging.Level.FINER, java.util.logging.Level.FINEST)) {
                 wire.setLevel(level);
-                assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
+                assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
                     .isEqualTo(ResultStatus.SOURCE_UNAVAILABLE);
             }
             assertThat(stub.requests).isEmpty();
@@ -64,7 +64,7 @@ public class LokiQueryNotRecordedTest {
             try (var stub = new ConnectorTestSupport()) {
                 System.setProperty(key, "stub-capture-enabled");
                 var connector = new LokiLogConnector(stub.http("loki"), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-                assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
+                assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
                     .isEqualTo(ResultStatus.SOURCE_UNAVAILABLE);
                 assertThat(stub.requests).isEmpty();
             } finally { if (previous == null) System.clearProperty(key); else System.setProperty(key, previous); }
@@ -76,7 +76,7 @@ public class LokiQueryNotRecordedTest {
             try (var stub = new ConnectorTestSupport()) {
                 logger.setLevel(java.util.logging.Level.FINE);
                 var connector = new LokiLogConnector(stub.http("loki"), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-                assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
+                assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("비밀"), 1000)).status())
                     .isEqualTo(ResultStatus.SOURCE_UNAVAILABLE);
                 assertThat(stub.requests).isEmpty();
             } finally { logger.setLevel(previous); }
@@ -87,7 +87,7 @@ public class LokiQueryNotRecordedTest {
             Observation parent = Observation.start("global.parent", capture.globalObservations);
             try (var scope = parent.openScope()) {
                 var connector = new LokiLogConnector(new SourceHttpClient(stub.base(), "loki", capture.observations), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-                assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("SOURCE_PRIVATE_SENTINEL"), 1000)).status())
+                assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of("SOURCE_PRIVATE_SENTINEL"), 1000)).status())
                     .isEqualTo(ResultStatus.EMPTY);
             } finally { parent.stop(); }
             assertThat(capture.globalMeters.getMeters()).allSatisfy(meter -> assertThat(meter.getId().getName()).startsWith("global.parent"));

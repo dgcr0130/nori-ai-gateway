@@ -3,7 +3,7 @@ package com.nori.ai.gateway.app;
 import org.junit.jupiter.api.Test;
 import java.nio.file.*;
 import java.util.zip.ZipFile;
-import com.nori.ai.gateway.tcmock.TcMockModuleConfiguration;
+import com.nori.ai.gateway.integration.system.SystemAdapterModuleConfiguration;
 import static org.assertj.core.api.Assertions.*;
 
 class RuntimeClasspathCleanTest {
@@ -23,7 +23,7 @@ class RuntimeClasspathCleanTest {
         assertThat(runtime).doesNotContain("org.springframework.boot:spring-boot-flyway:", "org.springframework.boot:spring-boot-starter-flyway:",
             "org.flywaydb:flyway-database-postgresql:").contains("org.flywaydb:flyway-core:");
         assertThat(runtime.lines()).allMatch(line -> line.matches("\\S+ sha256=[0-9a-f]{64} nativeResources=.*"));
-        Path mockLocation = Path.of(TcMockModuleConfiguration.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+        Path mockLocation = Path.of(SystemAdapterModuleConfiguration.class.getProtectionDomain().getCodeSource().getLocation().toURI());
         // Mock의 운영 구성과 시험 보조 패키지가 같은 모듈 이름에 가려지지 않도록 실제 산출물도 검사합니다.
         if (Files.isDirectory(mockLocation)) {
             try (var entries = Files.walk(mockLocation)) {
@@ -37,6 +37,6 @@ class RuntimeClasspathCleanTest {
         }
     }
     private boolean testOnlyMockPackage(String name) {
-        return name.startsWith("com/nori/ai/gateway/tcmock/testing/") || name.startsWith("com/nori/ai/gateway/tcmock/verify/");
+        return name.startsWith("com/nori/ai/gateway/integration/fixtures/testing/") || name.startsWith("com/nori/ai/gateway/integration/fixtures/verify/");
     }
 }

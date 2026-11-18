@@ -19,7 +19,7 @@ class ExecutionContextBindingTest {
     }
     @Test void exactAttemptTraceAncestorReachesGitAndDefensiveCopiesKeepInputsImmutable() {
         var fixture=new WorkflowAuthorizationPreparationTest.Fixture();var trace=tool("tc.test.trace",ToolKind.TRACE);var git=tool("tc.test.git",ToolKind.GIT);var versions=new ContractVersionPolicy();
-        var registry=new CapabilityRegistry(List.of(trace,git),workflows(),Set.of(ImplementationPhase.PHASE_1),versions);var validator=validator(registry,new PlanInjectionSeam.NoOp());
+        var registry=new CapabilityRegistry(List.of(trace,git),Set.of(ImplementationPhase.PHASE_1),versions);var validator=validator(registry,new PlanInjectionSeam.NoOp());
         var traceStep=new PlanStep("trace",trace.capabilityId(),List.of(),step().resources(),step().arguments());var gitStep=new PlanStep("git",git.capabilityId(),List.of("trace"),step().resources(),step().arguments());
         var prepared=(PlanValidator.Prepared)validator.prepare(plan(traceStep,gitStep),fixture.scope,fixture.resolver);var attempt=prepared.newAttempt(gitStep,fixture.scope,StepAttempt.Purpose.DISPATCH);
         var json=SchemaContracts.JSON.createObjectNode().putArray("items");json.addObject().put("traceId","actual-trace");

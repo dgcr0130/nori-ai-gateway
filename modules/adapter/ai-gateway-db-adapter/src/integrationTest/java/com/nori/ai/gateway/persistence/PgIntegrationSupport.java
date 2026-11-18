@@ -30,7 +30,7 @@ abstract class PgIntegrationSupport {
         // 이 classpath에는 Tool Manifest가 없으므로 등록 Tool이 0개인 실제 Registry를 씁니다(Tool 감사 값은 모두 거부됨).
         @org.springframework.context.annotation.Bean com.nori.ai.gateway.core.audit.AuditFieldAllowlist auditFieldAllowlist() {
             return new com.nori.ai.gateway.core.audit.AuditFieldAllowlist(new com.nori.ai.gateway.core.sanitize.ContentSanitizer(),
-                new com.nori.ai.gateway.core.registry.CapabilityRegistry(java.util.List.of(), java.util.List.of(),
+                new com.nori.ai.gateway.core.registry.CapabilityRegistry(java.util.List.of(),
                     java.util.Set.of(com.nori.ai.gateway.core.registry.ImplementationPhase.PHASE_1), new com.nori.ai.gateway.core.registry.ContractVersionPolicy()));
         }
     }

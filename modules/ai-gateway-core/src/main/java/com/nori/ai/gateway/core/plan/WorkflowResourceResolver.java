@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.core.plan;
 
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.DelegatedCall;
+import com.nori.ai.gateway.core.authz.DelegatedCall;
 import com.nori.ai.gateway.core.result.ResultStatus;
 import com.nori.ai.gateway.core.registry.CapabilityManifest;
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
@@ -27,6 +27,7 @@ public interface WorkflowResourceResolver extends ResourceResolver {
     Lookup lookup(ResourceRef resource, VerifiedSystemScope scope);
     DelegatedCall delegatedCall();
     void beforeRead();
+    default com.nori.ai.gateway.core.job.CancellationToken cancellation(){throw new IllegalStateException("작업 취소 결속이 없습니다");}
     @Override default ResourceState resolve(ResourceRef ref, VerifiedSystemScope scope) {
         return switch (lookup(ref, scope)) {
             case Found found -> found.value();

@@ -86,7 +86,7 @@ public final class MetricsCatalog {
         if (spec == null) return id.getName().startsWith(HIKARI_PREFIX) && id.getTags().stream().allMatch(tag -> tag.getKey().equals("pool") && POOL.matcher(tag.getValue()).matches());
         if (spec.type() != id.getType()) return false;
         return id.getTags().stream().allMatch(tag -> tag.getKey().equals(TOOL_ID) && spec.labels().containsKey(TOOL_ID)
-            ? registry.find(tag.getValue()).filter(manifest -> manifest.toolId().equals(tag.getValue())).isPresent()
+            ? registry.hasToolId(tag.getValue())
             : tag.getKey().equals("owner_system") && spec.labels().containsKey("owner_system") ? systems.contains(tag.getValue()) : spec.accepts(tag.getKey(), tag.getValue()));
     }
     public static MeterFilter filter(CapabilityRegistry registry) { return filter(registry, java.util.Set.of("TC","WM","HRM")); }

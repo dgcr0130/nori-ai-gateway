@@ -14,14 +14,14 @@ class LokiSelectorInvariantTest {
         try (var stub = new ConnectorTestSupport()) {
             List<String> terms = List.of("app=\"wm-ui-backend\"", "{namespace=\"tc\"}", "a\\b\"\n\r\t +&?/%한글🙂");
             var connector = new LokiLogConnector(stub.http("loki"), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-            var result = connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), terms, 1000));
+            var result = connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), terms, 1000));
             assertThat(result.status()).isEqualTo(ResultStatus.EMPTY);
             assertThat(stub.requests).hasSize(4);
             for (int i = 0; i < 4; i++) {
                 var received = stub.requests.get(i);
                 assertThat(received.method()).isEqualTo("GET");
                 assertThat(received.path()).isEqualTo("/loki/api/v1/query_range");
-                assertThat(received.query()).containsEntry("query", LokiSourcePolicy.selector(TcSourcePolicy.APPS.get(i), terms))
+                assertThat(received.query()).containsEntry("query", LokiSourcePolicy.selector(TEST_APPS.get(i),"tc", terms))
                     .containsEntry("start", SourceHttpClient.nanos(NOW.minusSeconds(1))).containsEntry("end", SourceHttpClient.nanos(NOW))
                     .containsEntry("limit", "500").containsEntry("direction", "backward");
                 assertThat(received.query().get("query")).contains("a\\\\b\\\"\\n\\r\\t +&?/%한글🙂");
@@ -33,14 +33,14 @@ class LokiSelectorInvariantTest {
         try (var stub = new ConnectorTestSupport()) {
             stub.responder = req -> new Response(200, loki("wm-ui-backend", "tc", List.of(NOW.minusNanos(1))));
             var connector = new LokiLogConnector(stub.http("loki"), access(), ignored -> Optional.empty(), new LokiProperties(), CLOCK);
-            var result = connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(), 1000));
+            var result = connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(), 1000));
             assertThat(result.items()).isEmpty(); assertThat(result.rejectedLabels()).isEqualTo(4);
             stub.responder = req -> new Response(200, loki(selectedApp(req), "wm", List.of(NOW.minusNanos(1))));
-            assertThat(connector.search(request(LokiSourcePolicy.SOURCE_REF), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(), 1000)).rejectedLabels()).isEqualTo(4);
+            assertThat(connector.search(request("sources://TC/logs.search"), new LokiLogConnector.LogQuery(new TimeWindow(NOW.minusSeconds(1), NOW), List.of(), 1000)).rejectedLabels()).isEqualTo(4);
         }
     }
     @Test void unapprovedAppCannotConstructASelector() {
-        assertThatThrownBy(() -> LokiSourcePolicy.selector("wm-ui-backend", List.of())).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> LokiSourcePolicy.selector("", List.of())).isInstanceOf(IllegalArgumentException.class);
+        assertThat(LokiSourcePolicy.selector("configured-app","configured-namespace",List.of())).isEqualTo("{app=\"configured-app\", namespace=\"configured-namespace\"}");
+        assertThatThrownBy(() -> LokiSourcePolicy.selector("","tc", List.of())).isInstanceOf(IllegalArgumentException.class);
     }
 }

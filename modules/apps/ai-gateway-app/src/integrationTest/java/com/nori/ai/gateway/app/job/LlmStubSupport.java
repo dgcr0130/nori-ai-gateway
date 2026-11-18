@@ -51,10 +51,10 @@ abstract class LlmStubSupport extends P09QueueSupport {
         return wire(t, eqp, from, to, qRef, needs, "B");
     }
     protected static String wire(String t, String eqp, String from, String to, String qRef, List<String> n, String a) {
-        var node = SchemaContracts.JSON.createObjectNode();
-        node.put("t", t); node.put("eqp", eqp); node.put("from", from); node.put("to", to); node.put("qRef", qRef);
-        var needs = node.putArray("n"); n.forEach(needs::add);
-        node.put("a", a);
+        var task=switch(t){case "KQ"->TaskType.KNOWLEDGE_QUERY;case "LQ"->TaskType.LIVE_QUERY;case "INC"->TaskType.INCIDENT_ANALYSIS;case "GQ"->TaskType.GENERAL_QUERY;case "UNS"->TaskType.UNSUPPORTED_REQUEST;default->throw new IllegalArgumentException();};
+        var node=SchemaContracts.JSON.createObjectNode().put("taskType",task.name()).put("searchQuery",eqp==null?"질문":eqp).put("retryQuery",eqp==null?"질문 보완":eqp+" 보완");
+        var calls=StandardSystemConfiguration.calls(task);node.set("toolCalls",SchemaContracts.JSON.valueToTree(calls));var targets=node.putArray("targets");if(eqp!=null)targets.addObject().put("type","EQP").put("ref",eqp);
+        if(from!=null&&to!=null)node.set("timeWindow",SchemaContracts.JSON.valueToTree(Map.of("from",from,"to",to)));else node.putNull("timeWindow");
         return node.toString();
     }
     /** 질문 시간창(Context) 과 화면 선택 리소스 없는 요청 필드. 설비는 분류 출력으로만 들어온다. */
@@ -63,7 +63,9 @@ abstract class LlmStubSupport extends P09QueueSupport {
     }
     protected JobAdmissionService.Accepted admitScripted(String key, String question, Map<String,Object> fields, List<TestHookRegistry.LlmReply> script,
             Optional<TestHookRegistry.PromptWatch> watch, String conversation) {
-        hooks().arm("actor", key, new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY, Set.of(), null, false, Optional.empty(), script, watch));
+        var boundScript=new ArrayList<TestHookRegistry.LlmReply>();
+        for(var reply:script){String content=reply.content();if(reply.callType()==CallType.CLASSIFY&&content!=null)try{var node=SchemaContracts.parse(content);if(node.isObject()&&node.has("searchQuery")&&node.path("searchQuery").asString().equals("질문")&&question.codePointCount(0,question.length())<=512){var copy=(tools.jackson.databind.node.ObjectNode)node;copy.put("searchQuery",question);content=copy.toString();}}catch(RuntimeException invalid){/* 무효 출력은 그대로 제품 분류기에 전달합니다. */}int completion=reply.completionTokens();if(!Objects.equals(content,reply.content())&&completion>=answerTokens(reply.content()))completion=Math.max(completion,answerTokens(content));boundScript.add(new TestHookRegistry.LlmReply(reply.callType(),content,reply.finishReason(),reply.promptTokens(),completion));}
+        hooks().arm("actor", key, new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,Optional.empty(),boundScript,watch,com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));
         return admitUnarmed(key, question, fields, conversation);
     }
     protected JobAdmissionService.Accepted admitUnarmed(String key, String question, Map<String,Object> fields, String conversation) {

@@ -14,7 +14,7 @@ class SeamRegistryTest {
     private final TestHookRegistry hooks=new TestHookRegistry(clock,new PausePointRegistry());
     private final ManifestLoader loader=new ManifestLoader();
     private final SourcePermissionMap permissions=new SourcePermissionMap(Map.of("sources://TC/logs",new SourcePermissionMap.Entry(Set.of("AI_LOG_READ"),true)));
-    private final SeamRegistry seams=new SeamRegistry(hooks,loader,permissions);
+    private final SeamRegistry seams=new SeamRegistry(hooks,new CapabilityRegistry(loader.loadClasspath("fixtures/tools/index.json"),Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy()),permissions);
     private VerifiedSystemScope scope(String job){return new VerifiedSystemScope(OwnerSystem.TC,"job-worker",new ActorRef("actor"),"actor",Set.of(),"a".repeat(64),clock.instant(),clock.instant().plusSeconds(60),job);}
     private void bind(String key,String job,SeamRegistry.Directive directive,int completion){
         hooks.arm("actor",key,new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,Optional.of(directive)));
@@ -23,7 +23,7 @@ class SeamRegistryTest {
         finally{TransactionSynchronizationManager.clearSynchronization();TransactionSynchronizationManager.setActualTransactionActive(false);}
     }
     @Test void immutableJobDirectiveRepeatsWithoutLeakingToSameActorsNextJobOrLegacyCall() {
-        var manifest=loader.loadClasspath("manifests/tc/index.json").stream().filter(m->m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
+        var manifest=loader.loadClasspath("fixtures/tools/index.json").stream().filter(m->m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
         bind("one","job-one",new SeamRegistry.Directive(SeamRegistry.Kind.PLANNED,manifest.capabilityId(),null,null),TransactionSynchronization.STATUS_COMMITTED);
         assertThat(seams.inspect(manifest,scope("job-one")).availability()).isEqualTo(Availability.PLANNED);
         assertThat(seams.inspect(manifest,scope("job-one")).availability()).isEqualTo(Availability.PLANNED);
@@ -46,7 +46,7 @@ class SeamRegistryTest {
             assertThatThrownBy(()->seams.validate(directive)).isInstanceOf(IllegalArgumentException.class);
     }
     @Test void everyClosedDirectiveProjectsOnlyTheMatchingTargetWithoutMutatingOriginal() {
-        var manifest=loader.loadClasspath("manifests/tc/index.json").stream().filter(m->m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
+        var manifest=loader.loadClasspath("fixtures/tools/index.json").stream().filter(m->m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
         var target=new com.nori.ai.gateway.core.dispatch.DispatchTarget(manifest,List.of(new com.nori.ai.gateway.core.plan.ResourceResolver.ResourceState(OwnerSystem.TC,"EQP",true)),
             new com.nori.ai.gateway.core.plan.ResourceResolver.SourceBinding(OwnerSystem.TC,manifest.sourceAllowlistRef(),true));
         for(var kind:List.of(SeamRegistry.Kind.DISABLED,SeamRegistry.Kind.PHASE_INACTIVE,SeamRegistry.Kind.SIDE_EFFECTS,
@@ -70,7 +70,7 @@ class SeamRegistryTest {
         assertThat(manifest.requiresApproval()).isFalse();assertThat(target.resources().getFirst().ownerSystem()).isEqualTo(OwnerSystem.TC);assertThat(target.source().ownerSystem()).isEqualTo(OwnerSystem.TC);
     }
     @Test void dispatchOnlyOwnerOverrideKeepsPlanOriginalAndScopesToOneJob() {
-        var manifest=loader.loadClasspath("manifests/tc/index.json").stream().filter(m->m.capabilityId().equals("tc.commLogs.search")).findFirst().orElseThrow();
+        var manifest=loader.loadClasspath("fixtures/tools/index.json").stream().filter(m->m.capabilityId().equals("tc.commLogs.search")).findFirst().orElseThrow();
         bind("dispatch","job",new SeamRegistry.Directive(SeamRegistry.Kind.DISPATCH_OWNER_OVERRIDE,manifest.capabilityId(),null,OwnerSystem.WM),TransactionSynchronization.STATUS_COMMITTED);
         assertThat(seams.inspect(manifest,scope("job"))).isSameAs(manifest);
         var target=new com.nori.ai.gateway.core.dispatch.DispatchTarget(manifest,List.of(),new com.nori.ai.gateway.core.plan.ResourceResolver.SourceBinding(OwnerSystem.TC,manifest.sourceAllowlistRef(),true));

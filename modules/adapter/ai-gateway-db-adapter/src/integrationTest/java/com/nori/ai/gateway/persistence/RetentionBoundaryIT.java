@@ -277,7 +277,7 @@ class RetentionBoundaryIT extends PgIntegrationSupport {
     private static VerifiedSystemScope scope(OwnerSystem system, String actor, String pdg) {
         return new VerifiedSystemScope(system, "service", new ActorRef(actor), actor, Set.of(), pdg, BASE.minusSeconds(1), BASE.plusSeconds(60), "request");
     }
-    private static CacheRepository.Entry entry(Instant expiry) { return new CacheRepository.Entry("tc.logs.search", "{}", "[]", expiry); }
+    private static CacheRepository.Entry entry(Instant expiry) { return new CacheRepository.Entry("logs.search", "{}", "[]", expiry); }
     private static MessageRepository.Message message(String id, String window) { return new MessageRepository.Message(id, "user", "제거된 시험 문구", "[]", "[]", null, window); }
     private static AuditRepository.Event event(String request, String conversation, String job) {
         return new AuditRepository.Event(request, conversation, job, null, "TEST", null, null, "ALLOW", "SUCCESS", null, "{}", "{}", "{}", "{}");

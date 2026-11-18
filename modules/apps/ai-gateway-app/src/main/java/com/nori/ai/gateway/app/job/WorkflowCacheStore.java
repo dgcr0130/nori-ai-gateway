@@ -18,7 +18,7 @@ public final class WorkflowCacheStore implements Store {
     }
     @Override public boolean put(VerifiedSystemScope scope,String conversationId,String keyDigest,String currentStagePdg,CachedValue value) {
         // 저장 전에 실행 기록과 같은 typed 마스킹을 적용합니다. find는 저장된 마스킹 값을 그대로 돌려줍니다.
-        var manifest=registry.find(value.capabilityId()).orElseThrow(()->new IllegalStateException("캐시 계약을 확인할 수 없습니다"));
+        var manifest=registry.find(scope,value.capabilityId()).orElseThrow(()->new IllegalStateException("캐시 계약을 확인할 수 없습니다"));
         var masked=WorkflowContent.tool(SchemaContracts.JSON.treeToValue(value.value(),ToolResultEnvelope.class),manifest,scope,sanitizer);
         return cache.put(scope,conversationId,keyDigest,currentStagePdg,new CacheRepository.Entry(value.capabilityId(),SchemaContracts.JSON.writeValueAsString(masked),SchemaContracts.JSON.writeValueAsString(value.sourceDeps()),value.expiresAt()));
     }

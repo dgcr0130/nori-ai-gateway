@@ -2,7 +2,6 @@ package com.nori.ai.gateway.app;
 
 import com.nori.ai.gateway.integration.InferenceAdapterModuleConfiguration;
 import com.nori.ai.gateway.persistence.PersistenceModuleConfiguration;
-import com.nori.ai.gateway.tcmock.TcMockModuleConfiguration;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import org.junit.jupiter.api.Test;
@@ -36,7 +35,6 @@ class ArchitectureRulesTest {
                 String target=owner.substring(PREFIX.length())+"."+call.getName(),caller=type.getName().substring(PREFIX.length());
                 if(rules.containsKey(target)) {assertThat(rules.get(target)).as("실제 호출자 %s -> %s",caller,target).contains(caller);actual.computeIfAbsent(target,ignored->new HashSet<>()).add(caller);}
                 if(owner.equals(PREFIX+"persistence.repository.CacheRepository")&&((call.getName().equals("find")&&call.getTarget().getRawParameterTypes().size()==4)||(call.getName().equals("put")&&call.getTarget().getRawParameterTypes().size()==5)))assertThat(caller).isEqualTo("app.job.WorkflowCacheStore");
-                if(owner.equals(PREFIX+"core.port.TcBusinessReadPort")&&call.getName().equals("listDlq")&&caller.equals("app.job.BusinessToolExecutor"))assertThat(call.getTarget().getRawParameterTypes()).hasSize(4);
             }
             for(var call:type.getConstructorCallsFromSelf())if(call.getTargetOwner().getName().equals(PREFIX+"core.dispatch.ExecutionContext$BoundInputs"))assertThat(type.getName()).isEqualTo(PREFIX+"core.workflow.WorkflowExecutor");
         }
@@ -108,7 +106,7 @@ class ArchitectureRulesTest {
     static JavaClasses mainClasses() throws Exception {
         Set<Path> locations = new HashSet<>();
         // 참조된 타입의 자동 해석에 기대지 않고 모든 제품 main 산출물을 직접 수집합니다.
-        for (String module : List.of("modules/apps/ai-gateway-app","modules/adapter/ai-gateway-db-adapter","modules/ai-gateway-core","modules/adapter/ai-gateway-inference-adapter","modules/adapter/ai-gateway-source-support","modules/adapter/ai-gateway-loki-adapter","modules/adapter/ai-gateway-tempo-adapter","modules/adapter/ai-gateway-gitlab-adapter","modules/adapter/ai-gateway-tc-mock-adapter","modules/apps/ai-gateway-acceptance-cli")) {
+        for (String module : List.of("modules/apps/ai-gateway-app","modules/adapter/ai-gateway-db-adapter","modules/ai-gateway-core","modules/adapter/ai-gateway-inference-adapter","modules/adapter/ai-gateway-source-support","modules/adapter/ai-gateway-system-adapter","modules/adapter/ai-gateway-loki-adapter","modules/adapter/ai-gateway-tempo-adapter","modules/adapter/ai-gateway-gitlab-adapter","modules/apps/ai-gateway-acceptance-cli")) {
             Path output = Path.of(System.getProperty("aigw.rootDir"),module,"build/classes/java/main");
             assertThat(output).isDirectory(); locations.add(output);
         }
@@ -127,8 +125,7 @@ class ArchitectureRulesTest {
                      target.startsWith("java.net.http.") || target.startsWith("com.nori.ai.gateway.") && !target.startsWith("com.nori.ai.gateway.core."));
                 invalid |= name.startsWith("com.nori.ai.gateway.persistence.") && target.startsWith("com.nori.ai.gateway.integration.");
                 invalid |= name.startsWith("com.nori.ai.gateway.integration.") && target.startsWith("com.nori.ai.gateway.persistence.");
-                invalid |= name.startsWith("com.nori.ai.gateway.tcmock.") &&
-                    (target.startsWith("com.nori.ai.gateway.persistence.") || target.startsWith("com.nori.ai.gateway.integration.") || target.startsWith("com.nori.ai.gateway.app."));
+
                 invalid |= name.startsWith("com.nori.ai.gateway.eval.") && target.startsWith("com.nori.ai.gateway.") && !target.startsWith("com.nori.ai.gateway.eval.");
                 assertThat(invalid).as("모듈 의존 방향: %s -> %s", name, target).isFalse();
             }
@@ -152,7 +149,7 @@ class ArchitectureRulesTest {
         var appendCallers = new HashSet<String>();
         var auditorCallers = new HashSet<String>();
         for (var type : mainClasses()) {
-            assertThat(type.getName()).doesNotContain("StubAssertionSigner", "tcmock.testing", "tcmock.verify");
+            assertThat(type.getName()).doesNotContain("StubAssertionSigner", "integration.fixtures.testing", "integration.fixtures.verify");
             for (var call : type.getConstructorCallsFromSelf()) {
                 String target = call.getTargetOwner().getName();
                 if (expectedConstructors.containsKey(target)) {

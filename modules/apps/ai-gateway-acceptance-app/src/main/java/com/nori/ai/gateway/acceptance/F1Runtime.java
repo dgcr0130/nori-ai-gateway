@@ -4,7 +4,7 @@ import com.nori.ai.gateway.integration.source.*;
 import com.nimbusds.jose.jwk.*;
 import com.nori.ai.gateway.integration.loki.*;
 import com.nori.ai.gateway.acceptance.loki.LokiDirectQuery;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import java.net.*;
 import java.net.http.HttpClient;
 import java.nio.file.*;
@@ -22,7 +22,7 @@ public final class F1Runtime {
         try {
             var http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();URI base=URI.create(required(config,"AIGW_GATEWAY_BASE_URL"));
             if(!Set.of("http","https").contains(base.getScheme())||base.getHost()==null||base.getUserInfo()!=null)throw new IllegalArgumentException();
-            var hooks=new HookClient(http,base,config.secret("AIGW_HOOK_TOKEN_FILE"));String token=config.secret("AIGW_SERVICE_TOKEN_FILE");
+            var hooks=new HookClient(http,base,config.secret("AIGW_HOOK_TOKEN_FILE"),URI.create(required(config,"AIGW_BACKEND_FIXTURE_URL")),config.secret("AIGW_BACKEND_FIXTURE_TOKEN_FILE"));String token=config.secret("AIGW_SERVICE_TOKEN_FILE");
             Path key=Path.of(required(config,"AIGW_SIGNER_PRIVATE_JWK_FILE"));var signer=StubAssertionSigner.fromPrivateJwkFile(key);
             var gateway=new GatewayClient(http,base,token,signer,hooks);var assertions=new F1Assertions((ECKey)JWK.parse(Files.readString(key)));
             OracleQueries oracle=null;
@@ -42,7 +42,7 @@ public final class F1Runtime {
             var observation=new GatewayLogReadback(HttpClient.newHttpClient(),URI.create(url)).count(host,start,Instant.now().plusNanos(1),sentinels);
             if(observation.limited()||observation.lines()==0)throw new TestAbortedException("LOKI_READBACK_INCOMPLETE");F1SecurityChecks.require(observation.sentinelLines()==0,"F1_LOG_RESIDUE");};
         if(leaf.startsWith("ISO-04-"))new F1SecurityChecks(clients.gateway(),clients.hooks(),clients.oracle(),clients.assertions(),clients.token(),rsa(config),residual).run(leaf);
-        else {String url=config.env().get("AIGW_LOKI_READ_URL");Optional<LokiDirectQuery> loki=url==null||url.isBlank()?Optional.empty():Optional.of(new LokiDirectQuery(new SourceHttpClient(URI.create(url),LokiSourcePolicy.SOURCE_REF,SourceObservability.noop())));new F1JobChecks(clients.gateway(),clients.hooks(),clients.oracle(),loki,residual).run(leaf);}
+        else {String url=config.env().get("AIGW_LOKI_READ_URL");Optional<LokiDirectQuery> loki=url==null||url.isBlank()?Optional.empty():Optional.of(new LokiDirectQuery(new SourceHttpClient(URI.create(url),"sources://TC/logs.search",SourceObservability.noop())));new F1JobChecks(clients.gateway(),clients.hooks(),clients.oracle(),loki,residual).run(leaf);}
     }
     private static String required(AcceptanceConfig config,String name){String value=config.env().get(name);if(value==null||value.isBlank())throw new IllegalArgumentException("F1_INPUT_MISSING");return value;}
 }

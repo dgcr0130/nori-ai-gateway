@@ -50,7 +50,7 @@ public class WorkflowSourceFixture {
                 String body;
                 if(exchange.getRequestURI().getPath().startsWith("/loki/")) {
                     logs.incrementAndGet();var query=query(exchange.getRequestURI());String selector=query.get("query");
-                    String app=TcSourcePolicy.APPS.stream().filter(value->selector.contains("app=\""+value+"\"")).findFirst().orElseThrow();
+                    String app=List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front").stream().filter(value->selector.contains("app=\""+value+"\"")).findFirst().orElseThrow();
                     try{requestDigests.add(java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest((app+"\n"+"tc"+"\n"+query.get("start")+"\n"+query.get("end")).getBytes(java.nio.charset.StandardCharsets.UTF_8))));}catch(java.security.NoSuchAlgorithmException e){throw new IllegalStateException(e);}
                     // 실제 전달된 나노초 창의 첫 instant만 응답하므로 서버 fixture가 창을 축소하지 않습니다.
                     // logText 가 null 이면 관측 행 0(빈 로그 이력 fixture).
@@ -61,7 +61,7 @@ public class WorkflowSourceFixture {
                     body=SchemaContracts.JSON.writeValueAsString(Map.of("traces",hits));
                 } else if(exchange.getRequestURI().getPath().startsWith("/api/traces/")) {
                     String id=exchange.getRequestURI().getPath().substring("/api/traces/".length());int index=Integer.parseInt(id.substring(28),16)-1;
-                    var attributes=List.of(Map.of("key","service.name","value",Map.of("stringValue","tc-gateway")),Map.of("key","service.version","value",Map.of("stringValue",traceVersions.get(index))));
+                    var attributes=List.of(Map.of("key","k8s.namespace.name","value",Map.of("stringValue","tc")),Map.of("key","service.name","value",Map.of("stringValue","tc-gateway")),Map.of("key","service.version","value",Map.of("stringValue",traceVersions.get(index))));
                     var spans=List.of(Map.of("spanId",spanIds.isEmpty()?"span-"+index:spanIds.get(index),"name",spanName,"startTimeUnixNano",SourceHttpClient.nanos(P09QueueSupport.NOW.minusSeconds(2700)),"endTimeUnixNano",SourceHttpClient.nanos(P09QueueSupport.NOW.minusSeconds(2699))));
                     body=SchemaContracts.JSON.writeValueAsString(Map.of("batches",List.of(Map.of("resource",Map.of("attributes",attributes),"scopeSpans",List.of(Map.of("spans",spans))))));
                 } else if(exchange.getRequestURI().getPath().contains("/pipelines/")) {

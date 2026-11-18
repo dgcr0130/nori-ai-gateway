@@ -1,186 +1,44 @@
 package com.nori.ai.gateway.core.llm;
 
-import com.nori.ai.gateway.core.budget.CallType;
-import com.nori.ai.gateway.core.budget.ChatMessage;
-import com.nori.ai.gateway.core.budget.TokenBudgetPolicy;
-import com.nori.ai.gateway.core.job.CancellationToken;
-import com.nori.ai.gateway.core.job.JobRequestInput;
+import com.nori.ai.gateway.core.budget.*;
+import com.nori.ai.gateway.core.expiry.ExpiryCheckpoint;
+import com.nori.ai.gateway.core.job.*;
 import com.nori.ai.gateway.core.port.InferenceClient;
-import com.nori.ai.gateway.core.registry.TaskType;
+import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.result.ErrorCode;
-import com.nori.ai.gateway.core.workflow.AnswerMode;
-import com.nori.ai.gateway.core.workflow.EvidenceNeed;
 import org.junit.jupiter.api.Test;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import tools.jackson.databind.node.ObjectNode;
+import java.util.*;
 import static com.nori.ai.gateway.core.llm.LlmTestSupport.*;
 import static org.assertj.core.api.Assertions.*;
 
 class ClassificationServiceTest {
-    private static final String PROMPT = "분류 지시\nRegistry 참고:\n{{REGISTRY}}";
-    private static final Map<String,Object> CONTEXT = Map.of("context", Map.of("timezone", "+09:00", "referenceTime", "2026-10-20T10:00:00+09:00"));
-    private final MutableClock clock = new MutableClock();
-    private final List<List<ChatMessage>> observed = new ArrayList<>();
-    private final List<LlmCallAudit.Attempt> audits = new ArrayList<>();
-    private final LlmCallObserver observer = (job, type, messages) -> { assertThat(type).isEqualTo(CallType.CLASSIFY); observed.add(messages); return () -> {}; };
-
-    private ClassificationService service(ScriptedClient client) {
-        return new ClassificationService(client, TokenBudgetPolicy.current(), CODEPOINTS, expiry(clock), observer, audits::add, PROMPT, "boundSystem: X\n");
+    static final CapabilityManifest TOOL=ConfiguredTool.create(SCOPE.boundSystem(),"lookup","조회",ToolKind.BUSINESS,
+        SchemaContracts.JSON.valueToTree(Map.of("type","object","additionalProperties",false,"properties",Map.of("targetRef",Map.of("type","string","minLength",1,"maxLength",64)),"required",List.of("targetRef"))),SchemaContracts.JSON.valueToTree(Map.of("type","object")),List.of("EQP_READ"),10000);
+    static RegistryView view(){return new RegistryView(SCOPE.boundSystem(),List.of(TOOL));}
+    static ObjectNode wire(){return (ObjectNode)SchemaContracts.parse("{\"taskType\":\"LIVE_QUERY\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\"질문\",\"retryQuery\":\"두 번째 질문\"}");}
+    static ClassificationService.Request request(String question){return new ClassificationService.Request(SCOPE,"conversation","job-1",new CancellationToken(),new JobRequestInput("message",1,question,Map.of("context",Map.of("timezone","UTC","referenceTime",NOW.toString()))));}
+    static ClassificationService service(ScriptedClient client){return service(client,new ClassificationService.Context(view(),List.of(),Map.of(),2),messages->100,attempt->{});}
+    static ClassificationService service(ScriptedClient client,ClassificationService.Context context,PromptTokenCounting counter,LlmCallAudit audit){return new ClassificationService(client,TokenBudgetPolicy.current(),CODEPOINTS,counter,new ExpiryCheckpoint(),LlmCallObserver.NONE,audit,"분류 지시",ignored->context);}
+    @Test void sixFieldsArePreservedAndExactlyOneCallUsesTheRegisteredTools(){
+        var node=wire();node.withArray("toolCalls").addObject().put("toolId","lookup").set("arguments",SchemaContracts.parse("{\"targetRef\":\"EQP_001\"}"));node.withArray("targets").addObject().put("type","EQP").put("ref","EQP_001");node.put("searchQuery","EQP_001 질문");
+        var client=new ScriptedClient(reply(node.toString()));var result=(ClassificationService.Classified)service(client).classify(request("EQP_001 질문"));
+        assertThat(result.calls()).isOne();assertThat(result.classification().toolCalls()).hasSize(1);assertThat(result.classification().jobClassification().keySet()).containsExactlyInAnyOrder("taskType","toolCalls","targets","timeWindow","searchQuery","retryQuery");
+        assertThat(client.sent).singleElement().satisfies(sent->{assertThat(sent.maxTokens()).isEqualTo(2048);var input=SchemaContracts.parse(sent.messages().get(1).content());assertThat(input.path("tools").get(0).path("inputSchema")).isEqualTo(TOOL.inputSchema());});
     }
-    private ClassificationService.Request request(String question, Map<String,Object> fields) {
-        return new ClassificationService.Request(SCOPE, "conversation", "job-1", new CancellationToken(), new JobRequestInput("message", 1, question, fields));
+    @Test void invalidJsonUnknownKeysToolsTargetsAndFiveCallsFailWithoutRetry(){
+        List<String> invalid=new ArrayList<>(List.of("not json",wire()+" {}"));
+        for(String key:wire().propertyNames()){var copy=wire();copy.remove(key);invalid.add(copy.toString());}
+        var unknown=wire();unknown.put("systemId","WM");invalid.add(unknown.toString());
+        var tool=wire();tool.withArray("toolCalls").addObject().put("toolId","unknown").set("arguments",SchemaContracts.parse("{}"));invalid.add(tool.toString());
+        var target=wire();target.withArray("targets").addObject().put("type","EQP").put("ref","invented");invalid.add(target.toString());
+        var over=wire();for(int i=0;i<5;i++)over.withArray("toolCalls").addObject().put("toolId","lookup").set("arguments",SchemaContracts.parse("{}"));invalid.add(over.toString());
+        for(String text:invalid){var client=new ScriptedClient(reply(text));assertThat(service(client).classify(request("질문"))).as(text).isEqualTo(new ClassificationService.Rejected(ErrorCode.CONTRACT_INVALID,1,List.of()));assertThat(client.sent).hasSize(1);}
     }
-    /** 분류 wire v3 고정 fixture: n 은 상위 작업 최소 근거(KQ=N, LQ=S, INC=H, GQ·UNS=[]), a=B. 다른 값은 {@link #wire(String,String,String,String,String,String,String)}. */
-    private static String wire(String t, String eqp, String from, String to, String qRef) {
-        String n = switch (t) { case "KQ" -> "[\"N\"]"; case "LQ" -> "[\"S\"]"; case "INC" -> "[\"H\"]"; default -> "[]"; };
-        return wire(t, eqp, from, to, qRef, n, "\"B\"");
-    }
-    private static String wire(String t, String eqp, String from, String to, String qRef, String n, String a) {
-        return "{\"t\":\"" + t + "\",\"eqp\":" + quoted(eqp) + ",\"from\":" + quoted(from) + ",\"to\":" + quoted(to) + ",\"qRef\":" + quoted(qRef) + ",\"n\":" + n + ",\"a\":" + a + "}";
-    }
-    private static String quoted(String value) { return value == null ? "null" : "\"" + value + "\""; }
-
-    @Test void validWireRestoresTheExactOriginalAndKeepsTimeTextNanosAndOffsetWithoutTruncation() {
-        String query = "C:\\log\\" + new String(Character.toChars(0x1F600)) + "TIMEOUT";
-        String eqp = "포토설비A동1라인EQP0001경계최대길이검증용식별자abcdefghij0123456789KLMN가나다라마바사아자차카타";
-        assertThat(eqp.codePointCount(0, eqp.length())).isEqualTo(64);
-        var client = new ScriptedClient(reply(wire("INC", eqp, "2026-10-03T00:00:00.123456789+09:00", "2026-10-04T00:00Z", "Q1")));
-        var result = service(client).classify(request("\"" + query + "\" 원인 찾아줘", CONTEXT));
-        var classified = (ClassificationService.Classified) result;
-        assertThat(classified.calls()).isOne();
-        assertThat(classified.classification()).isEqualTo(new com.nori.ai.gateway.core.llm.Classification(TaskType.INCIDENT_ANALYSIS, eqp, "2026-10-03T00:00:00.123456789+09:00", "2026-10-04T00:00Z", query,
-            List.of(EvidenceNeed.H), java.util.Set.of(), AnswerMode.B, Classification.WIRE_V3));
-        assertThat(classified.classification().q().codePoints().toArray()).isEqualTo(query.codePoints().toArray());
-        var sent = client.sent.getFirst();
-        assertThat(sent.maxTokens()).isEqualTo(2_048);
-        assertThat(sent.messages().getFirst().content()).isEqualTo("분류 지시\nRegistry 참고:\nboundSystem: X\n");
-        String user = sent.messages().get(1).content();
-        assertThat(user).contains("\"qRefCatalog\":[\"Q1\"]").startsWith("{\"context\":{\"referenceTime\":\"2026-10-20T10:00:00+09:00\",\"selectedResourceRefs\":[],\"timeWindow\":null,\"timezone\":\"+09:00\"}");
-        assertThat(observed).containsExactly(sent.messages());
-        assertThat(classified.classification().jobClassification()).containsEntry("taskType", "INCIDENT_ANALYSIS").containsEntry("q", query).containsEntry("evidenceNeeds", List.of("H")).containsEntry("answerMode", "B")
-            .containsEntry("wireVersion", "classify-wire-v3").doesNotContainKey("qRef").doesNotContainKey("n");
-    }
-
-    @Test void schemaFailureRetriesOnceWithTheSameBindingAndOnlyAFixedErrorThenUsesTheRetryValues() {
-        var client = new ScriptedClient(reply("{\"t\":\"LQ\",\"eqp\":\"FIRST\",\"from\":null,\"to\":null,\"q\":\"invented\",\"n\":[\"S\"],\"a\":\"B\"}"), reply(wire("LQ", "SECOND", null, null, "Q2")));
-        var result = (ClassificationService.Classified) service(client).classify(request("\"a\" 와 \"b\"", CONTEXT));
-        assertThat(result.calls()).isEqualTo(2);
-        assertThat(result.classification().eqp()).isEqualTo("SECOND");
-        assertThat(result.classification().q()).isEqualTo("b");
-        var first = client.sent.get(0).messages(); var retry = client.sent.get(1).messages();
-        assertThat(retry.subList(0, 2)).isEqualTo(first);
-        assertThat(retry.getLast()).isEqualTo(new ChatMessage(ChatMessage.Role.USER, "직전 출력이 무효다(오류: SCHEMA_KEYS_INVALID). 출력 스키마에 맞는 JSON 객체 한 개만 다시 출력한다."));
-        assertThat(retry.toString()).doesNotContain("invented", "FIRST");
-    }
-
-    @Test void everyWireOrAnswerViolationFailsBothAttemptsAndEndsAsPlanInvalidAfterExactlyTwoCalls() {
-        var cases = new java.util.LinkedHashMap<String,InferenceClient.Completed>();
-        cases.put("missing key", reply("{\"t\":\"LQ\",\"eqp\":null,\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}"));
-        cases.put("v2 five keys", reply("{\"t\":\"LQ\",\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\"}"));
-        cases.put("q key", reply("{\"t\":\"LQ\",\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\",\"q\":\"x\",\"n\":[\"S\"],\"a\":\"B\"}"));
-        cases.put("extra capability", reply("{\"t\":\"LQ\",\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\",\"n\":[\"S\"],\"a\":\"B\",\"capabilityId\":\"wm.inventory.get\"}"));
-        cases.put("enum", reply(wire("XX", null, null, null, "Q1")));
-        cases.put("forged ref", reply(wire("LQ", null, null, null, "Q2")));
-        cases.put("null with candidate", reply(wire("LQ", null, null, null, null)));
-        cases.put("impossible date", reply(wire("LQ", null, "2026-02-30T00:00", "2026-03-01T00:00", "Q1")));
-        cases.put("ten fraction digits", reply(wire("LQ", null, "2026-10-03T00:00:00.1234567890Z", "2026-10-04T00:00Z", "Q1")));
-        cases.put("empty eqp", reply(wire("LQ", "", null, null, "Q1")));
-        cases.put("eqp 65", reply(wire("LQ", "E".repeat(65), null, null, "Q1")));
-        cases.put("length", reply(wire("LQ", null, null, null, "Q1"), "length"));
-        cases.put("other finish", reply(wire("LQ", null, null, null, "Q1"), "tool_calls"));
-        cases.put("answer over 768", reply("{\"t\":\"LQ\"," + " ".repeat(780) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":\"Q1\",\"n\":[\"S\"],\"a\":\"B\"}"));
-        cases.put("think marker", reply("</think>" + wire("LQ", null, null, null, "Q1")));
-        cases.put("not json", reply("LQ 입니다"));
-        for (var entry : cases.entrySet()) {
-            var client = new ScriptedClient(entry.getValue(), entry.getValue());
-            var result = service(client).classify(request("\"q\" 찾아줘", CONTEXT));
-            assertThat(result).as(entry.getKey()).isEqualTo(new ClassificationService.Rejected(ErrorCode.PLAN_INVALID, 2));
-            assertThat(client.sent).as(entry.getKey()).hasSize(2);
-        }
-        var budget = new ScriptedClient(reply("{\"t\":\"LQ\"," + " ".repeat(780) + "\"eqp\":null,\"from\":null,\"to\":null,\"qRef\":null,\"n\":[\"S\"],\"a\":\"B\"}"), reply(wire("GQ", null, null, null, null)));
-        service(budget).classify(request("질문", CONTEXT));
-        assertThat(budget.sent.get(1).messages().getLast().content()).contains("(오류: USAGE_EXCEEDS_LIMIT)");
-    }
-
-    @Test void inputLiteralFailuresStopBeforeAnyCallWithTheExistingClarificationCodes() {
-        var client = new ScriptedClient();
-        assertThat(service(client).classify(request("\"" + "가".repeat(257) + "\"", CONTEXT))).isEqualTo(new ClassificationService.Rejected(ErrorCode.INPUT_BUDGET_EXCEEDED, 0));
-        assertThat(service(client).classify(request("닫힘 없는 \"인용", CONTEXT))).isEqualTo(new ClassificationService.Rejected(ErrorCode.PLAN_INVALID, 0));
-        assertThat(client.sent).isEmpty();
-        assertThat(observed).isEmpty();
-    }
-
-    @Test void callFailureIsUnavailableWithoutRetryAndBudgetExceededIsNeverSent() {
-        var failed = new ScriptedClient(new InferenceClient.CallFailed(InferenceClient.FailureReason.TRANSPORT, "java.io.IOException", Duration.ZERO, 100));
-        assertThat(service(failed).classify(request("질문", CONTEXT))).isEqualTo(new ClassificationService.Unavailable(1));
-        assertThat(failed.sent).hasSize(1);
-        var budget = new ScriptedClient(InferenceClient.ChatOutcome.budgetExceeded(6_000));
-        assertThat(service(budget).classify(request("질문", CONTEXT))).isEqualTo(new ClassificationService.BudgetExceeded(0));
-        var retryBudget = new ScriptedClient(reply("x"), InferenceClient.ChatOutcome.budgetExceeded(3_100));
-        assertThat(service(retryBudget).classify(request("질문", CONTEXT))).isEqualTo(new ClassificationService.BudgetExceeded(1));
-    }
-
-    /** SPEC §14.5: 호출 직전 assert 에 도달한 시도(재시도 포함)마다 감사 1건, 보내지 않은 시도는 sent=false·usage 없음, 원문 0. */
-    @Test void everyAttemptIncludingRetriesFailuresAndBudgetStopsLeavesExactlyOneTextFreeAudit() {
-        var firstReply = reply("{\"t\":\"LQ\",\"eqp\":\"FIRST-SECRET\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}");
-        var secondReply = reply(wire("LQ", "SECOND", null, null, null));
-        var retried = new ScriptedClient(firstReply, secondReply);
-        service(retried).classify(request("질문", CONTEXT));
-        assertThat(audits).hasSize(2).allSatisfy(audit -> {
-            assertThat(audit.callType()).isEqualTo(CallType.CLASSIFY); assertThat(audit.sent()).isTrue(); assertThat(audit.inputTokens()).isEqualTo(100);
-            assertThat(audit.maxTokens()).isEqualTo(2_048); assertThat(audit.promptTokens()).isEqualTo(100);
-            assertThat(audit.reduction()).isEmpty(); assertThat(audit.jobId()).isEqualTo("job-1"); assertThat(audit.conversationId()).isEqualTo("conversation"); assertThat(audit.scope()).isSameAs(SCOPE);
-        });
-        assertThat(audits).extracting(LlmCallAudit.Attempt::completionTokens).containsExactly(firstReply.completionTokens(),secondReply.completionTokens());
-        assertThat(audits.get(0).status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.FAILED); assertThat(audits.get(0).errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.PLAN_INVALID);
-        assertThat(audits.get(1).status()).isEqualTo(com.nori.ai.gateway.core.result.ResultStatus.SUCCESS); assertThat(audits.get(1).errorCode()).isNull();
-        assertThat(audits.toString()).doesNotContain("FIRST-SECRET", "SECOND", "질문");
-        audits.clear();
-        service(new ScriptedClient(InferenceClient.ChatOutcome.budgetExceeded(6_000))).classify(request("질문", CONTEXT));
-        assertThat(audits).singleElement().satisfies(audit -> {
-            assertThat(audit.sent()).isFalse(); assertThat(audit.inputTokens()).isEqualTo(6_000); assertThat(audit.promptTokens()).isNull(); assertThat(audit.completionTokens()).isNull();
-            assertThat(audit.errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.INPUT_BUDGET_EXCEEDED);
-        });
-        audits.clear();
-        service(new ScriptedClient(new InferenceClient.CallFailed(InferenceClient.FailureReason.TRANSPORT, "java.io.IOException", Duration.ofMillis(7), 120))).classify(request("질문", CONTEXT));
-        assertThat(audits).singleElement().satisfies(audit -> { assertThat(audit.sent()).isTrue(); assertThat(audit.inputTokens()).isEqualTo(120); assertThat(audit.latencyMs()).isEqualTo(7);
-            assertThat(audit.promptTokens()).isNull(); assertThat(audit.errorCode()).isEqualTo(com.nori.ai.gateway.core.result.ErrorCode.LLM_UNAVAILABLE); });
-        audits.clear();
-        assertThat(service(new ScriptedClient()).classify(request("\"" + "x".repeat(257) + "\"", CONTEXT))).isInstanceOf(ClassificationService.Rejected.class);
-        assertThat(audits).as("호출 전 거부는 호출 시도가 아니다").isEmpty();
-    }
-
-    @Test void localTimeWithoutAContextTimezoneCannotBeResolvedAndIsAFormatFailure() {
-        var client = new ScriptedClient(reply(wire("LQ", null, "2026-10-03T00:00", "2026-10-04T00:00", null)), reply(wire("LQ", null, "2026-10-03T00:00Z", "2026-10-04T00:00Z", null)));
-        var result = (ClassificationService.Classified) service(client).classify(request("질문", Map.of()));
-        assertThat(client.sent.get(1).messages().getLast().content()).contains("(오류: FORMAT_INVALID)");
-        assertThat(result.classification().from()).isEqualTo("2026-10-03T00:00Z");
-        assertThat(client.sent.getFirst().messages().get(1).content()).startsWith("{\"context\":{\"referenceTime\":null,\"selectedResourceRefs\":[],\"timeWindow\":null,\"timezone\":null}");
-    }
-
-    @Test void cancellationBeforeAssemblyStopsTheCall() {
-        var cancelled = new ScriptedClient(reply(wire("GQ", null, null, null, null)));
-        var token = new CancellationToken(); token.signal(CancellationToken.Reason.CANCELLED);
-        assertThatThrownBy(() -> service(cancelled).classify(new ClassificationService.Request(SCOPE, "conversation", "job-1", token, new JobRequestInput("message", 1, "질문", CONTEXT))))
-            .isInstanceOf(IllegalStateException.class);
-        assertThat(cancelled.sent).isEmpty();
-    }
-
-    @Test void twoRequestsWithTheSameIdsNeverShareBindings() {
-        var client = new ScriptedClient(reply(wire("KQ", null, null, null, "Q1")), reply(wire("KQ", null, null, null, "Q1")));
-        var service = service(client);
-        var first = (ClassificationService.Classified) service.classify(request("\"alpha\"", CONTEXT));
-        var second = (ClassificationService.Classified) service.classify(request("\"beta\"", CONTEXT));
-        assertThat(first.classification().q()).isEqualTo("alpha");
-        assertThat(second.classification().q()).isEqualTo("beta");
-        assertThat(client.sent.get(1).messages().get(1).content()).doesNotContain("alpha");
-    }
-
-    @Test void templateMustHaveExactlyOneRegistrySlotAndNoLeftoverPlaceholder() {
-        var client = new ScriptedClient();
-        for (String bad : List.of("no slot", "{{REGISTRY}} {{REGISTRY}}", "a\r\n{{REGISTRY}}", "{{REGISTRY}} {{TOOLS}}"))
-            assertThatThrownBy(() -> new ClassificationService(client, TokenBudgetPolicy.current(), CODEPOINTS, expiry(clock), observer, audits::add, bad, "r")).as(bad).isInstanceOf(IllegalArgumentException.class);
-    }
+    @Test void missingRequiredInputReturnsOnlyTheMissingFieldsAndDoesNotInventArguments(){var node=wire();node.withArray("toolCalls").addObject().put("toolId","lookup").set("arguments",SchemaContracts.parse("{}"));var client=new ScriptedClient(reply(node.toString()));assertThat(service(client).classify(request("질문"))).isEqualTo(new ClassificationService.Rejected(ErrorCode.PLAN_INVALID,1,List.of("targetRef")));assertThat(client.sent).hasSize(1);}
+    @Test void exactLiteralTargetsUseOnlyTheHistoryThatWasActuallySent(){var node=wire();node.withArray("targets").addObject().put("type","EQP").put("ref","OLD");node.put("searchQuery","OLD 질문");var context=new ClassificationService.Context(view(),List.of(new ClassificationService.HistoryPair("OLD 질문","답"),new ClassificationService.HistoryPair("NEW 질문","답")),Map.of(),1);var client=new ScriptedClient(reply(node.toString()));assertThat(service(client,context,messages->100,attempt->{}).classify(request("질문"))).isInstanceOf(ClassificationService.Rejected.class);assertThat(client.sent.getFirst().messages().get(1).content()).doesNotContain("OLD").contains("NEW");}
+    @Test void tokenOverflowDropsOldestPairsThenStopsBeforeSendingIfTheBaseIsTooLarge(){var context=new ClassificationService.Context(view(),List.of(new ClassificationService.HistoryPair("OLD","답"),new ClassificationService.HistoryPair("NEW","답")),Map.of(),2);var client=new ScriptedClient(reply(wire().toString()));assertThat(service(client,context,messages->messages.toString().contains("OLD")?6000:100,attempt->{}).classify(request("질문"))).isInstanceOf(ClassificationService.Classified.class);assertThat(client.sent.getFirst().messages().toString()).contains("NEW").doesNotContain("OLD");var absent=new ScriptedClient();assertThat(service(absent,context,messages->6000,attempt->{}).classify(request("질문"))).isEqualTo(new ClassificationService.BudgetExceeded(0));assertThat(absent.sent).isEmpty();}
+    @Test void transportBudgetAndMalformedRepliesLeaveExactlyOneTextFreeAudit(){for(var reply:List.of(reply("secret malformed"),new InferenceClient.CallFailed(InferenceClient.FailureReason.TRANSPORT,"java.io.IOException",java.time.Duration.ofMillis(7),120),InferenceClient.ChatOutcome.budgetExceeded(6000))){var records=new ArrayList<LlmCallAudit.Attempt>();var client=new ScriptedClient(reply);service(client,new ClassificationService.Context(view(),List.of(),Map.of(),2),messages->100,records::add).classify(request("질문"));assertThat(records).hasSize(1);assertThat(records.toString()).doesNotContain("secret malformed","질문");}}
+    @Test void cancellationBeforeAssemblyMakesNoCall(){var client=new ScriptedClient();var request=request("질문");request.cancellation().signal(CancellationToken.Reason.CANCELLED);assertThatThrownBy(()->service(client).classify(request)).isInstanceOf(IllegalStateException.class);assertThat(client.sent).isEmpty();}
+    @Test void timezoneAndHalfOpenTimeWindowAreValidated(){for(String from:List.of("2026-02-30T00:00Z","2026-10-04T00:00Z","2026-10-03T00:00:00.1234567890Z")){var node=wire();node.set("timeWindow",SchemaContracts.JSON.valueToTree(Map.of("from",from,"to","2026-10-04T00:00Z")));assertThat(service(new ScriptedClient(reply(node.toString()))).classify(request("질문"))).isInstanceOf(ClassificationService.Rejected.class);}}
 }

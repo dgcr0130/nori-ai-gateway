@@ -22,7 +22,7 @@ public class HarnessP09TestPorts {
             @Override public void run(){
                 // 재시작 때 무장 메모리는 비어 있습니다. 미구현 분류기의 시험 입력만 새로 제공합니다.
                 var rows=jdbc.sql("SELECT id,actor_ref,idempotency_key FROM gw.job WHERE status='QUEUED'").query((rs,n)->new String[]{rs.getString(1),rs.getString(2),rs.getString(3)}).list();
-                for(var row:rows){hooks.arm(row[1],row[2],new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false));tx.executeWithoutResult(s->hooks.bindOnAdmission(row[1],row[2],row[0]));}
+                for(var row:rows){hooks.arm(row[1],row[2],new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));tx.executeWithoutResult(s->hooks.bindOnAdmission(row[1],row[2],row[0]));}
             }
         };
     }

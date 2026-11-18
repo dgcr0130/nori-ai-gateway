@@ -4,7 +4,7 @@ import com.nori.ai.gateway.app.config.InferenceModeProperties;
 import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.app.security.ScopeAssembler;
 import com.nori.ai.gateway.core.job.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.persistence.queue.*;
 import com.nori.ai.gateway.persistence.repository.JobRepository;
@@ -14,7 +14,7 @@ import java.util.*;
 public final class JobWorker {
     private final JobDelegationReader delegations;
     private final ScopeAssembler scopes;
-    private final TcSourceAuthorizationPort authorization;
+    private final GatewaySystemsProperties systems;
     private final WorkflowExecutor workflow;
     private final JobTerminalCommitter terminal;
     private final JobRepository jobs;
@@ -26,10 +26,10 @@ public final class JobWorker {
     private final com.nori.ai.gateway.core.port.JobRequestInputReader inputs;
     private final Optional<com.nori.ai.gateway.core.llm.ClassificationService> classifier;
     public JobWorker(JobDelegationReader delegations,ScopeAssembler scopes,
-            TcSourceAuthorizationPort authorization,WorkflowExecutor workflow,JobTerminalCommitter terminal,JobRepository jobs,
+            GatewaySystemsProperties systems,WorkflowExecutor workflow,JobTerminalCommitter terminal,JobRepository jobs,
             InferenceModeProperties inference,Optional<StructuredClassificationHook> classification,Optional<PausePointRegistry> pauses,Optional<FaultInjector> faults,SlotLedger slots,com.nori.ai.gateway.core.port.JobRequestInputReader inputs,
             Optional<com.nori.ai.gateway.core.llm.ClassificationService> classifier){
-        this.delegations=delegations;this.scopes=scopes;this.authorization=authorization;this.workflow=workflow;
+        this.delegations=delegations;this.scopes=scopes;this.systems=systems;this.workflow=workflow;
         this.terminal=terminal;this.jobs=jobs;this.inference=inference;this.classification=classification;this.pauses=pauses;this.faults=faults;this.slots=slots;this.inputs=inputs;this.classifier=classifier;
     }
     public void run(JobScopeRecord job,CancellationToken token){
@@ -43,11 +43,7 @@ public final class JobWorker {
             if(persisted.get().cancelRequestedAt()!=null)token.signal(CancellationToken.Reason.CANCELLED);
             if(token.reason().isPresent())result=cancelled(token);
             else{
-                TcSourceAuthorizationPort.Outcome outcome;
-                try{outcome=authorization.authorize(new TcSourceAuthorizationPort.DelegatedCall(scope.sub(),delegation),Set.of());}
-                catch(RuntimeException unavailable){outcome=new TcSourceAuthorizationPort.Unavailable();}
-                if(outcome instanceof TcSourceAuthorizationPort.DelegationInvalid)result=TerminalSpec.forCause(TerminalSpec.Cause.START_GATE_DENIED);
-                else if(!(outcome instanceof TcSourceAuthorizationPort.Allowed allowed)||allowed.pdg()==null||!allowed.pdg().matches("[0-9a-f]{64}"))result=TerminalSpec.forCause(TerminalSpec.Cause.START_GATE_UNAVAILABLE);
+                if(!systems.systems().containsKey(scope.boundSystem().name())||delegation==null)result=TerminalSpec.forCause(TerminalSpec.Cause.START_GATE_DENIED);
                 else{
                     if(token.reason().isPresent()){result=cancelled(token);}
                     else{
@@ -68,12 +64,12 @@ public final class JobWorker {
                         var classifiedOutcome=classifier.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(new com.nori.ai.gateway.core.llm.ClassificationService.Request(scope,job.conversationId(),job.jobId(),token,input));
                         result=switch(classifiedOutcome){
                             case com.nori.ai.gateway.core.llm.ClassificationService.Classified classified->workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,token,inference.mode(),classified.classification().jobClassification(),input));
-                            case com.nori.ai.gateway.core.llm.ClassificationService.Rejected rejected->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,rejected.code(),Map.of("clarification",new Clarification(rejected.code(),List.of("q"))));
+                            case com.nori.ai.gateway.core.llm.ClassificationService.Rejected rejected->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,rejected.code(),Map.of("clarification",new Clarification(rejected.code(),rejected.fields())));
                             case com.nori.ai.gateway.core.llm.ClassificationService.Unavailable unavailable->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,ErrorCode.LLM_UNAVAILABLE,Map.of());
                             case com.nori.ai.gateway.core.llm.ClassificationService.BudgetExceeded exceeded->TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,ErrorCode.INPUT_BUDGET_EXCEEDED,Map.of());
                         };
                     }else{
-                        Map<String,Object> classified=classification.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(job.jobId());
+                        Map<String,Object> classified=classification.orElseThrow(()->new IllegalStateException("분류 구현이 없습니다")).classify(job.jobId(),input);
                         result=workflow.execute(new JobContext(job.jobId(),job.conversationId(),scope,delegation,token,inference.mode(),classified,input));
                     }
                     }

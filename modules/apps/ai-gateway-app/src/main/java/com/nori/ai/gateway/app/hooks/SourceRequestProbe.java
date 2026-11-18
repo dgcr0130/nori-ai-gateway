@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.app.hooks;
 
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
+import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.persistence.queue.TerminalCommitObserver;
 import io.micrometer.observation.*;
 import org.springframework.http.client.observation.ClientRequestObservationContext;
@@ -21,22 +21,23 @@ public final class SourceRequestProbe implements ObservationHandler<ClientReques
     public interface Scope extends AutoCloseable { @Override void close(); }
     private static final Pattern SELECTOR=Pattern.compile("\\{app=\"([^\"]+)\", namespace=\"([^\"]+)\"}");
     private static final class Data {String status="OPEN";final List<Attempt> attempts=new ArrayList<>();}
-    private record Binding(String jobId,String capabilityId,Data data) {}
+    private record Binding(String jobId,String capabilityId,String systemId,Data data) {}
     private record Pending(Data data,int index) {}
     private final Map<String,Map<String,Data>> jobs=new HashMap<>();
     private final Set<String> terminal=new HashSet<>();
     private final ThreadLocal<Binding> current=new ThreadLocal<>();
+    private final GatewaySystemsProperties systems;
     private final TestHookRegistry hooks;
-    public SourceRequestProbe(TestHookRegistry hooks){this.hooks=hooks;hooks.onIdleReset(this::reset);}
-    public Scope open(String jobId,String capabilityId) {
+    public SourceRequestProbe(TestHookRegistry hooks,GatewaySystemsProperties systems){this.systems=systems;this.hooks=hooks;hooks.onIdleReset(this::reset);}
+    public Scope open(String jobId,String capabilityId,com.nori.ai.gateway.core.scope.OwnerSystem owner) {
         if(hooks.binding(jobId).isEmpty())return ()->{};
-        if(!Set.of("tc.logs.search","tc.trace.search","tc.git.searchCode").contains(capabilityId))throw new IllegalArgumentException("관측 Capability가 잘못되었습니다");
+        if(!Set.of("logs.search","trace.search","git.searchCode").contains(capabilityId))throw new IllegalArgumentException("관측 Capability가 잘못되었습니다");
         synchronized(this){
             if(current.get()!=null){current.get().data.status="INVALID";return ()->{};}
             if(!jobs.containsKey(jobId)&&jobs.size()>=MAX_JOBS)return ()->{};
             var byCapability=jobs.computeIfAbsent(jobId,key->new HashMap<>());var previous=byCapability.get(capabilityId);
-            if(previous!=null){previous.status="INVALID";return ()->{};}
-            var data=new Data();byCapability.put(capabilityId,data);var binding=new Binding(jobId,capabilityId,data);current.set(binding);
+            if(previous!=null&&!previous.status.equals("COMPLETE")){previous.status="INVALID";return ()->{};}
+            var data=previous==null?new Data():previous;data.status="OPEN";byCapability.put(capabilityId,data);var binding=new Binding(jobId,capabilityId,owner.name(),data);current.set(binding);
             return ()->{synchronized(SourceRequestProbe.this){if(current.get()!=binding){data.status="INVALID";}else{current.remove();if(data.status.equals("OPEN"))data.status=data.attempts.stream().anyMatch(attempt->attempt.outcome().equals("STARTED"))?"INCOMPLETE":"COMPLETE";}}};
         }
     }
@@ -67,7 +68,7 @@ public final class SourceRequestProbe implements ObservationHandler<ClientReques
                 var matcher=SELECTOR.matcher(values.getOrDefault("query",""));String state="INVALID",digest="";
                 if(matcher.lookingAt()&&literalFilters(values.get("query").substring(matcher.end()))){
                     String app=matcher.group(1),namespace=matcher.group(2);var from=new BigInteger(values.get("start"));var to=new BigInteger(values.get("end"));if(from.compareTo(to)>=0)throw new IllegalArgumentException();
-                    state=TcSourcePolicy.APPS.contains(app)&&namespace.equals("tc")?"ALLOWLIST":"OUTSIDE_ALLOWLIST";
+                    state=Optional.ofNullable(systems.systems().get(binding.systemId())).stream().flatMap(system->system.apps().stream()).anyMatch(location->location.name().equals(app)&&location.namespace().equals(namespace))?"ALLOWLIST":"OUTSIDE_ALLOWLIST";
                     digest=digest(app,namespace,from.toString(),to.toString());
                 }else if(values.getOrDefault("query","").startsWith("{namespace="))state="NAMESPACE_ONLY";
                 int index=data.attempts.size();data.attempts.add(new Attempt(digest,state,"STARTED"));context.put(Pending.class,new Pending(data,index));if(!state.equals("ALLOWLIST"))data.status="INVALID";

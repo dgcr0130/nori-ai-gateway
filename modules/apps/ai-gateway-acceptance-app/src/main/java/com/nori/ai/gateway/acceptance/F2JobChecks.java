@@ -8,7 +8,7 @@ import com.nori.ai.gateway.core.budget.CallType;
 import com.nori.ai.gateway.core.budget.TokenBudgetPolicy;
 import com.nori.ai.gateway.core.retention.TimeWindow;
 import com.nori.ai.gateway.integration.loki.LokiProperties;
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
+
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.*;
@@ -26,10 +26,7 @@ import static com.nori.ai.gateway.acceptance.F1SecurityChecks.*;
 public final class F2JobChecks {
     /** prompt-watch 의 질문 sentinel 위치. 같은 무장의 다른 sentinel 은 1부터다. */
     static final int QUESTION = 0;
-    static final List<String> REPORT_COLUMNS = List.of("section", "evidence", "status", "sources", "observedAt", "missingItems", "serverAdded");
-    /** ReportSections 의 근거 코드 표시(S,H,N,I,C,R). */
-    static final Map<String,String> NEED_LABELS = Map.of("S", "현재 상태", "H", "실제 발생 이력", "N", "정상 절차·선행 조건", "I", "구현·적용 버전", "C", "기대와 실제 비교", "R", "확인·조치 절차");
-    static final List<String> BUSINESS_READS = List.of("getEqpSnapshot", "getActiveWorkLots", "getRecentEvents", "listDlq", "getCommLogs", "readModel", "resolveResource");
+    static final List<String> BUSINESS_READS = List.of("getEqpSnapshot", "getModel", "listDlq", "getCommLogs");
     static final String COMPOSER_OVERSIZE_SCENARIO = "composer-oversize";
     /** AC-35-EGRESS 양성 대조 대상 id(추론 endpoint·주 DB, SPEC §27.2). runconfig 목록에 ALLOWED 로 있어야 판정한다(test-hooks-v1). */
     static final Set<String> EGRESS_POSITIVE_CONTROLS = Set.of("inference-endpoint", "db-main");
@@ -78,7 +75,7 @@ public final class F2JobChecks {
             var job = submit(fixture.fixtureId(), fixture.question(), window(Duration.ofMinutes(30), true), null, LIVE_TIMEOUT);
             var rows = oracle.toolRows(job.id());
             long unregistered = rows.stream().filter(row -> !F2Fixture.IMPLEMENTED.contains(row.capabilityId())).count();
-            long foreign = rows.stream().filter(row -> !row.capabilityId().startsWith("tc.")).count();
+            long foreign = rows.stream().filter(row -> !row.capabilityId().startsWith("tc.")&&!F2Fixture.IMPLEMENTED.contains(row.capabilityId())).count();
             sample("AC-22-LIVE", fixture.fixtureId(), job, rows, Map.of("unregisteredToolCount", unregistered, "foreignSystemToolCount", foreign));
             require(oracle.jobOwner(job.id()).orElseThrow(() -> new AssertionError("F2_JOB_OWNER_MISSING")).equals("TC"), "F2_LIVE_SYSTEM_SWITCHED");
             require(unregistered == 0 && foreign == 0, "F2_LIVE_TOOL_OUTSIDE_REGISTRY");
@@ -100,18 +97,18 @@ public final class F2JobChecks {
         hooks.clock(Map.of("op", "RESUME_SYSTEM"));
         Instant to = hooks.clockNow().truncatedTo(ChronoUnit.SECONDS), from = to.minusSeconds(3600);
         var direct = loki.orElseThrow(() -> new TestAbortedException("LOKI_POSITIVE_CONTROL_UNAVAILABLE"));
-        int count = 0; for (String app : TcSourcePolicy.APPS) count += direct.measure(app, new TimeWindow(from, to)).count();
+        int count = 0; for (String app : F1Fixture.APPS) count += direct.measure(app, new TimeWindow(from, to)).count();
         if (count == 0) throw new TestAbortedException("LOKI_POSITIVE_CONTROL_EMPTY");
         var body = new LinkedHashMap<String,Object>(context(to, from, to)); body.put("resourceRefs", List.of(Map.of("type", "EQP", "ref", "EQP-001")));
         var job = submit("ac-38-f2", "EQP-001 에서 발생한 오류 로그를 보고 장애 원인을 분석해 줘", body, null, LIVE_TIMEOUT);
         var rows = oracle.toolRows(job.id());
         sample("AC-38-F2", "ac-38-f2", job, rows, Map.of());
         require(oracle.classifiedTaskTypes(job.id()).equals(List.of("INCIDENT_ANALYSIS")), "F2_INCIDENT_NOT_CLASSIFIED");
-        require(rows.stream().anyMatch(row -> row.capabilityId().equals("tc.logs.search")), "F2_INCIDENT_LOG_TOOL_MISSING");
-        require(rows.stream().allMatch(row -> row.capabilityId().startsWith("tc.")), "F2_INCIDENT_FOREIGN_TOOL");
+        require(rows.stream().anyMatch(row -> row.capabilityId().equals("logs.search")), "F2_INCIDENT_LOG_TOOL_MISSING");
+        require(rows.stream().allMatch(row -> F2Fixture.IMPLEMENTED.contains(row.capabilityId())), "F2_INCIDENT_FOREIGN_TOOL");
         require(!status(job).equals("UNSUPPORTED"), "F2_INCIDENT_UNSUPPORTED");
         var boundaries = new LinkedHashMap<String,Instant>();
-        for (String app : TcSourcePolicy.APPS) boundaries.put(app, oracle.retentionProbe(app).flatMap(OracleQueries.RetentionProbe::verifiedOldestAt).orElse(from));
+        for (String app : F1Fixture.APPS) boundaries.put(app, oracle.retentionProbe(app).flatMap(OracleQueries.RetentionProbe::verifiedOldestAt).orElse(from));
         JsonNode observation;
         try { observation = hooks.get("/__test/source-observations/" + job.id()); } catch (HookClient.HookFailure unavailable) { throw new TestAbortedException("SOURCE_REQUEST_OBSERVATION_UNAVAILABLE"); }
         F1SourceChecks.verify(observation, job.id(), F1SourceChecks.expected(boundaries, from, to, new LokiProperties().splitInterval()), false);
@@ -165,17 +162,19 @@ public final class F2JobChecks {
 
     // ── LLM_STUB ─────────────────────────────────────────────────────────────────────────────────
     private void planRejected(String leaf) {
-        String extra = leaf.equals("AC-22-STUB-TOOL") ? ",\"capabilityId\":\"tc.unknown.tool\"" : ",\"targetSystem\":\"WM\",\"capabilityId\":\"wm.inventory.get\"";
-        String reply = "{\"t\":\"LQ\",\"eqp\":\"EQP-001\",\"from\":null,\"to\":null,\"qRef\":null,\"n\":[\"S\"],\"a\":\"B\"" + extra + "}";
+        var output=(ObjectNode)parse(wire("LQ","EQP-001",List.of(),"B"));
+        if(leaf.equals("AC-22-STUB-TOOL"))((ObjectNode)output.path("toolCalls").get(0)).put("toolId","tc.unknown.tool");
+        else output.put("systemId","WM");
+        String reply=output.toString();
         var job = scripted(leaf, "EQP-001 상태 알려줘", window(Duration.ofMinutes(30), false), List.of(classify(reply), classify(reply)), List.of());
-        failed(job, "PLAN_INVALID");
+        failed(job, "CONTRACT_INVALID");
         require(oracle.jobOwner(job.id()).orElseThrow(() -> new AssertionError("F2_JOB_OWNER_MISSING")).equals("TC"), "F2_BOUND_SYSTEM_CHANGED");
         require(oracle.toolRows(job.id()).isEmpty(), "F2_REJECTED_PLAN_EXECUTED_TOOL");
         require(watch(job, "CLASSIFY", QUESTION) >= 1 && watch(job, "COMPOSER", QUESTION) == 0, "F2_REJECTED_PLAN_CALLS");
     }
     private void generalHelp() {
         var job = scripted("AC-22-GQ-HELP", "여기서 뭘 물어볼 수 있어?", Map.of(), List.of(classify(wire("GQ", null, List.of(), "B")), compose("물어볼 수 있는 기능 범위를 안내한다.")),
-            List.of(F2Fixture.GQ_MANIFEST_SNIPPET, F2Fixture.PLANNED.getFirst()));
+            List.of(F2Fixture.GQ_MANIFEST_SNIPPET, F2Fixture.ABSENT_DOCUMENT_TOOL));
         generalCommon(job);
         var rows = new ArrayList<String>(); payload(job).path("blocks").path(0).path("content").path("rows").forEach(row -> rows.add(row.path("capabilityId").asText()));
         require(rows.equals(F2Fixture.GQ_HELP_ROWS) && rows.stream().noneMatch(F2Fixture.PLANNED::contains), "F2_GQ_HELP_ROWS");
@@ -200,9 +199,9 @@ public final class F2JobChecks {
     private void resourceMissing(String leaf) {
         String eqp = switch (leaf) { case "AC-30-EQ" -> "EQ"; case "AC-30-WM" -> "WM"; default -> "EQP-NOT-FOUND"; };
         var job = scripted(leaf, "설비 상태 알려줘", window(Duration.ofMinutes(30), false), List.of(classify(wire("LQ", eqp, List.of("S"), "B"))), List.of());
-        failed(job, "RESOURCE_NOT_FOUND");
-        clarification(job, "RESOURCE_NOT_FOUND", List.of("targetResources"));
-        require(calls("resolveResource") > 0, "F2_RESOURCE_VALIDATION_NOT_RUN");
+        failed(job, "CONTRACT_INVALID");
+        clarification(job, "CONTRACT_INVALID", List.of());
+        require(calls("getEqpSnapshot") == 0, "F2_RESOURCE_VALIDATION_NOT_RUN");
         require(oracle.toolRows(job.id()).isEmpty() && calls("getEqpSnapshot") == 0, "F2_RESOURCE_TOOL_EXECUTED");
         require(watch(job, "CLASSIFY", QUESTION) == 1 && watch(job, "COMPOSER", QUESTION) == 0, "F2_RESOURCE_CALLS");
     }
@@ -210,19 +209,13 @@ public final class F2JobChecks {
         var reply = leaf.equals("AC-32-SCHEMA") ? classify("{\"t\":\"LQ\",\"eqp\":\"EQP-001\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}")
             : reply("CLASSIFY", "{\"t\":\"LQ\",\"eqp\":\"EQP-0", "length", 2_048);
         var job = scripted(leaf, "EQP-001 상태 알려줘", window(Duration.ofMinutes(30), false), List.of(reply, reply), List.of());
-        failed(job, "PLAN_INVALID");
-        clarification(job, "PLAN_INVALID", List.of("q"));
-        require(watch(job, "CLASSIFY", QUESTION) == 2, "F2_CLASSIFY_RETRY_COUNT");
+        failed(job, "CONTRACT_INVALID");
+        clarification(job, "CONTRACT_INVALID", List.of());
+        require(watch(job, "CLASSIFY", QUESTION) == 1, "F2_CLASSIFY_RETRY_COUNT");
         require(oracle.toolRows(job.id()).isEmpty() && watch(job, "COMPOSER", QUESTION) == 0, "F2_FAILED_CLASSIFY_PROCEEDED");
     }
     private void retryOk() {
-        String wrong = "EQP-W" + letters(8);
-        var job = scripted("AC-32-RETRYOK", "EQP-001 상태 알려줘", window(Duration.ofMinutes(30), false),
-            List.of(classify("{\"t\":\"LQ\",\"eqp\":\"" + wrong + "\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}"), classify(wire("LQ", "EQP-001", List.of("S"), "B")), compose("EQP-001 은 연결되어 운전 중이다[e1].")), List.of());
-        require(job.response().path("jobStatus").asText().equals("SUCCEEDED") && status(job).equals("SUCCESS") && errorCode(job).isEmpty(), "F2_RETRY_NOT_RECOVERED");
-        require(watch(job, "CLASSIFY", QUESTION) == 2 && watch(job, "COMPOSER", QUESTION) == 1, "F2_RETRY_CALLS");
-        require(oracle.tools(job.id(), "tc.eqp.getOperationalSnapshot").size() == 1 && calls("getEqpSnapshot") == 1, "F2_RETRY_TOOL_ARGUMENT");
-        require(!job.response().toString().contains(wrong) && oracle.residueScan(Set.of(wrong)).matchCount() == 0, "F2_RETRY_FIRST_OUTPUT_USED");
+        var job=scripted("no-retry","EQP-001 상태",window(Duration.ofMinutes(30),false),List.of(classify("{}"),classify(wire("LQ","EQP-001",List.of(),"B"))),List.of());failed(job,"CONTRACT_INVALID");require(watch(job,"CLASSIFY",QUESTION)==1&&oracle.toolRows(job.id()).isEmpty()&&watch(job,"COMPOSER",QUESTION)==0,"F2_NO_CLASSIFICATION_RETRY");
     }
     private void classificationOverBudget() {
         // 분류 고정 응답을 두지 않는다. 분류가 한 번이라도 전송되면 유형 불일치 전송 실패(LLM_UNAVAILABLE)가 되어 예산 초과와 구별된다.
@@ -238,10 +231,10 @@ public final class F2JobChecks {
             && calls.getFirst().errorCode().equals(Optional.of("INPUT_BUDGET_EXCEEDED")), "F2_CLS_BUDGET_AUDIT");
     }
     private void composerOverBudget() {
-        try { hooks.post("/__test/tcmock/scenario", Map.of("id", COMPOSER_OVERSIZE_SCENARIO), 204); }
+        try { hooks.post("/__fixture/scenario", Map.of("id", COMPOSER_OVERSIZE_SCENARIO), 204); }
         catch (HookClient.HookFailure failure) { if (failure.status() == 400) throw new TestAbortedException("COMPOSER_OVERSIZE_FIXTURE_UNAVAILABLE"); throw failure; }
         String fallback = "FALLBACK" + letters(8);
-        // 시간창과 무관한 모델 조회(N)가 fixture 의 대량 항목을 그대로 넘기도록 분류를 LQ [S,N] 으로 고정한다.
+        // 표준 조회 fixture의 대량 values를 축소 뒤에도 보존하는 실행 목록으로 분류한다.
         var job = scripted("AC-43-COMP", "EQP-001 상태와 적용 모델 정의 알려줘", window(Duration.ofMinutes(30), false),
             List.of(classify(wire("LQ", "EQP-001", List.of("S", "N"), "B")), compose("대체 서술 " + fallback)), List.of());
         failed(job, "INPUT_BUDGET_EXCEEDED");
@@ -256,64 +249,12 @@ public final class F2JobChecks {
 
     /** SPEC §27.2 AC-32-NEEDS ⓐ~ⓞ. 실패는 즉시 FAIL, 배포 관측이 없는 사례가 하나라도 있으면 끝에 NOT_RUN 이다. */
     private void needs() {
-        var unobserved = new ArrayList<String>();
-        accepted("a", "INC", List.of("S", "H"), List.of("S", "H"), List.of(), false, unobserved);
-        accepted("b", "INC", List.of("H", "S"), List.of("S", "H"), List.of(), false, unobserved);
-        accepted("c", "INC", List.of("C"), List.of("H", "N", "I", "C"), List.of("H", "N", "I"), false, unobserved);
-        accepted("d", "KQ", List.of("R"), List.of("N", "R"), List.of("N"), false, unobserved);
-        accepted("e", "LQ", List.of("N"), List.of("S", "N"), List.of("S"), false, unobserved);
-        String base = "{\"t\":\"INC\",\"eqp\":\"EQP-001\",\"from\":null,\"to\":null,\"qRef\":null";
-        rejected("f", base + "}", "SCHEMA_KEYS_INVALID");
-        rejected("g", base + ",\"n\":[\"S\",\"H\"],\"a\":\"D\",\"tool\":\"tc.logs.search\"}", "SCHEMA_KEYS_INVALID");
-        rejected("h", base + ",\"n\":[\"S\",\"H\"],\"a\":\"D\",\"scope\":\"WM\"}", "SCHEMA_KEYS_INVALID");
-        rejected("i", wire("INC", "EQP-001", List.of("tc.logs.search"), "B"), "ENUM_INVALID");
-        rejected("j", wire("INC", "EQP-001", List.of("S", "S"), "B"), "FORMAT_INVALID");
-        rejected("k", wire("GQ", "EQP-001", List.of("N"), "B"), "FORMAT_INVALID");
-        rejected("l", wire("KQ", "EQP-001", List.of(), "B"), "FORMAT_INVALID");
-        rejected("m", wire("INC", "EQP-001", List.of("S"), "X"), "ENUM_INVALID");
-        accepted("n", "INC", List.of("S", "H"), List.of("S", "H"), List.of(), true, unobserved);
-        maximumWire(unobserved);
-        if (!unobserved.isEmpty()) throw new TestAbortedException("NEEDS_CASE_UNOBSERVED_" + String.join("", unobserved));
-    }
-    /** 정규화 결과는 상세 요청(a=D)의 구조화 보고 표 행(근거 코드·서버 보완)으로만 관측한다. ⓑ~ⓔ 의 a 는 SPEC 이 정하지 않아 관측 가능한 D 로 둔다. */
-    private void accepted(String code, String t, List<String> wire, List<String> expected, List<String> added, boolean injected, List<String> unobserved) {
-        Map<String,Object> body = new LinkedHashMap<>(window(Duration.ofMinutes(30), false));
-        if (injected) { var context = new LinkedHashMap<String,Object>(castMap(body.get("context"))); context.put("evidenceNeeds", List.of("I")); body.put("context", context); body.put("evidenceNeeds", List.of("I")); }
-        var job = scripted("needs-" + code, "EQP-001 진행이 멈췄어", body, List.of(classify(wire(t, "EQP-001", wire, "D")), compose("확인된 자료를 정리했다[e1].")), List.of());
-        require(watch(job, "CLASSIFY", QUESTION) == 1, "F2_NEEDS_RETRY_" + code);
-        if (injected) require(oracle.toolRows(job.id()).stream().noneMatch(row -> row.capabilityId().equals("tc.git.searchCode")), "F2_NEEDS_INJECTED_" + code);
-        var table = reportTable(payload(job));
-        if (table.isEmpty()) {
-            require(payload(job).path("blocks").isEmpty() && payload(job).path("evidence").isEmpty(), "F2_NEEDS_REPORT_MISSING_" + code);
-            unobserved.add(code); return;
+        for(int count=0;count<=4;count++){
+            var node=(ObjectNode)parse(wire("LQ","EQP-001",List.of(),"B"));var selected=node.putArray("toolCalls");for(int i=0;i<count;i++)selected.addObject().put("toolId","tc.eqp.getOperationalSnapshot").set("arguments",CanonicalJson.MAPPER.valueToTree(Map.of("eqp","EQP-001")));
+            var job=scripted("calls-"+count,"EQP-001 상태",window(Duration.ofMinutes(30),false),List.of(classify(node.toString()),compose("자료를 확인했다.")),List.of());
+            require(watch(job,"CLASSIFY",QUESTION)==1,"F2_CLASSIFY_SINGLE_CALL");require(oracle.toolRows(job.id()).size()==Math.min(count,3),"F2_EXECUTION_LIST_COUNT");if(count==4)require(payload(job).path("trace").toString().contains("TOOL_LIMIT_REACHED"),"F2_TOOL_LIMIT_TRACE");
         }
-        var labels = new ArrayList<String>(); var server = new ArrayList<String>();
-        for (var row : table.get().path("rows")) { labels.add(row.path("evidence").asText()); if (row.path("serverAdded").asBoolean()) server.add(row.path("evidence").asText()); }
-        require(labels.equals(expected.stream().map(NEED_LABELS::get).toList()), "F2_NEEDS_BOUND_" + code);
-        require(server.equals(added.stream().map(NEED_LABELS::get).toList()), "F2_NEEDS_SERVER_ADDED_" + code);
-    }
-    private void rejected(String code, String content, String reason) {
-        var job = scripted("needs-" + code, "EQP-001 진행이 멈췄어", window(Duration.ofMinutes(30), false), List.of(classify(content), classify(content)), List.of("오류: " + reason + ")"));
-        failed(job, "PLAN_INVALID");
-        require(watch(job, "CLASSIFY", QUESTION) == 2 && watch(job, "CLASSIFY", 1) == 1, "F2_NEEDS_RETRY_REASON_" + code);
-        require(oracle.toolRows(job.id()).isEmpty() && watch(job, "COMPOSER", QUESTION) == 0, "F2_NEEDS_REJECTED_PROCEEDED_" + code);
-    }
-    /** ⓞ: pin tokenizer 로 센 최대 wire 답변 토큰(하네스 계수)과 배포 예산 assert 통과(분류 재시도 0·예산 초과 0)를 함께 본다. */
-    private void maximumWire(List<String> unobserved) {
-        String eqp = "설비\"경계\\" + "가".repeat(54) + "EQP0";
-        var node = CanonicalJson.MAPPER.createObjectNode().put("t", "INC").put("eqp", eqp).put("from", "2026-10-03T00:00:00.123456789+09:00").put("to", "2026-10-04T00:00:00.123456789+09:00").put("qRef", "Q1");
-        var codes = node.putArray("n"); for (String need : List.of("S", "H", "N", "I", "C", "R")) codes.add(need);
-        node.put("a", "D");
-        String content = node.toString();
-        var counted = tokenCount.apply(content);
-        if (counted.isEmpty()) { unobserved.add("o"); return; }
-        int answer = counted.get();
-        var budget = TokenBudgetPolicy.current().budget(CallType.CLASSIFY);
-        require(answer <= 768 && budget.answerLimit() == 768 && budget.requestMaxTokens() == 2_048, "F2_NEEDS_MAX_WIRE_BUDGET");
-        String question = "\"" + "검".repeat(256) + "\" " + "설비 진행이 멈춘 원인과 정상 절차 비교, 조치까지 보고서로 정리해줘".repeat(4);
-        var job = scripted("needs-o", question, window(Duration.ofMinutes(30), false), List.of(reply("CLASSIFY", content, "stop", answer), compose("확인된 자료를 정리했다.")), List.of());
-        require(watch(job, "CLASSIFY", QUESTION) == 1, "F2_NEEDS_MAX_WIRE_RETRIED");
-        require(errorCode(job).filter(Set.of("PLAN_INVALID", "INPUT_BUDGET_EXCEEDED", "LLM_UNAVAILABLE")::contains).isEmpty(), "F2_NEEDS_MAX_WIRE_REJECTED");
+        var invalid=(ObjectNode)parse(wire("LQ","EQP-001",List.of(),"B"));invalid.put("systemId","WM");var job=scripted("calls-invalid","EQP-001 상태",window(Duration.ofMinutes(30),false),List.of(classify(invalid.toString())),List.of());failed(job,"CONTRACT_INVALID");require(watch(job,"CLASSIFY",QUESTION)==1&&oracle.toolRows(job.id()).isEmpty(),"F2_EXECUTION_LIST_REJECTED");
     }
 
     // ── AC-35-EGRESS ─────────────────────────────────────────────────────────────────────────────
@@ -373,8 +314,8 @@ public final class F2JobChecks {
         for (var row : rows.get()) if (row.path("callType").asText().equals(callType) && row.path("sentinelIndex").asInt() == sentinelIndex) found = row.path("matchCount").asInt();
         return found;
     }
-    private long calls(String operation) { return hooks.get("/__test/tcmock/calls").path(operation).asLong(); }
-    private long businessReads() { var calls = hooks.get("/__test/tcmock/calls"); return BUSINESS_READS.stream().mapToLong(operation -> calls.path(operation).asLong()).sum(); }
+    private long calls(String operation) { return hooks.get("/__fixture/calls").path(operation).asLong(); }
+    private long businessReads() { var calls = hooks.get("/__fixture/calls"); return BUSINESS_READS.stream().mapToLong(operation -> calls.path(operation).asLong()).sum(); }
     private Map<String,Object> window(Duration length, boolean resource) {
         Instant now = hooks.clockNow().truncatedTo(ChronoUnit.SECONDS);
         var body = new LinkedHashMap<String,Object>(context(now, now.minus(length), now));
@@ -394,17 +335,10 @@ public final class F2JobChecks {
         var value = payload(job).path("clarification"); var actual = new ArrayList<String>(); value.path("fields").forEach(field -> actual.add(field.asText()));
         require(value.path("reason").asText().equals(reason) && actual.equals(fields), "F2_CLARIFICATION_" + reason);
     }
-    static Optional<JsonNode> reportTable(JsonNode payload) {
-        for (var block : payload.path("blocks")) {
-            var columns = new ArrayList<String>(); block.path("content").path("columns").forEach(column -> columns.add(column.asText()));
-            if (block.path("type").asText().equals("table") && columns.equals(REPORT_COLUMNS)) return Optional.of(block.path("content"));
-        }
-        return Optional.empty();
-    }
     static String wire(String t, String eqp, List<String> needs, String answerMode) {
-        var node = CanonicalJson.MAPPER.createObjectNode().put("t", t); if (eqp == null) node.putNull("eqp"); else node.put("eqp", eqp);
-        node.putNull("from"); node.putNull("to"); node.putNull("qRef");
-        var codes = node.putArray("n"); needs.forEach(codes::add); node.put("a", answerMode);
+        String task=switch(t){case "LQ"->"LIVE_QUERY";case "INC"->"INCIDENT_ANALYSIS";case "KQ"->"KNOWLEDGE_QUERY";case "GQ"->"GENERAL_QUERY";case "UNS"->"UNSUPPORTED_REQUEST";default->t;};
+        var node=CanonicalJson.MAPPER.createObjectNode().put("taskType",task).put("searchQuery",eqp==null?"질문":eqp).put("retryQuery",eqp==null?"질문 보완":eqp+" 보완");node.putNull("timeWindow");var calls=node.putArray("toolCalls");var targets=node.putArray("targets");
+        if(eqp!=null){targets.addObject().put("type","EQP").put("ref",eqp);if(t.equals("LQ")||t.equals("INC"))calls.addObject().put("toolId","tc.eqp.getOperationalSnapshot").set("arguments",CanonicalJson.MAPPER.valueToTree(Map.of("eqp",eqp)));}
         return node.toString();
     }
     static ObjectNode classify(String content) { return reply("CLASSIFY", content, "stop", 40); }

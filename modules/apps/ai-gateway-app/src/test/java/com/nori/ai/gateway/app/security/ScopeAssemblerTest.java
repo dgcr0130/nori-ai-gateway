@@ -27,7 +27,7 @@ class ScopeAssemblerTest {
         var scope=new ScopeAssembler().forWorker(job);
         var workflow=new WorkflowDefinition(OwnerSystem.TC,TaskType.GENERAL_QUERY,List.of(),
             WorkflowDefinition.AnswerSource.REGISTRY_VIEW,null);
-        var registry=new CapabilityRegistry(List.of(),List.of(workflow),Set.of(),new ContractVersionPolicy());
+        var registry=new CapabilityRegistry(List.of(),Set.of(),new ContractVersionPolicy());
         var plan=new PlanEnvelope(job.jobId(),job.conversationId(),"질문",List.of(),TaskType.GENERAL_QUERY,List.of());
         for(long delta:new long[]{-1,0,1}){
             Instant now=created.plusSeconds(180).plusNanos(delta);

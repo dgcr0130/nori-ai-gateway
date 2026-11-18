@@ -38,7 +38,7 @@ final class ComposerInputs {
         }
         for (var stage : outcome.stages()) {
             var result = stage.result();
-            var manifest = registry.find(result.capabilityId()).orElse(null);
+            var manifest = registry.find(job.scope(),result.capabilityId()).orElse(null);
             if (manifest == null || result.blocks().isEmpty()) continue;
             var contents = SchemaContracts.JSON.createArrayNode();
             var required = SchemaContracts.JSON.createArrayNode();

@@ -17,17 +17,22 @@ public final class HookClient {
     }
     private final HttpClient http;
     private final URI base;
-    private final String hookToken;
+    private final String hookToken;private final URI backend;private final String fixtureToken;
 
-    public HookClient(HttpClient http, URI base, String hookToken) { this.http = http; this.base = base; this.hookToken = hookToken; }
+    public HookClient(HttpClient http, URI base, String hookToken) {this(http,base,hookToken,base,hookToken);}
+    public HookClient(HttpClient http,URI base,String hookToken,URI backend,String fixtureToken){this.http=http;this.base=base;this.hookToken=hookToken;this.backend=backend;this.fixtureToken=fixtureToken;}
 
     public Instant clockNow() { return Instant.parse(call("GET", "/__test/clock", null, 200).path("now").asText()); }
-    public void reset() { call("POST", "/__test/reset", null, 204); }
+    public void reset() {
+        call("POST", "/__test/reset", null, 204);
+        // Gateway가 진행 중 작업의 초기화를 거절하면 외부 대역도 보존합니다.
+        call("POST", "/__fixture/reset", Map.of(), 204);
+    }
     public void arm(String actorSub, String requestKey, JsonNode scenario) {
         call("POST", "/__test/arm", Map.of("actorSub", actorSub, "requestKey", requestKey, "scenario", scenario), 204);
     }
     /** Mock 위임 등록. 원문 {@code dlg} 는 요청 본문에만 있고 반환·기록하지 않는다. */
-    public void registerDelegation(String sub, String dlg) { call("POST", "/__test/tcmock/delegations", Map.of("sub", sub, "dlg", dlg), 204); }
+    public void registerDelegation(String sub, String dlg) { call("POST", "/__fixture/delegations", Map.of("sub", sub, "dlg", dlg), 204); }
     public JsonNode clock(Map<String,Object> operation) { return call("POST", "/__test/clock", operation, 200); }
     public JsonNode post(String path, Map<String,Object> body, int expected) { return call("POST", path, body, expected); }
     public JsonNode get(String path) { return call("GET", path, null, 200); }
@@ -39,8 +44,8 @@ public final class HookClient {
 
     private JsonNode call(String method, String path, Object body, int expected) {
         try {
-            var request = HttpRequest.newBuilder(base.resolve(path)).timeout(Duration.ofSeconds(15)).header("X-AIGW-Hook-Token", hookToken)
-                .header("Content-Type", "application/json")
+            var request = HttpRequest.newBuilder((path.startsWith("/__fixture/")?backend:base).resolve(path)).timeout(Duration.ofSeconds(15)).header("X-AIGW-Hook-Token", hookToken)
+                .header("Authorization",path.startsWith("/__fixture/")?"Bearer "+fixtureToken:"Bearer "+hookToken).header("Content-Type", "application/json")
                 .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofByteArray(CanonicalJson.MAPPER.writeValueAsBytes(body)));
             var response = http.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
             if (response.statusCode() != expected) throw new HookFailure(path, response.statusCode());

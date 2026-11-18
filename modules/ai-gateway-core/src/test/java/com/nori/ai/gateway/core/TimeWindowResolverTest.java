@@ -12,7 +12,7 @@ import static com.nori.ai.gateway.core.DomainFixtures.*;
 
 class TimeWindowResolverTest {
     private final TimeWindowResolver resolver=new TimeWindowResolver();
-    private final WorkflowDefinition live=workflows().stream().filter(w->w.taskType()==TaskType.LIVE_QUERY).findFirst().orElseThrow();
+    private final WorkflowDefinition live=new WorkflowDefinition(com.nori.ai.gateway.core.scope.OwnerSystem.TC,TaskType.LIVE_QUERY,List.of(),WorkflowDefinition.AnswerSource.TOOL_RESULTS,java.time.Duration.ofHours(1));
     private Map<String,Object> window(){return Map.of("from","2026-11-04T09:00:00.123456789+09:00","to","2026-11-04T10:00:00.987654321+09:00");}
     private Map<String,Object> context(){return Map.of("timezone","Asia/Seoul","referenceTime","2026-11-05T09:00+09:00");}
     @Test void currentWindowAndExplicitExtractionPreserveInstantPrecisionAndNeverReadPrevious() {
@@ -26,7 +26,7 @@ class TimeWindowResolverTest {
         var calls=new AtomicInteger();var result=resolver.resolve(Map.of(),context(),()->{calls.incrementAndGet();return Optional.of(window());},live);
         assertThat(calls).hasValue(1);assertThat(result.values()).isEqualTo(window());
         assertThatThrownBy(()->resolver.resolve(Map.of(),context(),Optional::empty,live)).isInstanceOf(TimeWindowResolver.Failure.class).extracting(f->((TimeWindowResolver.Failure)f).code()).isEqualTo(ErrorCode.TIME_WINDOW_REQUIRED);
-        var general=workflows().stream().filter(w->w.taskType()==TaskType.GENERAL_QUERY).findFirst().orElseThrow();resolver.resolve(Map.of(),Map.of(),()->{throw new AssertionError();},general);
+        var general=new WorkflowDefinition(com.nori.ai.gateway.core.scope.OwnerSystem.TC,TaskType.GENERAL_QUERY,List.of(),WorkflowDefinition.AnswerSource.REGISTRY_VIEW,null);resolver.resolve(Map.of(),Map.of(),()->{throw new AssertionError();},general);
     }
     @Test void invalidDatesNanoOverflowFutureAndReversedInputNeverFallback() {
         for(Map<String,Object> value:List.<Map<String,Object>>of(Map.of("from","2026-02-30T00:00","to","2026-03-01T00:00"),Map.of("from","2026-11-04T00:00:00.1234567890Z","to","2026-11-04T01:00Z"),Map.of("from","2026-11-06T00:00Z","to","2026-11-06T01:00Z"),Map.of("from","2026-11-04T02:00Z","to","2026-11-04T01:00Z"))) {

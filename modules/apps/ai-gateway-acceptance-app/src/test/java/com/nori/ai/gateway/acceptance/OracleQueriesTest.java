@@ -15,7 +15,7 @@ class OracleQueriesTest {
                 return java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),new Class<?>[]{ResultSet.class},new java.lang.reflect.InvocationHandler(){String[] row;public Object invoke(Object rp,java.lang.reflect.Method rm,Object[] ra){return switch(rm.getName()){case "next"->{boolean has=iterator.hasNext();if(has)row=iterator.next();yield has;}case "getString"->row[(int)ra[0]-1];default->null;};}});
             });
         }));
-        var report=queries.residueScan(Set.of("credential-sentinel"));assertThat(report.matches()).extracting(com.nori.ai.gateway.tcmock.verify.ResidueScanner.Match::location).contains("cache_entry:1","job:terminal");assertThat(report.toString()).doesNotContain("credential-sentinel");
+        var report=queries.residueScan(Set.of("credential-sentinel"));assertThat(report.matches()).extracting(com.nori.ai.gateway.integration.fixtures.verify.ResidueScanner.Match::location).contains("cache_entry:1","job:terminal");assertThat(report.toString()).doesNotContain("credential-sentinel");
         assertThat(OracleQueries.Query.RESIDUE_CACHE_ENTRY.sql).contains("row_number() OVER (ORDER BY key_digest, owner_system, actor_ref, pdg)");
     }
     /** SQL 은 enum 상수뿐이고 공개 API 어디에도 SQL 문자열 입력이 없다. */
@@ -72,7 +72,7 @@ class OracleQueriesTest {
             });
             default -> null;
         });
-        for (String app : com.nori.ai.gateway.integration.source.TcSourcePolicy.APPS) assertThat(new OracleQueries(capturing).retentionProbe(app)).isEmpty();
-        assertThat(bound).containsExactly("sources://TC/logs/tc-gateway", "sources://TC/logs/tc-business", "sources://TC/logs/tc-ui-backend", "sources://TC/logs/tc-ui-front");
+        for (String app : F1Fixture.APPS) assertThat(new OracleQueries(capturing).retentionProbe(app)).isEmpty();
+        assertThat(bound).containsExactly("sources://TC/logs.search/tc/tc-gateway", "sources://TC/logs.search/tc/tc-business", "sources://TC/logs.search/tc/tc-ui-backend", "sources://TC/logs.search/tc/tc-ui-front");
     }
 }

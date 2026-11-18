@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
 class InputLimitsNotNarrowerTest {
     private static final Path ROOT = Path.of(System.getProperty("aigw.rootDir"));
     private final ManifestLoader loader = new ManifestLoader();
-    private final List<CapabilityManifest> manifests = loader.loadClasspath("manifests/tc/index.json");
+    private final List<CapabilityManifest> manifests = loader.loadClasspath("fixtures/tools/index.json");
     private final InputValidator validator = new InputValidator();
     private JsonNode args(String q) { return SchemaContracts.JSON.createObjectNode().put("eqp", "설비").put("q", q); }
     @Test void allActualManifestLimitsMatchProtectedConfirmedFieldsAndSchemas() throws Exception {

@@ -84,7 +84,7 @@ public final class AuditFieldAllowlist {
     }
     /** Tool은 등록 Manifest의 canonical 값이고 bound owner의 것이어야 한다. sourceRef는 그 Manifest의 값만 허용한다. */
     private void requireTool(AuditEvent event, boolean sourceAllowed) {
-        var manifest = registry.find(event.toolId()).orElseThrow(() -> rejected("toolId"));
+        var manifest = registry.find(event.scope(),event.toolId()).orElseThrow(() -> rejected("toolId"));
         if (!manifest.toolId().equals(event.toolId()) || !java.util.Objects.equals(manifest.ownerSystem(),event.scope().boundSystem())) throw rejected("toolId");
         if (event.sourceRef() != null && (!sourceAllowed || !manifest.sourceAllowlistRef().equals(event.sourceRef()))) throw rejected("sourceRef");
     }

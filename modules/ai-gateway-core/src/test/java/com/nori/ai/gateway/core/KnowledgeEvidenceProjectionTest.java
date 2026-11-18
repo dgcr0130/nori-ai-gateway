@@ -8,7 +8,7 @@ import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.scope.*;
 import com.nori.ai.gateway.core.seam.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+
 import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
@@ -44,7 +44,7 @@ class KnowledgeEvidenceProjectionTest {
     private void assertRejected(ToolResultEnvelope raw) {
         var fixture=new WorkflowAuthorizationPreparationTest.Fixture();var versions=new ContractVersionPolicy();var registry=registry(manifest,versions);var validator=validator(registry,new PlanInjectionSeam.NoOp());
         var prepared=(PlanValidator.Prepared)validator.prepare(plan(step()),scope,fixture.resolver);var attempt=prepared.newAttempt(step(),scope,StepAttempt.Purpose.DISPATCH);
-        var authorization=new SourceAuthorizationStep(new SourcePermissionMap(Map.of(manifest.sourceAllowlistRef(),new SourcePermissionMap.Entry(Set.of("EQP_READ"),false))),(call,required)->new TcSourceAuthorizationPort.Allowed(required,"b".repeat(64)));
+        var authorization=new SourceAuthorizationStep(new SourcePermissionMap(Map.of(manifest.sourceAllowlistRef(),new SourcePermissionMap.Entry(Set.of("EQP_READ"),false))),(source,scope)->false);
         ToolExecutor executor=new ToolExecutor(){public ToolKind toolKind(){return ToolKind.KNOWLEDGE;}public ToolResultEnvelope execute(PlanStep step,CapabilityManifest actual,VerifiedSystemScope scope,ExecutionContext context){return raw;}};
         var dispatcher=new ToolDispatcher(registry,validator,new ToolResultContractValidator(versions),new DispatchInjectionSeam.NoOp(),List.of(executor),CLOCK);
         var outcome=(ToolDispatcher.Returned)dispatcher.dispatchCurrent(prepared,attempt,scope,(SourceAuthorizationStep.StepGrant)authorization.authorizeStep(attempt,scope,fixture.resolver.delegatedCall()),new ExecutionContext(fixture.resolver,ignored->{}));

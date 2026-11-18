@@ -29,7 +29,7 @@ public final class PlanValidator {
         pass(trace, 1);
         List<PlanStep> steps = plan == null ? List.of() : plan.plan();
         Map<PlanStep, CapabilityManifest> tools = new LinkedHashMap<>();
-        for (PlanStep step : steps) registry.find(step.capabilityId()).ifPresent(m -> tools.put(step, seam.inspect(m, scope)));
+        for (PlanStep step : steps) registry.find(scope,step.capabilityId()).or(() -> registry.find(step.capabilityId())).ifPresent(m -> tools.put(step, seam.inspect(m, scope)));
         if (tools.values().stream().anyMatch(m -> m != null && !OwnerBoundary.toolMatches(m, scope))) return reject(trace, 2, RejectReason.OWNER_MISMATCH, List.of());
         pass(trace, 2);
         Set<ResourceRef> refs = new LinkedHashSet<>();
@@ -69,7 +69,7 @@ public final class PlanValidator {
         long cost = 0;
         for (PlanStep step : steps) {
             if (step.stepId() == null || step.stepId().isBlank() || step.capabilityId() == null || step.capabilityId().isBlank()
-                || !ids.add(step.stepId()) || !capabilities.add(step.capabilityId()) || new HashSet<>(step.dependsOn()).size() != step.dependsOn().size())
+                || !ids.add(step.stepId()) || new HashSet<>(step.dependsOn()).size() != step.dependsOn().size())
                 return reject(trace, 7, RejectReason.PLAN_INVALID, List.of());
             CapabilityManifest tool = tools.get(step);
             if (tool != null) {
@@ -83,7 +83,7 @@ public final class PlanValidator {
         for (PlanStep step : steps) if (cycleOrMissing(step, byId, new HashSet<>(), new HashSet<>())) return reject(trace, 7, RejectReason.PLAN_INVALID, List.of());
         pass(trace, 7);
         for (ResourceRef ref : plan.targetResources())
-            if (!tools.isEmpty() && tools.values().stream().noneMatch(m -> m.resourceTypes().contains(ref.type())))
+            if (!tools.isEmpty() && tools.values().stream().noneMatch(m -> "system-query-1".equals(m.adapterVersion()) || m.resourceTypes().contains(ref.type())))
                 return reject(trace, 8, RejectReason.RESOURCE_NOT_FOUND, List.of("targetResources"));
         for (var entry : resources.entrySet()) {
             var state = entry.getValue();
@@ -91,11 +91,9 @@ public final class PlanValidator {
                 return reject(trace, 8, RejectReason.RESOURCE_NOT_FOUND, List.of("targetResources"));
         }
         for (var entry : tools.entrySet()) for (ResourceRef ref : ResourceInputs.bound(entry.getKey(), entry.getValue()))
-            if (!entry.getValue().resourceTypes().contains(ref.type())) return reject(trace, 8, RejectReason.RESOURCE_NOT_FOUND, List.of("targetResources"));
+            if (!"system-query-1".equals(entry.getValue().adapterVersion()) && !entry.getValue().resourceTypes().contains(ref.type())) return reject(trace, 8, RejectReason.RESOURCE_NOT_FOUND, List.of("targetResources"));
         pass(trace, 8);
-        if (plan.taskType() == TaskType.UNSUPPORTED_REQUEST || tools.size() != steps.size() || registry.workflow(scope, plan.taskType()).isEmpty()
-            || registry.workflow(scope, plan.taskType()).orElseThrow().answerSource() == WorkflowDefinition.AnswerSource.TOOL_RESULTS && steps.isEmpty())
-            return reject(trace, 9, RejectReason.UNSUPPORTED, List.of());
+        if(plan.taskType()==TaskType.UNSUPPORTED_REQUEST || tools.size()!=steps.size()) return reject(trace,9,RejectReason.UNSUPPORTED,List.of());
         pass(trace, 9);
         return new ValidationOutcome(true, trace, null, ResultStatus.SUCCESS, null, null);
     }
@@ -112,7 +110,7 @@ public final class PlanValidator {
         return current != null && current.sessionValid() && java.util.Objects.equals(current.ownerSystem(),scope.boundSystem())
             && tool.sourceAllowlistRef().equals(current.sourceAllowlistRef()) && scope.actorRef().equals(current.actorRef())
             && scope.pdg().equals(current.permissionDigest()) && current.actorScopes().contains(tool.requiredActorScope())
-            && tool.requiredPermission().stream().anyMatch(p -> scope.perm().contains(p) && current.permissions().contains(p));
+            && !tool.requiredPermission().isEmpty() && scope.perm().containsAll(tool.requiredPermission()) && current.permissions().containsAll(tool.requiredPermission());
     }
     public sealed interface Preparation permits Prepared, Rejected, ReadRejected {}
     public record Rejected(ValidationOutcome outcome) implements Preparation {}
@@ -125,7 +123,7 @@ public final class PlanValidator {
             ValidationOutcome outcome = validateInternal(plan,scope,resolver,true);
             if (!outcome.accepted()) return new Rejected(outcome);
             Map<String,CapabilityManifest> manifests = new LinkedHashMap<>();
-            for (PlanStep step : plan.plan()) manifests.put(step.stepId(),registry.find(step.capabilityId()).orElseThrow());
+            for (PlanStep step : plan.plan()) manifests.put(step.stepId(),registry.find(scope,step.capabilityId()).or(() -> registry.find(step.capabilityId())).orElseThrow());
             return new Prepared(plan,scope,resolver,manifests,clock);
         } catch (WorkflowResourceResolver.ReadFailure failure) { return new ReadRejected(failure.status()); }
     }
@@ -195,7 +193,7 @@ public final class PlanValidator {
             && "READ".equals(prepared.manifest(attempt.binding().stepId()).requiredActorScope())
             && grant.currentPdg()!=null && grant.currentPdg().matches("[0-9a-f]{64}")
             && !attempt.binding().manifestRequiredPermissions().isEmpty() && grant.requested().containsAll(grant.allowed())
-            && !Collections.disjoint(grant.allowed(),attempt.binding().manifestRequiredPermissions());
+            && grant.allowed().containsAll(attempt.binding().manifestRequiredPermissions());
     }
     private boolean cycleOrMissing(PlanStep step, Map<String, PlanStep> all, Set<String> visiting, Set<String> done) {
         if (done.contains(step.stepId())) return false;

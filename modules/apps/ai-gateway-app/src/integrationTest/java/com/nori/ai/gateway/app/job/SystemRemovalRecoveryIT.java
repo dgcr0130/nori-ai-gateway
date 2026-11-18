@@ -18,6 +18,6 @@ class SystemRemovalRecoveryIT extends WorkerRestartProcessSupport {
         assertThat(jdbc.sql("SELECT count(*) FROM gw.cache_entry").query(Integer.class).single()).isZero();
         assertThat(jdbc.sql("SELECT count(*) FROM gw.job_event WHERE type='job.failed' AND NOT external_suppressed").query(Integer.class).single()).isEqualTo(2);
         for(String id:jdbc.sql("SELECT id FROM gw.job").query(String.class).list()) JobAuditLineage.assertLineage(jdbc,id,true);
-        assertThat(json.readTree(send("/__test/harness-observations","GET",null,null,null,false).body()).get("authorization").asInt()).isZero();
+        assertThat(json.readTree(send("/__test/harness-observations","GET",null,null,null,false).body()).get("backendQueries").asInt()).isZero();
     }
 }

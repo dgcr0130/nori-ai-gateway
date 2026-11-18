@@ -31,7 +31,7 @@ public final class ToolDispatcher {
             PlanValidator.Prepared prepared, com.nori.ai.gateway.core.authz.StepAttempt attempt,
             com.nori.ai.gateway.core.authz.SourceAuthorizationStep.StepGrant grant, InvocationState invocation) {
         Objects.requireNonNull(step); Objects.requireNonNull(scope); Objects.requireNonNull(context);
-        CapabilityManifest registered = registry.find(step.capabilityId()).orElse(null);
+        CapabilityManifest registered = registry.find(scope,step.capabilityId()).or(() -> registry.find(step.capabilityId())).orElse(null);
         // 로컬에서 거부할 수 있는 인증·소유권 오류는 Backend 조회와 시험 주입보다 먼저 차단합니다.
         if (!scope.validAt(clock.instant())) {
             if (registered == null) return unsupported(step, scope);
@@ -61,7 +61,7 @@ public final class ToolDispatcher {
             return reject(step, scope, registered, context, invalid.reason(), ResultStatus.FAILED, error,
                 invalid.fields().isEmpty() ? null : new Clarification(error, invalid.fields()));
         }
-        if (states.size() > tool.maxResourcesPerCall() || target.resources().stream().anyMatch(r -> r == null || !r.exists() || !tool.resourceTypes().contains(r.type())))
+        if (states.size() > tool.maxResourcesPerCall() || target.resources().stream().anyMatch(r -> r == null || !r.exists() || !"system-query-1".equals(tool.adapterVersion())&&!tool.resourceTypes().contains(r.type())))
             return reject(step, scope, registered, context, RejectReason.RESOURCE_NOT_FOUND, ResultStatus.FAILED, ErrorCode.RESOURCE_NOT_FOUND,
                 new Clarification(ErrorCode.RESOURCE_NOT_FOUND, List.of("targetResources")));
         ToolExecutor executor = executors.get(tool.toolKind());

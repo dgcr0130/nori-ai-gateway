@@ -51,8 +51,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 
 /**
- * 정본 Source 선언(`config/sources/tc-sources-v1.json`)을 한 번 검증한 immutable snapshot으로 실제 Source Bean을 조립한다.
- * 운영 YAML/env가 주소·검증 상태·GitLab 범위를 덮어쓰는 경로는 없다. 각 Source는 literal `serviceTargetVerified=true`이고
+ * 정본 Source 선언(`config/sources/shared-v1.json`)을 한 번 검증한 immutable snapshot으로 실제 Source Bean을 조립한다.
+ * 전송 주소·검증 상태는 이 선언만 사용하고, 조회 위치·포함 권한은 시스템 config를 사용한다. 각 Source는 literal `serviceTargetVerified=true`이고
  * 같은 snapshot의 주소·필수 token 경로가 갖춰진 경우에만 Bean을 만든다. 필수 값의 부재·false·mount 미준비는 Bean 0이고,
  * 제공된 값의 타입·URI·경로 형식 오류만 고정 기동 오류다.
  */
@@ -60,7 +60,7 @@ import tools.jackson.databind.JsonNode;
 @EnableConfigurationProperties(LokiProperties.class)
 @Import({SourceConnectorConfiguration.FactoryConfiguration.class, SourceConnectorConfiguration.Registrar.class})
 public class SourceConnectorConfiguration {
-    public static final String RESOURCE = "config/sources/tc-sources-v1.json";
+    public static final String RESOURCE = "config/sources/shared-v1.json";
 
     @Bean SourceRetentionProbeRepository sourceRetentionProbeRepository(JdbcClient jdbc, TransactionTemplate transactions) {
         return new SourceRetentionProbeRepository(jdbc, transactions);
@@ -87,7 +87,7 @@ public class SourceConnectorConfiguration {
         public static SourceSnapshot parse(String json) {
             JsonNode root;
             GitLabSourcePolicy policy;
-            try { root = SchemaContracts.parse(json); policy = TcSourceAllowlist.parse(json); }
+            try { root = SchemaContracts.parse(json); policy = GitLabSourcePolicy.denyAll(); }
             catch (IllegalArgumentException failure) { throw invalid(); }
             List<GitLabSourcePolicy.Repository> repositories = new ArrayList<>();
             List<GitLabSourcePolicy.LineageEntry> lineage = new ArrayList<>();
@@ -98,8 +98,7 @@ public class SourceConnectorConfiguration {
                     entry.path("execProjectId").asLong(), entry.path("packageJobName").asString(), entry.path("sourceRepo").asString(),
                     entry.path("siblingProjectId").asLong(), entry.path("method").asString(), entry.path("approvalRef").asString()));
             } catch (RuntimeException failure) { throw invalid(); }
-            // TcSourceAllowlist가 검증한 같은 범위만 실행 범위로 투영합니다.
-            for (var repo : repositories) if (!policy.repository(repo.sourceRepo()).equals(Optional.of(repo))) throw invalid();
+            policy = new GitLabSourcePolicy(repositories,lineage);
             return new SourceSnapshot(node(root.path("loki"), "loki", false), node(root.path("tempo"), "tempo", false),
                 node(root.path("gitlab"), "gitlab", true), policy, repositories, lineage, retentionProbe(root.path("loki").path("retentionProbe")));
         }
@@ -189,6 +188,13 @@ public class SourceConnectorConfiguration {
     @Configuration(value = FactoryConfiguration.NAME, proxyBeanMethods = false)
     public static class FactoryConfiguration {
         public static final String NAME = "sourceConnectorFactories";
+        public DirectSourceToolExecutor.GitExecutionScopes gitExecutionScopes(GatewaySystemsProperties systems,SourceSnapshot snapshot) {
+            var grouped=new LinkedHashMap<String,List<GatewaySystemsProperties.Repository>>();
+            systems.systems().values().forEach(system->system.repositories().forEach(repo->grouped.computeIfAbsent(repo.projectId(),key->new ArrayList<>()).add(repo)));
+            var repositories=new ArrayList<GitLabSourcePolicy.Repository>();
+            grouped.forEach((project,values)->repositories.add(new GitLabSourcePolicy.Repository(project,snapshot.repositories().stream().filter(repo->repo.projectId().equals(project)).map(GitLabSourcePolicy.Repository::sourceRepo).findFirst().orElse(project),values.stream().map(GatewaySystemsProperties.Repository::ref).collect(java.util.stream.Collectors.toSet()),values.stream().map(GatewaySystemsProperties.Repository::pathPrefix).collect(java.util.stream.Collectors.toSet()),"SYSTEM_CONFIG")));
+            return new DirectSourceToolExecutor.GitExecutionScopes(repositories,snapshot.deployLineage().stream().filter(entry->repositories.stream().anyMatch(repo->repo.projectId().equals(Long.toString(entry.siblingProjectId()))&&repo.sourceRepo().equals(entry.sourceRepo()))).toList());
+        }
         public SourceReadAccess sourceReadAccess(SourceAuthorizationStep authorization, Clock clock) { return new SourceReadAccess(authorization, clock); }
         public SourceObservability sourceObservability(MeterRegistry meters, OpenTelemetry openTelemetry) {
             return SourceObservability.create(meters, new SourceSpans(openTelemetry.getTracer("com.nori.ai.gateway.source")));
@@ -210,11 +216,11 @@ public class SourceConnectorConfiguration {
         }
         public LokiProbeFactory lokiProbeFactory(SourceHttpClient http) { return new LokiProbeFactory(http); }
         public TempoTraceConnector tempoTraceConnector(SourceHttpClient http, SourceReadAccess access) { return new TempoTraceConnector(http, access); }
-        public GitLabCodeConnector gitLabCodeConnector(SourceHttpClient http, SourceReadAccess access, SourceSnapshot snapshot) {
-            return new GitLabCodeConnector(http, access, snapshot.gitLabPolicy(), new GitLabReadTokenFile(snapshot.gitlab().tokenPath().orElseThrow()));
+        public GitLabCodeConnector gitLabCodeConnector(SourceHttpClient http, SourceReadAccess access, SourceSnapshot snapshot,DirectSourceToolExecutor.GitExecutionScopes scopes) {
+            return new GitLabCodeConnector(http, access, new GitLabSourcePolicy(scopes.repositories(),scopes.deployLineage()), new GitLabReadTokenFile(snapshot.gitlab().tokenPath().orElseThrow()));
         }
-        public GitLabPipelineLineageReader gitLabPipelineLineageReader(SourceHttpClient http, SourceReadAccess access, SourceSnapshot snapshot) {
-            return new GitLabPipelineLineageReader(http, access, snapshot.gitLabPolicy(), new GitLabReadTokenFile(snapshot.gitlab().tokenPath().orElseThrow()));
+        public GitLabPipelineLineageReader gitLabPipelineLineageReader(SourceHttpClient http, SourceReadAccess access, SourceSnapshot snapshot,DirectSourceToolExecutor.GitExecutionScopes scopes) {
+            return new GitLabPipelineLineageReader(http, access, new GitLabSourcePolicy(scopes.repositories(),scopes.deployLineage()), new GitLabReadTokenFile(snapshot.gitlab().tokenPath().orElseThrow()));
         }
     }
 
@@ -246,9 +252,8 @@ public class SourceConnectorConfiguration {
                 register(registry, "tempoTraceConnector", factory("tempoTraceConnector", ref("tempoSourceHttpClient"), ref("sourceReadAccess")));
             }
             if (gitlab) {
-                // 실행 범위는 같은 snapshot 목록 그대로이며 GitLab Connector가 있을 때만 의미가 있습니다.
-                register(registry, "sourceGitExecutionScopes", instance(DirectSourceToolExecutor.GitExecutionScopes.class,
-                    new DirectSourceToolExecutor.GitExecutionScopes(snapshot.repositories(), snapshot.deployLineage())));
+                // 실행 범위는 시스템 config로 조립하며 GitLab Connector가 있을 때만 의미가 있습니다.
+                register(registry, "sourceGitExecutionScopes", factory("gitExecutionScopes"));
                 register(registry, "gitlabSourceHttpClient", factory("sourceHttpClient", snapshot.gitlab(), ref("sourceObservability")));
                 register(registry, "gitLabCodeConnector", factory("gitLabCodeConnector", ref("gitlabSourceHttpClient"), ref("sourceReadAccess"), ref(SNAPSHOT)));
                 register(registry, "gitLabPipelineLineageReader", factory("gitLabPipelineLineageReader", ref("gitlabSourceHttpClient"), ref("sourceReadAccess"), ref(SNAPSHOT)));
@@ -260,10 +265,10 @@ public class SourceConnectorConfiguration {
             // 필수 Secret mount가 아직 없으면 Bean을 만들지 않고 실행 경계에서 실패하게 둡니다(파일 본문은 읽지 않음).
             return node.tokenPath().map(Files::isRegularFile).orElse(false);
         }
-        /** 네 앱의 보존 SourceId에 대해 startAt < now인 주기만 새 [startAt, now) 창을 만든다. 이전 창은 보관하지 않는다. */
+        /** 시스템 config 앱의 보존 SourceId에 대해 startAt < now인 주기만 새 [startAt, now) 창을 만든다. 이전 창은 보관하지 않는다. */
         static ProbeWindowInput probeWindows(Instant startAt) {
-            Set<String> sourceIds = Set.copyOf(TcSourcePolicy.APPS.stream().map(LokiSourcePolicy::retentionSourceId).toList());
-            return new ProbeWindowInput((sourceId, now) -> sourceIds.contains(sourceId) && startAt.isBefore(now) ? Optional.of(new TimeWindow(startAt, now)) : Optional.empty());
+
+            return new ProbeWindowInput((sourceId, now) -> sourceId.matches("sources://[^/]+/logs\\.search/[^/]+/[^/]+") && startAt.isBefore(now) ? Optional.of(new TimeWindow(startAt, now)) : Optional.empty());
         }
         private String readDeclared() {
             if (resources == null) throw invalid();

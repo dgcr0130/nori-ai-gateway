@@ -15,33 +15,33 @@ class F2JobChecksTest {
     private static List<String> types(JsonNode scenario) { var values = new ArrayList<String>(); scenario.path("llmScript").forEach(reply -> values.add(reply.path("callType").asText())); return values; }
     private static String sentinel(JsonNode scenario) { return scenario.path("promptWatch").path("sentinels").get(0).asText(); }
 
-    @Test void stubToolRejectionArmsTwoViolatingClassificationsAndFailsWhenTheBoundSystemOrToolBoundaryBreaks() throws Exception {
+    @Test void stubToolRejectionArmsOneViolatingClassificationsAndFailsWhenTheBoundSystemOrToolBoundaryBreaks() throws Exception {
         try (var fixture = new F2LocalFixture()) {
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("PLAN_INVALID").watch("CLASSIFY", 0, 2);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").watch("CLASSIFY", 0, 1);
             fixture.checks(Optional.empty()).run("AC-22-STUB-TOOL");
             var scenario = fixture.armed.values().iterator().next();
             assertThat(types(scenario)).containsExactly("CLASSIFY", "CLASSIFY");
-            assertThat(scenario.path("llmScript").get(0).path("content").asText()).contains("\"capabilityId\":\"tc.unknown.tool\"");
+            assertThat(scenario.path("llmScript").get(0).path("content").asText()).contains("\"toolId\":\"tc.unknown.tool\"");
             assertThat(fixture.questions.getFirst()).startsWith(sentinel(scenario) + " ");
-            fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().failed("PLAN_INVALID").watch("CLASSIFY", 0, 2); outcome.owner = "WM"; return outcome; };
+            fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").watch("CLASSIFY", 0, 1); outcome.owner = "WM"; return outcome; };
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-22-STUB-SYSTEM")).isInstanceOf(AssertionError.class).hasMessage("F2_BOUND_SYSTEM_CHANGED");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("PLAN_INVALID").watch("CLASSIFY", 0, 2).tool("wm.inventory.get", "SUCCESS");
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").watch("CLASSIFY", 0, 1).tool("wm.inventory.get", "SUCCESS");
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-22-STUB-SYSTEM")).hasMessage("F2_REJECTED_PLAN_EXECUTED_TOOL");
         }
     }
 
-    @Test void schemaAndLengthFailuresRequireExactlyTwoClassificationCallsAndNoComposer() throws Exception {
+    @Test void schemaAndLengthFailuresRequireExactlyOneClassificationCallsAndNoComposer() throws Exception {
         try (var fixture = new F2LocalFixture()) {
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("PLAN_INVALID").clarification("PLAN_INVALID", List.of("q")).watch("CLASSIFY", 0, 2);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").clarification("CONTRACT_INVALID", List.of()).watch("CLASSIFY", 0, 1);
             fixture.checks(Optional.empty()).run("AC-32-LENGTH");
             var length = fixture.armed.values().iterator().next().path("llmScript");
             assertThat(length.get(0).path("finishReason").asText()).isEqualTo("length"); assertThat(length.get(1)).isEqualTo(length.get(0));
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("PLAN_INVALID").clarification("PLAN_INVALID", List.of("q")).watch("CLASSIFY", 0, 1);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").clarification("CONTRACT_INVALID", List.of()).watch("CLASSIFY", 0, 2);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-SCHEMA")).hasMessage("F2_CLASSIFY_RETRY_COUNT");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("PLAN_INVALID").clarification("PLAN_INVALID", List.of("q")).watch("CLASSIFY", 0, 2).watch("COMPOSER", 0, 1);
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").clarification("CONTRACT_INVALID", List.of()).watch("CLASSIFY", 0, 1).watch("COMPOSER", 0, 1);
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-SCHEMA")).hasMessage("F2_FAILED_CLASSIFY_PROCEEDED");
-            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("LLM_UNAVAILABLE").watch("CLASSIFY", 0, 2);
-            assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-SCHEMA")).hasMessage("F2_EXPECTED_FAILED_PLAN_INVALID");
+            fixture.responder = entry -> new F2LocalFixture.Outcome().failed("LLM_UNAVAILABLE").watch("CLASSIFY", 0, 1);
+            assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-SCHEMA")).hasMessage("F2_EXPECTED_FAILED_CONTRACT_INVALID");
         }
     }
 
@@ -152,8 +152,8 @@ class F2JobChecksTest {
             fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().watch("CLASSIFY", 0, 1).watch("COMPOSER", 1, 1).watch("COMPOSER", 2, 0); outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(Map.of("type", "table", "content", Map.of("rows", rows))), "evidence", List.of())); outcome.taskTypes = List.of("GENERAL_QUERY"); return outcome; };
             fixture.checks(Optional.empty()).run("AC-22-GQ-HELP");
             var watch = fixture.armed.values().iterator().next().path("promptWatch").path("sentinels");
-            assertThat(watch.get(1).asText()).isEqualTo(F2Fixture.GQ_MANIFEST_SNIPPET); assertThat(watch.get(2).asText()).isEqualTo("tc.knowledge.search");
-            var leaked = new ArrayList<Map<String,String>>(rows); leaked.add(Map.of("capabilityId", "tc.knowledge.search"));
+            assertThat(watch.get(1).asText()).isEqualTo(F2Fixture.GQ_MANIFEST_SNIPPET); assertThat(watch.get(2).asText()).isEqualTo("document.search");
+            var leaked = new ArrayList<Map<String,String>>(rows); leaked.add(Map.of("capabilityId", "document.search"));
             fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().watch("CLASSIFY", 0, 1).watch("COMPOSER", 1, 1); outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(Map.of("type", "table", "content", Map.of("rows", leaked))))); outcome.taskTypes = List.of("GENERAL_QUERY"); return outcome; };
             assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-22-GQ-HELP")).hasMessage("F2_GQ_HELP_ROWS");
             fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().watch("CLASSIFY", 0, 1); outcome.taskTypes = List.of("GENERAL_QUERY"); outcome.calls.put("getEqpSnapshot", 1); return outcome; };
@@ -178,7 +178,7 @@ class F2JobChecksTest {
 
     @Test void liveGoldenSetIsUnarmedRecordsSamplesAndRubricTargetsAndRejectsToolsOutsideTheRegistry() throws Exception {
         try (var fixture = new F2LocalFixture()) {
-            fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().tool("tc.eqp.getOperationalSnapshot", "SUCCESS").tool("tc.logs.search", "FAILED"); outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(), "answer", "근거 범위에서 원인 후보를 정리했다[e1].")); return outcome; };
+            fixture.responder = entry -> { var outcome = new F2LocalFixture.Outcome().tool("tc.eqp.getOperationalSnapshot", "SUCCESS").tool("logs.search", "FAILED"); outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(), "answer", "근거 범위에서 원인 후보를 정리했다[e1].")); return outcome; };
             fixture.checks(Optional.empty()).run("AC-22-LIVE");
             assertThat(fixture.armed).as("LLM_LIVE 는 무장 없이 운영 전송").isEmpty();
             assertThat(F2RubricTargets.snapshot()).hasSize(3).extracting(RubricViewer.Target::fixtureId).containsExactly("f2-live-incident-comm", "f2-live-incident-dlq", "f2-live-incident-stall");

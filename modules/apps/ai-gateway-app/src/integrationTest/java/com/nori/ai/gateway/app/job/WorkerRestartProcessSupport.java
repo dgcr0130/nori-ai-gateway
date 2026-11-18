@@ -33,7 +33,7 @@ abstract class WorkerRestartProcessSupport extends StackContextSupport {
         p.put("spring.config.import","optional:file:config/ai-gateway-db.properties");
         p.putAll(Map.of("spring.datasource.url",database.jdbcUrl(),"spring.datasource.username",database.user(),"spring.datasource.password",database.passwordFor(database.user()),"server.address","127.0.0.1","server.port","0","spring.flyway.enabled","false"));
         p.putAll(Map.of("ai.gateway.capacity.max-running-jobs","1","ai.gateway.capacity.generation-concurrency","1","ai.gateway.capacity.queued-depth","4","ai.gateway.capacity.queue-wait-limit","60s","ai.gateway.capacity.job-lifetime-limit","180s","ai.gateway.inference.mode","disabled"));
-        p.putAll(Map.of("ai.gateway.test-hooks.enabled","true","ai.gateway.test-hooks.token-sha256-file",securityDirectory.resolve("hook.sha256").toString(),"ai.gateway.test-hooks.clock.mode","FROZEN","ai.gateway.test-hooks.clock.initial",at.toString(),"ai.gateway.tcmock.state-dir",state.toString()));
+        p.putAll(Map.of("ai.gateway.test-hooks.enabled","true","ai.gateway.test-hooks.token-sha256-file",securityDirectory.resolve("hook.sha256").toString(),"ai.gateway.test-hooks.clock.mode","FROZEN","ai.gateway.test-hooks.clock.initial",at.toString()));
         p.putAll(Map.of("spring.kafka.bootstrap-servers","127.0.0.1:1","spring.kafka.listener.auto-startup","false","nori.storage.s3.enabled","true","nori.storage.s3.endpoint","http://127.0.0.1:1","nori.storage.s3.bucket","p09-fixture","nori.storage.s3.access-key","p09-dummy","nori.storage.s3.secret-key","p09-dummy","nori.storage.s3.region","us-east-1"));return p;
     }
     protected Map<String,Object> launch(Instant at)throws Exception{harness.launch(state,properties(at),null);return harness.awaitReady(state);}
@@ -51,7 +51,7 @@ abstract class WorkerRestartProcessSupport extends StackContextSupport {
         if(path.startsWith("/__test"))builder.header("X-AIGW-Hook-Token",hookToken);
         else{
             var claims=new HashMap<String,Object>(Map.of("iss","tc-ui-backend","aud","ai-gateway","sys","TC","sub","actor","scope","READ","perm",List.of("MODEL_READ","EQP_READ","EQP_READ"),"pdg",P09TestPorts.PDG));if(job){String delegation=UUID.randomUUID().toString().replace("-","");harness.watch(delegation);
-                assertThat(send("/__test/tcmock/delegations","POST",json.writeValueAsString(Map.of("sub","actor","dlg",delegation)),null,null,false).statusCode()).isEqualTo(204);claims.put("dlg",delegation);}
+claims.put("dlg",delegation);}
             String assertion=signer.sign(claims,at);harness.watch(assertion);
             builder.header("Authorization","Bearer "+serviceToken).header("X-Actor-Assertion",assertion);if(key!=null)builder.header("Idempotency-Key",key);
         }

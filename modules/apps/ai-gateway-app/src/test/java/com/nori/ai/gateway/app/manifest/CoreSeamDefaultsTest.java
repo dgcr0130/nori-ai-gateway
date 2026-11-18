@@ -7,7 +7,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import static org.assertj.core.api.Assertions.*;
 
 class CoreSeamDefaultsTest {
-    private ApplicationContextRunner runner(java.time.Clock clock) {return new ApplicationContextRunner().withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("llm-fixture", com.nori.ai.gateway.integration.testing.InferenceFixtures.properties()))).withUserConfiguration(CoreBeansConfiguration.class,com.nori.ai.gateway.tcmock.TcMockModuleConfiguration.class)
+    private ApplicationContextRunner runner(java.time.Clock clock) {return new ApplicationContextRunner().withInitializer(context -> context.getEnvironment().getPropertySources().addFirst(new org.springframework.core.env.MapPropertySource("llm-fixture", com.nori.ai.gateway.integration.testing.InferenceFixtures.properties()))).withUserConfiguration(CoreBeansConfiguration.class)
+        .withBean(com.nori.ai.gateway.app.config.GatewaySystemsProperties.class,()->com.nori.ai.gateway.app.SystemConfigFixtures.systems())
         .withBean(java.time.Clock.class,()->clock)
         .withBean(com.nori.ai.gateway.core.budget.PromptTokenCounting.class,()->messages->{throw new AssertionError("빈 등록 시험에서 실제 계수가 발생했습니다");})
         .withBean(com.nori.ai.gateway.core.cache.ToolResultCache.Store.class,()->org.mockito.Mockito.mock(com.nori.ai.gateway.core.cache.ToolResultCache.Store.class))
@@ -26,7 +27,7 @@ class CoreSeamDefaultsTest {
     }
     @Test void verifyRegistersOneConcreteRegistryForBothInterfaces() {
         var clock=java.time.Clock.systemUTC();
-        runner.withUserConfiguration(com.nori.ai.gateway.app.hooks.MockHooksConfiguration.class)
+        runner.withUserConfiguration(com.nori.ai.gateway.app.hooks.VerifyHooksModuleConfiguration.class)
             .withBean(com.nori.ai.gateway.app.hooks.TestHookRegistry.class,()->new com.nori.ai.gateway.app.hooks.TestHookRegistry(clock,new com.nori.ai.gateway.app.hooks.PausePointRegistry()))
             .withInitializer(context->context.getEnvironment().setActiveProfiles("verify")).withPropertyValues("ai.gateway.test-hooks.enabled=true")
             .run(context->{assertThat(context).hasNotFailed().hasSingleBean(PlanInjectionSeam.class).hasSingleBean(DispatchInjectionSeam.class);

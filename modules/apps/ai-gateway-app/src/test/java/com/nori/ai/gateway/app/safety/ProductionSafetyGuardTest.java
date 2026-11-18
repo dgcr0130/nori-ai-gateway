@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.app.safety;
 
-import com.nori.ai.gateway.tcmock.MockTcBusinessReadAdapter;
+
 import java.nio.file.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,6 @@ class ProductionSafetyGuardTest {
         cases.put("HOOK_TOKEN_FILE_PRESENT", Map.entry("ai.gateway.test-hooks.token-sha256-file", hookFile.toString()));
         cases.put("INFERENCE_DISABLED", Map.entry("ai.gateway.inference.mode", "DISABLED"));
         cases.put("TEST_CLOCK_CONFIGURED", Map.entry("ai.gateway.test-hooks.clock.initial", "2026-11-06T00:00:00Z"));
-        cases.put("MOCK_STATE_DIR_CONFIGURED", Map.entry("ai.gateway.tcmock.state-dir", directory.toString()));
         cases.put("VERIFY_SANITIZE_RULE_SET", Map.entry("ai.gateway.sanitize.verify-rule-set", "mask-v1r"));
         for (var item : cases.entrySet()) {
             var environment = prod();
@@ -62,25 +61,19 @@ class ProductionSafetyGuardTest {
         assertThat(violations(unreadable)).containsExactly("ACTOR_JWKS_UNREADABLE");
     }
 
-    @Test void mockTcAdapterDefinitionIsRejected() throws Exception {
-        var beans = new DefaultListableBeanFactory();
-        beans.registerBeanDefinition("mockTcBusinessReadAdapter", new RootBeanDefinition(MockTcBusinessReadAdapter.class));
-        assertThat(ProductionSafetyGuard.violations(prod(), beans)).containsExactly("TC_ADAPTER_MOCK");
-    }
-
     // 차트는 설정을 환경 변수로 전달하므로 속성 이름 그대로가 아닌 relaxed 이름도 거부해야 한다.
     @Test void environmentVariableFormIsJudgedLikePropertyForm() throws Exception {
         var environment = prod();
         environment.getPropertySources().addFirst(new SystemEnvironmentPropertySource("systemEnvironment",
-            Map.of("AI_GATEWAY_TEST_HOOKS_CLOCK_MODE", "FROZEN", "AI_GATEWAY_TCMOCK_STATE_DIR", "/work/mock", "AI_GATEWAY_RECOVERY_RESTORE_MODE", "true")));
-        assertThat(violations(environment)).containsExactlyInAnyOrder("TEST_CLOCK_CONFIGURED", "MOCK_STATE_DIR_CONFIGURED", "RESTORE_MODE");
+            Map.of("AI_GATEWAY_TEST_HOOKS_CLOCK_MODE", "FROZEN", "AI_GATEWAY_RECOVERY_RESTORE_MODE", "true")));
+        assertThat(violations(environment)).containsExactlyInAnyOrder("TEST_CLOCK_CONFIGURED", "RESTORE_MODE");
     }
 
     @Test void refusalCarriesCodesOnlyAndRunsBeforeBeans() throws Exception {
         var environment = prod();
-        environment.setProperty("ai.gateway.tcmock.state-dir", directory.resolve("secret-path").toString());
+        environment.setProperty("ai.gateway.test-hooks.token-sha256-file", directory.resolve("secret-path").toString());
         var policy = ProductionSafetyGuard.productionSafetyPolicy(environment);
         assertThatThrownBy(() -> policy.postProcessBeanFactory(new DefaultListableBeanFactory()))
-            .isInstanceOf(IllegalStateException.class).hasMessageContaining("MOCK_STATE_DIR_CONFIGURED").hasMessageNotContaining("secret-path");
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("HOOK_TOKEN_FILE_CONFIGURED").hasMessageNotContaining("secret-path");
     }
 }

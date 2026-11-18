@@ -1,7 +1,7 @@
 package com.nori.ai.gateway.acceptance;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.nori.ai.gateway.tcmock.PdgCanonical;
+import com.nori.ai.gateway.integration.fixtures.PdgCanonical;
 import java.io.IOException;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -15,12 +15,11 @@ public final class F2Fixture {
     public static final String RUBRIC_RESOURCE = "rubric/f2-v1.json";
     public static final Set<String> FREE_TEXT_LEAVES = Set.of("AC-22-LIVE", "AC-22-GQ-BYPASS-DATA", "AC-22-GQ-BYPASS-XSYS");
     /** boundSystem=TC Registry 의 IMPLEMENTED Capability(Manifest index 순서). AC-22-LIVE 실행 Tool 상한. */
-    public static final List<String> IMPLEMENTED = List.of("tc.eqp.getOperationalSnapshot", "tc.commLogs.search", "tc.event.getRecent", "tc.dlq.list", "tc.logs.search", "tc.trace.search", "tc.git.searchCode", "tc.model.read");
-    /** IMPLEMENTED 중 F2 actor 권한으로 인가되는 Capability(requiredPermission 비어 있는 tc.event.getRecent 제외). AC-22-GQ-HELP 표 행 기대값. */
-    public static final List<String> GQ_HELP_ROWS = List.of("tc.eqp.getOperationalSnapshot", "tc.commLogs.search", "tc.dlq.list", "tc.logs.search", "tc.trace.search", "tc.git.searchCode", "tc.model.read");
-    /** 첫 GQ 행 Manifest description 앞 40자. Composer 입력 근거가 Manifest 문구라는 관찰 sentinel. */
-    public static final String GQ_MANIFEST_SNIPPET = "설비 운영 상태 조회 (Gateway Mock 단계 계약, 실제 TC 배";
-    public static final List<String> PLANNED = List.of("tc.knowledge.search", "tc.knowledge.getSource");
+    public static final List<String> IMPLEMENTED = List.of("tc.eqp.getOperationalSnapshot","tc.model.read","tc.dlq.list","tc.commLogs.search","logs.search","trace.search");
+    public static final List<String> GQ_HELP_ROWS = IMPLEMENTED;
+    public static final String GQ_MANIFEST_SNIPPET = "설비 운영 상태 조회";
+    public static final List<String> PLANNED = List.of();
+    public static final String ABSENT_DOCUMENT_TOOL="document.search";
     public record FreeText(String fixtureId, String leafId, String question, Optional<String> composerScript, List<Pattern> forbidden) {
         @Override public String toString() { return "F2FreeText[" + fixtureId + "]"; }
     }

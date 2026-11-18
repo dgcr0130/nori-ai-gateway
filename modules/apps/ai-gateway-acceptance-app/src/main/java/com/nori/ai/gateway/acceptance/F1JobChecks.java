@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.nori.ai.gateway.core.retention.TimeWindow;
 import com.nori.ai.gateway.integration.loki.*;
 import com.nori.ai.gateway.acceptance.loki.LokiDirectQuery;
-import com.nori.ai.gateway.tcmock.verify.ResidueScanner;
+import com.nori.ai.gateway.integration.fixtures.verify.ResidueScanner;
 import java.time.*;
 import java.util.*;
 import org.opentest4j.TestAbortedException;
@@ -34,10 +34,13 @@ public final class F1JobChecks {
             }
         } finally {if(oracle.nonTerminalJobCount()==0)hooks.clock(Map.of("op","RESUME_SYSTEM"));}
     }
-    private void scenario(String id){hooks.post("/__test/tcmock/scenario",Map.of("id",id),204);require(hooks.get("/__test/tcmock/scenario").path("id").asText().equals(id),"F1_SCENARIO_NOT_SELECTED");}
+    private void scenario(String id){hooks.post("/__fixture/scenario",Map.of("id",id),204);require(hooks.get("/__fixture/scenario").path("id").asText().equals(id),"F1_SCENARIO_NOT_SELECTED");}
     private JsonNode submit(String fixture,String task,Instant from,Instant to,Map<String,Object> seam,String dlg) {
         String request=fixture+"-"+UUID.randomUUID();String key=GatewayClient.idempotencyKey(request);
-        var scenario=new LinkedHashMap<String,Object>();scenario.put("taskType",task);if(!seam.isEmpty())scenario.put("seam",seam);
+        var scenario=new LinkedHashMap<String,Object>();scenario.put("taskType",task);var calls=new ArrayList<Map<String,Object>>();calls.add(Map.of("toolId","tc.eqp.getOperationalSnapshot","arguments",Map.of("eqp","EQP-001")));if(task.equals("INCIDENT_ANALYSIS")){calls.add(Map.of("toolId","tc.commLogs.search","arguments",Map.of("eqp","EQP-001","from",from.toString(),"to",to.toString())));calls.add(Map.of("toolId","logs.search","arguments",Map.of("targetRef","EQP-001")));calls.add(Map.of("toolId","trace.search","arguments",Map.of()));}if(fixture.startsWith("AC-46-"))calls.removeIf(call->!call.get("toolId").equals("tc.commLogs.search"));
+        else if(fixture.equals("owner"))calls.removeIf(call->!Set.of("tc.eqp.getOperationalSnapshot","tc.commLogs.search").contains(call.get("toolId")));
+        else if(Set.of("AC-36","AC-45","ISO-15-QUERY","ISO-15-WINDOW").contains(fixture))calls.removeIf(call->!call.get("toolId").equals("logs.search"));
+        scenario.put("toolCalls",calls);if(!seam.isEmpty())scenario.put("seam",seam);
         hooks.arm("f1-acceptance",key,CanonicalJson.MAPPER.valueToTree(scenario));
         var body=Map.of("query","설비 상태와 통신 로그를 조회해 주세요","context",Map.of("timezone","UTC","referenceTime",hooks.clockNow().toString(),"timeWindow",Map.of("from",from.toString(),"to",to.toString())),"resourceRefs",List.of(Map.of("type","EQP","ref","EQP-001")));
         var submission=gateway.submitObserved("/v1/query",request,F1Fixture.claims(),dlg,json(body));submittedSentinels=submission.sentinels();var admitted=submission.response();require(admitted.statusCode()==202,"F1_JOB_NOT_ACCEPTED");
@@ -53,7 +56,7 @@ public final class F1JobChecks {
     private static String job(JsonNode response){return response.path("jobId").asText();}
     private static JsonNode payload(JsonNode response){return response.path("result").path("payload");}
     private OracleQueries.ToolObservation only(JsonNode response,String capability){var records=oracle.tools(job(response),capability);require(records.size()==1,"F1_TOOL_EXECUTION_COUNT");return records.getFirst();}
-    private long calls(String operation){return hooks.get("/__test/tcmock/calls").path(operation).asLong();}
+    private long calls(String operation){return hooks.get("/__fixture/calls").path(operation).asLong();}
     private void availability(String leaf){String kind=switch(leaf){case "AC-17-P"->"PLANNED";case "AC-17-U"->"UNSUPPORTED";case "AC-17-D"->"DISABLED";case "AC-17-PHASE"->"PHASE_INACTIVE";default->throw new IllegalArgumentException("F1_AVAILABILITY_INVALID");};
         var response=submit(leaf,"LIVE_QUERY",Map.of("kind",kind,"capabilityId","tc.eqp.getOperationalSnapshot"));
         require(response.path("jobStatus").asText().equals("SUCCEEDED")&&response.path("result").path("status").asText().equals("UNSUPPORTED"),"F1_AVAILABILITY_STATUS");
@@ -66,23 +69,23 @@ public final class F1JobChecks {
     private void source(){var response=submit("source","LIVE_QUERY",Map.of("kind","SOURCE_ALLOWLIST_REF_OVERRIDE","capabilityId","tc.eqp.getOperationalSnapshot","ownerSystem","WM"));require(oracle.sourceBlockCount(job(response))==1&&calls("getEqpSnapshot")==0,"F1_SOURCE_OWNER_BOUNDARY");}
     private void residue(){String dlg=gateway.newDlg();var response=submit("residue","LIVE_QUERY",MOCK_NOW.minusSeconds(60),MOCK_NOW,Map.of(),dlg);require(response.path("jobStatus").asText().equals("SUCCEEDED"),"F1_RESIDUE_POSITIVE_JOB");var sentinels=submittedSentinels;require(oracle.jobDelegationNonNull()==0&&oracle.residueScan(sentinels).matchCount()==0,"F1_DB_RESIDUE");require(ResidueScanner.scan(Map.of("response",response.toString()),sentinels).matchCount()==0,"F1_RESPONSE_RESIDUE");residual.verify(sentinels);}
     private void completeness(String leaf){scenario(leaf.equals("AC-46-EMPTY")?"empty":leaf.equals("AC-46-TRIM")?"comm-trim":"default");var response=submit(leaf,"INCIDENT_ANALYSIS",MOCK_NOW.minusSeconds(1800).plusNanos(1),MOCK_NOW.minusNanos(1),Map.of(),gateway.newDlg());var tool=only(response,"tc.commLogs.search");
-        require(tool.sources().size()==2,"F1_COMM_SOURCE_COUNT");require(!response.path("result").path("errorCode").asText().equals("LLM_UNAVAILABLE"),"F1_DISABLED_COMPOSER_ERROR");
-        for(var value:tool.sources())require(value.warnings().contains("RETENTION_UNVERIFIED"),"F1_COMM_WARNING_MISSING");
-        if(leaf.equals("AC-46-TRIM")){var value=tool.sources().getFirst();require(value.count()>=value.maximum()&&value.oldest().isPresent()&&value.applied()&&value.deletionPathsExcluded(),"F1_TRIM_FIXTURE_INVALID");
-            Instant from=MOCK_NOW.minusSeconds(1800).plusNanos(1),to=value.oldest().orElseThrow();require(value.unverified().equals(List.of(new OracleQueries.Range(from,to)))&&value.missing().isEmpty()&&!value.status().equals("OUT_OF_RETENTION"),"F1_TRIM_RANGE_INVALID");
-        }else{String status=leaf.equals("AC-46-EMPTY")?"EMPTY":"SUCCESS";require(tool.status().equals(status),"F1_COMM_TOOL_STATUS");for(var value:tool.sources())require(value.status().equals(status)&&(status.equals("EMPTY")?value.itemCount()==0:value.itemCount()>0),"F1_COMM_OBSERVATION_INVALID");
+        require(calls("getCommLogs")==1,"F1_COMM_SOURCE_COUNT");require(!response.path("result").path("errorCode").asText().equals("LLM_UNAVAILABLE"),"F1_DISABLED_COMPOSER_ERROR");
+        require(tool.warnings().contains("RETENTION_UNVERIFIED"),"F1_COMM_WARNING_MISSING");
+        if(leaf.equals("AC-46-TRIM")){require(tool.unverified().equals(List.of(new OracleQueries.Range(MOCK_NOW.minusSeconds(1800).plusNanos(1),MOCK_NOW.minusSeconds(600))))&&tool.missing().isEmpty()&&!tool.status().equals("OUT_OF_RETENTION"),"F1_TRIM_RANGE_INVALID");}
+        else{String status=leaf.equals("AC-46-EMPTY")?"EMPTY":"SUCCESS";require(tool.status().equals(status),"F1_COMM_TOOL_STATUS");require(status.equals("EMPTY")?tool.itemCount()==0:tool.itemCount()>0,"F1_COMM_OBSERVATION_INVALID");
             require(response.path("jobStatus").asText().equals("SUCCEEDED")&&response.path("result").path("status").asText().equals("SUCCESS"),"F1_COMM_AGGREGATION");byte[] narrative=narrative(response);require(narrative.length==0,"F1_NARRATIVE_PRESENT");F1RubricTargets.add(leaf,leaf.equals("AC-46-EMPTY")?"f1-retention-empty":"f1-retention-hit",job(response),narrative);}
     }
+
     public static byte[] narrative(JsonNode response){var payload=payload(response);if(payload.hasNonNull("answer")&&!payload.path("answer").asText().isEmpty())return payload.path("answer").asText().getBytes(java.nio.charset.StandardCharsets.UTF_8);for(var block:payload.path("blocks"))if(block.path("type").asText().equals("text"))return block.path("content").path("text").asText().getBytes(java.nio.charset.StandardCharsets.UTF_8);return new byte[0];}
     private void logs(String leaf){if(leaf.equals("ISO-15-WINDOW"))throw new TestAbortedException("MAX_WINDOW_UNDEFINED");hooks.clock(Map.of("op","RESUME_SYSTEM"));Instant now=hooks.clockNow();Instant from=now.minusSeconds(3600),to=now;var capturedBoundaries=new LinkedHashMap<String,Instant>();
-        if(!leaf.equals("ISO-15-QUERY")){var boundaries=new ArrayList<Instant>();for(String app:TcSourcePolicy.APPS){var probe=oracle.retentionProbe(app);if(probe.isEmpty()||probe.get().verifiedOldestAt().isEmpty())throw new TestAbortedException("MAX_WINDOW_UNDEFINED");boundaries.add(probe.get().verifiedOldestAt().orElseThrow());capturedBoundaries.put(app,probe.get().verifiedOldestAt().orElseThrow());}
+        if(!leaf.equals("ISO-15-QUERY")){var boundaries=new ArrayList<Instant>();for(String app:F1Fixture.APPS){var probe=oracle.retentionProbe(app);if(probe.isEmpty()||probe.get().verifiedOldestAt().isEmpty())throw new TestAbortedException("MAX_WINDOW_UNDEFINED");boundaries.add(probe.get().verifiedOldestAt().orElseThrow());capturedBoundaries.put(app,probe.get().verifiedOldestAt().orElseThrow());}
             Instant boundary=Collections.min(boundaries);from=leaf.equals("AC-36")?boundary.minusSeconds(60):leaf.equals("AC-45")?boundary.minusSeconds(1):boundary;to=leaf.equals("AC-36")?boundary:now;}
-        if(leaf.startsWith("ISO-15-")){var direct=loki.orElseThrow(()->new TestAbortedException("LOKI_POSITIVE_CONTROL_UNAVAILABLE"));int tc=0,wm=0;var window=new TimeWindow(from,to);for(String app:TcSourcePolicy.APPS)tc+=direct.measure(app,window).count();for(String app:List.of("wm-ui-backend","wm-ui-front"))wm+=direct.measure(app,window).count();if(tc==0||wm==0)throw new TestAbortedException("LOKI_POSITIVE_CONTROL_EMPTY");}
-        for(String app:TcSourcePolicy.APPS)if(!capturedBoundaries.containsKey(app))capturedBoundaries.put(app,oracle.retentionProbe(app).flatMap(OracleQueries.RetentionProbe::verifiedOldestAt).orElse(from));
-        var response=submit(leaf,"INCIDENT_ANALYSIS",from,to,Map.of(),gateway.newDlg());var tool=only(response,"tc.logs.search");
+        if(leaf.startsWith("ISO-15-")){var direct=loki.orElseThrow(()->new TestAbortedException("LOKI_POSITIVE_CONTROL_UNAVAILABLE"));int tc=0,wm=0;var window=new TimeWindow(from,to);for(String app:F1Fixture.APPS)tc+=direct.measure(app,window).count();for(String app:List.of("wm-ui-backend","wm-ui-front"))wm+=direct.measure(app,window).count();if(tc==0||wm==0)throw new TestAbortedException("LOKI_POSITIVE_CONTROL_EMPTY");}
+        for(String app:F1Fixture.APPS)if(!capturedBoundaries.containsKey(app))capturedBoundaries.put(app,oracle.retentionProbe(app).flatMap(OracleQueries.RetentionProbe::verifiedOldestAt).orElse(from));
+        var response=submit(leaf,"INCIDENT_ANALYSIS",from,to,Map.of(),gateway.newDlg());var tool=only(response,"logs.search");
         if(leaf.equals("AC-36"))require(tool.status().equals("OUT_OF_RETENTION")&&tool.itemCount()==0,"F1_RETENTION_OUTSIDE");
         else if(leaf.equals("AC-45")){require(tool.status().equals("PARTIAL"),"F1_RETENTION_CROSSING");Instant boundary=Collections.max(capturedBoundaries.values());Instant end=boundary.isBefore(to)?boundary:to;require(tool.missing().equals(List.of(new OracleQueries.Range(from,end))),"F1_RETENTION_MISSING_RANGE");}
-        else{require(Set.of("SUCCESS","EMPTY","PARTIAL").contains(tool.status()),"F1_LOG_TOOL_STATUS");require(TcSourcePolicy.APPS.containsAll(tool.apps()),"F1_WM_LOG_LEAK");}
+        else{require(Set.of("SUCCESS","EMPTY","PARTIAL").contains(tool.status()),"F1_LOG_TOOL_STATUS");require(F1Fixture.APPS.containsAll(tool.apps()),"F1_WM_LOG_LEAK");}
         // 실제 Gateway 송신의 건수/창/selector 관측 없이 결과만으로 그 사실을 추정하지 않습니다.
         JsonNode observation;try{observation=hooks.get("/__test/source-observations/"+job(response));}catch(HookClient.HookFailure unavailable){throw new TestAbortedException("SOURCE_REQUEST_OBSERVATION_UNAVAILABLE");}
         F1SourceChecks.verify(observation,job(response),F1SourceChecks.expected(capturedBoundaries,from,to,new LokiProperties().splitInterval()),leaf.equals("AC-36"));

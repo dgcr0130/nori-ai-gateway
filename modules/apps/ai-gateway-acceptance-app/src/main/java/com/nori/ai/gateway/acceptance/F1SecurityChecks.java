@@ -5,7 +5,7 @@ import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.*;
 import com.nimbusds.jose.jwk.*;
 import com.nimbusds.jose.util.JSONObjectUtils;
-import com.nori.ai.gateway.tcmock.verify.ResidueScanner;
+import com.nori.ai.gateway.integration.fixtures.verify.ResidueScanner;
 import java.time.Instant;
 import java.util.*;
 import org.opentest4j.TestAbortedException;
@@ -29,7 +29,7 @@ public final class F1SecurityChecks {
         require(oracle.nonTerminalJobCount()==0, "ISOLATION_NOT_IDLE"); hooks.reset();
         Instant now=hooks.clockNow(); String dlg=gateway.newDlg();
         Input input=prepare(leaf,now,dlg);
-        long before=oracle.jobCount(); JsonNode calls=hooks.get("/__test/tcmock/calls");
+        long before=oracle.jobCount(); JsonNode calls=hooks.get("/__fixture/calls");
         String path=input.path(); String method="POST";
         if(leaf.equals("ISO-04-JWS-DLG-EXTRA")) {
             var valid=signer.claims(now,dlg);valid.remove("dlg");String assertion=signer.sign(valid);
@@ -37,7 +37,7 @@ public final class F1SecurityChecks {
             String id=parse(created.body()).path("id").asText();require(id.matches("[a-f0-9-]{36}"),"F1_CONVERSATION_ID");
             path="/v1/conversations/"+id;method="GET";
             require(gateway.request(method,path,assertion,token,"{}").statusCode()==200,"F1_NON_JOB_POSITIVE_CONTROL");
-            calls=hooks.get("/__test/tcmock/calls");
+            calls=hooks.get("/__fixture/calls");
         }
         var response=gateway.request(method,path,input.assertion(),input.token(),json(input.body()));
         require(response.statusCode()==input.status(), "F1_AUTH_HTTP_STATUS");
@@ -47,7 +47,7 @@ public final class F1SecurityChecks {
         require(requestId.matches("[a-f0-9-]{36}"), "F1_AUTH_REQUEST_ID");
         require(oracle.authRejectionCount(requestId,input.reason(),input.status())==1, "F1_AUTH_AUDIT_REASON");
         require(oracle.jobCount()==before, "F1_AUTH_CREATED_JOB");
-        require(hooks.get("/__test/tcmock/calls").equals(calls), "F1_AUTH_DOWNSTREAM_CALL");
+        require(hooks.get("/__fixture/calls").equals(calls), "F1_AUTH_DOWNSTREAM_CALL");
         var sentinels=new HashSet<String>(Set.of(dlg,token));
         if(input.token()!=null)sentinels.add(input.token());
         if(input.assertion()!=null)sentinels.add(input.assertion());

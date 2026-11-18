@@ -3,7 +3,7 @@ package com.nori.ai.gateway.core;
 import com.nori.ai.gateway.core.authz.*;
 import com.nori.ai.gateway.core.dispatch.*;
 import com.nori.ai.gateway.core.plan.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+
 import com.nori.ai.gateway.core.result.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -22,10 +22,11 @@ class StepAttemptGrantTest {
         dispatcher.dispatchCurrent(prepared,attempt,f.scope,grant,new ExecutionContext(f.resolver,ignored->{}));reads=f.reads.get();
         assertThatThrownBy(()->dispatcher.dispatchCurrent(prepared,attempt,f.scope,grant,new ExecutionContext(f.resolver,ignored->{}))).isInstanceOf(IllegalArgumentException.class);assertThat(f.reads).hasValue(reads);assertThat(f.toolCalls).hasValue(1);
     }
-    @Test void denialUnavailableMalformedCurrentDigestAndEmptyAllowedNeverReachExecutor() {
-        for(var outcome:List.of(new TcSourceAuthorizationPort.Allowed(Set.of(),"b".repeat(64)),new TcSourceAuthorizationPort.Allowed(Set.of("EQP_READ"),"stale"),new TcSourceAuthorizationPort.Allowed(Set.of("OTHER"),"b".repeat(64)),new TcSourceAuthorizationPort.Unavailable())) {
-            var f=new WorkflowAuthorizationPreparationTest.Fixture();f.outcome.set(outcome);var prepared=f.prepared();var attempt=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.DISPATCH);
-            assertThat(f.source.authorizeStep(attempt,f.scope,f.resolver.delegatedCall())).isNotInstanceOf(SourceAuthorizationStep.StepGrant.class);assertThat(f.toolCalls).hasValue(0);assertThat(f.authCalls).hasValue(1);
+    @Test void missingAnyRequiredPermissionOrForeignActorNeverReachesExecutor() {
+        for(var permissions:List.of(Set.<String>of(),Set.of("OTHER"))) {
+            var f=new WorkflowAuthorizationPreparationTest.Fixture();var prepared=f.prepared();var attempt=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.DISPATCH);
+            var denied=new com.nori.ai.gateway.core.scope.VerifiedSystemScope(f.scope.boundSystem(),f.scope.authenticatedServiceRef(),f.scope.actorRef(),f.scope.sub(),permissions,f.scope.pdg(),f.scope.issuedAt(),f.scope.expiresAt(),f.scope.requestId());
+            assertThat(f.source.authorizeStep(attempt,denied,f.resolver.delegatedCall())).isInstanceOf(SourceAuthorizationStep.StepDenied.class);assertThat(f.toolCalls).hasValue(0);
         }
     }
     @Test void validFailedContractInvalidKeepsIdButRejectedRawUsesFallbackAndNoRawPayload() {

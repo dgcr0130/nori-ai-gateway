@@ -8,7 +8,7 @@ import java.util.*;
 /** Spec §5.4의 명시 실패와 자료 관측 집합을 분리해 집계합니다. */
 public final class TerminalOutcomeAssembler {
     private static final Set<ResultStatus> DATA=Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.STALE,ResultStatus.CONFLICT);
-    private static final Set<ResultStatus> ALLOWED=Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.OUT_OF_RETENTION,ResultStatus.STALE,ResultStatus.CONFLICT,ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.FAILED);
+    private static final Set<ResultStatus> ALLOWED=Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.OUT_OF_RETENTION,ResultStatus.STALE,ResultStatus.CONFLICT,ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.FAILED,ResultStatus.TIMEOUT,ResultStatus.UNSUPPORTED);
     public TerminalSpec assemble(WorkflowOutcome outcome,ComposerOutcome composer,InferenceMode inference) {
         return assemble(outcome,composer,Optional.empty(),inference);
     }
@@ -31,7 +31,8 @@ public final class TerminalOutcomeAssembler {
             var row=new LinkedHashMap<String,Object>();row.put("stepId",stage.stepId());row.put("capabilityId",result.capabilityId());row.put("status",result.status().name());row.put("observed",stage.observed());
             if(stage.observed()){row.put("count",stage.count());row.put("observedAt",result.observedAt());}
             if(result.errorCode()!=null)row.put("errorCode",result.errorCode().name());if(!result.missingFields().isEmpty())row.put("missingFields",result.missingFields());
-            if(result.metadata()!=null&&!result.metadata().missingRanges().isEmpty())row.put("missingRanges",result.metadata().missingRanges());summary.add(row);
+            if(!result.warnings().isEmpty())row.put("warnings",result.warnings());
+            if(result.metadata()!=null){if(!result.metadata().missingRanges().isEmpty())row.put("missingRanges",result.metadata().missingRanges());if(!result.metadata().unverifiedRanges().isEmpty())row.put("unverifiedRanges",result.metadata().unverifiedRanges());}summary.add(row);
         }
         payload.put("toolSummary",summary);
         ResultStatus status;ErrorCode error=null;
@@ -40,11 +41,11 @@ public final class TerminalOutcomeAssembler {
             if(rejected.clarification()!=null)payload.put("clarification",rejected.clarification());
         } else {
             var stages=outcome.stages();var statuses=stages.stream().map(stage->stage.result().status()).toList();
-            boolean data=stages.stream().anyMatch(stage->stage.observed()&&DATA.contains(stage.result().status()));
-            boolean failed=statuses.stream().anyMatch(s->Set.of(ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.FAILED).contains(s));
+            boolean data=stages.stream().anyMatch(stage->stage.observed()&&stage.result().observedAt()!=null&&DATA.contains(stage.result().status()));
+            boolean failed=statuses.stream().anyMatch(s->Set.of(ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.FAILED,ResultStatus.TIMEOUT,ResultStatus.UNSUPPORTED).contains(s));
             if(stages.isEmpty())status=ResultStatus.SUCCESS;
             else if(failed&&data)status=ResultStatus.PARTIAL;
-            else if(failed){status=statuses.contains(ResultStatus.FAILED)?ResultStatus.FAILED:statuses.contains(ResultStatus.SOURCE_UNAVAILABLE)?ResultStatus.SOURCE_UNAVAILABLE:ResultStatus.DENIED;if(status==ResultStatus.FAILED)error=ErrorCode.CONTRACT_INVALID;}
+            else if(failed){status=statuses.contains(ResultStatus.FAILED)?ResultStatus.FAILED:statuses.stream().anyMatch(s->Set.of(ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.TIMEOUT,ResultStatus.UNSUPPORTED).contains(s))?ResultStatus.SOURCE_UNAVAILABLE:ResultStatus.DENIED;if(status==ResultStatus.FAILED)error=ErrorCode.CONTRACT_INVALID;}
             else if(statuses.contains(ResultStatus.PARTIAL)||data&&statuses.contains(ResultStatus.OUT_OF_RETENTION))status=ResultStatus.PARTIAL;
             else if(statuses.stream().allMatch(s->s==ResultStatus.OUT_OF_RETENTION))status=ResultStatus.OUT_OF_RETENTION;
             else if(data){status=List.of(ResultStatus.CONFLICT,ResultStatus.STALE,ResultStatus.SUCCESS,ResultStatus.EMPTY).stream().filter(statuses::contains).findFirst().orElseThrow();}

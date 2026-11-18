@@ -2,7 +2,7 @@ package com.nori.ai.gateway.app.job;
 
 import com.nori.ai.gateway.app.hooks.PausePointRegistry;
 import com.nori.ai.gateway.core.job.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.seam.*;
 import java.util.*;
@@ -18,6 +18,15 @@ public class P09TestPorts {
     public static final class Observations {
         public final List<JobContext> workflows=new CopyOnWriteArrayList<>();
         public final AtomicInteger published=new AtomicInteger();
+    }
+    @Bean com.nori.ai.gateway.integration.fixtures.StandardSystemStub standardBackend(java.time.Clock clock)throws java.io.IOException{return new com.nori.ai.gateway.integration.fixtures.StandardSystemStub(clock);}
+    @Bean com.nori.ai.gateway.integration.fixtures.GatewayTokenFixture backendTokenFixture(org.springframework.core.env.Environment environment,com.nori.ai.gateway.integration.fixtures.StandardSystemStub backend)throws java.io.IOException {
+        String ingress=environment.getProperty("ai.gateway.systems[TC].service-token-sha256-file");
+        return new com.nori.ai.gateway.integration.fixtures.GatewayTokenFixture(ingress==null?null:java.nio.file.Path.of(ingress).getParent(),backend.token);
+    }
+    @Bean @Primary com.nori.ai.gateway.app.config.GatewaySystemsProperties fixtureSystems(org.springframework.core.env.Environment environment,com.nori.ai.gateway.integration.fixtures.StandardSystemStub backend,com.nori.ai.gateway.integration.fixtures.GatewayTokenFixture token)throws java.io.IOException {
+        if(token.file()==null)return new com.nori.ai.gateway.app.config.GatewaySystemsProperties(java.util.Map.of());
+        return StandardSystemConfiguration.systems(environment,backend.base().toString(),token.file().toString());
     }
     @Bean Observations p09Observations(){return new Observations();}
     @Bean static org.springframework.beans.factory.config.BeanPostProcessor p13WorkflowObservation(org.springframework.beans.factory.ObjectProvider<Observations> observations) {

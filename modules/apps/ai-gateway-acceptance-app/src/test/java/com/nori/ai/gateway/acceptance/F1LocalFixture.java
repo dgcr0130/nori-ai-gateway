@@ -4,7 +4,7 @@ import com.sun.net.httpserver.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.Curve;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import java.net.*;
 import java.net.http.*;
 import java.nio.charset.StandardCharsets;
@@ -30,8 +30,10 @@ final class F1LocalFixture implements AutoCloseable {
             Object result=Map.of();int status=200;
             if(path.equals("/__test/clock"))result=Map.of("now",now.toString());
             else if(path.equals("/__test/reset")){calls.clear();toolRows.clear();scenario="default";seam="";status=204;}
-            else if(path.equals("/__test/tcmock/calls"))result=calls;
-            else if(path.equals("/__test/tcmock/scenario")){if(method.equals("POST")){scenario=lastRequest.path("id").asText();status=204;}else result=Map.of("id",scenario);}
+            else if(path.equals("/__fixture/reset")){calls.clear();scenario="default";status=204;}
+            else if(path.equals("/__fixture/calls"))result=calls;
+            else if(path.equals("/__fixture/scenario")){if(method.equals("POST")){scenario=lastRequest.path("id").asText();status=204;}else result=Map.of("id",scenario);}
+            else if(path.equals("/__fixture/delegations"))status=204;
             else if(path.equals("/__test/arm")){seam=lastRequest.path("scenario").path("seam").path("kind").asText();capability=lastRequest.path("scenario").path("seam").path("capabilityId").asText();status=204;}
             else if(path.startsWith("/__test/"))status=204;
             else if(path.equals("/v1/conversations")&&method.equals("POST")){status=201;result=Map.of("id","11111111-1111-1111-1111-111111111111");}
@@ -44,12 +46,9 @@ final class F1LocalFixture implements AutoCloseable {
         }
     }
     private void createTools(){String status=scenario.equals("empty")?"EMPTY":"SUCCESS";calls.put("getEqpSnapshot",seam.isEmpty()?1:0);
-        var sources=new ArrayList<Map<String,Object>>();for(String source:List.of("gateway","business")){
-            var row=new LinkedHashMap<String,Object>();row.put("source",source);row.put("status",status);row.put("items",scenario.equals("empty")?List.of():List.of(Map.of("occurredAt",now.minusSeconds(100).toString())));row.put("warnings",warning?List.of("RETENTION_UNVERIFIED"):List.of());
-            row.put("completeness",Map.of("count",5000,"maxEntriesPerKey",5000,"oldestRetainedAt",now.minusSeconds(600).toString(),"retentionHours",1,"appliedValuesVerified",true,"otherDeletionPathsExcluded",true));
-            row.put("retentionMeta",Map.of("missingRanges",List.of(),"unverifiedRanges",scenario.equals("comm-trim")&&source.equals("gateway")?List.of(Map.of("startAt",now.minusSeconds(1800).plusNanos(1).toString(),"endAt",now.minusSeconds(600).toString())):List.of()));sources.add(row);
-        }
-        toolRows.put("tc.commLogs.search",List.<Object[]>of(new Object[]{F1SecurityChecks.json(Map.of("status",status,"result",Map.of("blocks",List.of(Map.of("content",Map.of("items",sources))),"warnings",List.of("RETENTION_UNVERIFIED"))))}));
+        calls.put("getCommLogs",1);
+        var ranges=scenario.equals("comm-trim")?List.of(Map.of("from",now.minusSeconds(1800).plusNanos(1).toString(),"to",now.minusSeconds(600).toString())):List.of();
+        toolRows.put("tc.commLogs.search",List.<Object[]>of(new Object[]{F1SecurityChecks.json(Map.of("status",status,"result",Map.of("blocks",List.of(Map.of("content",Map.of("items",scenario.equals("empty")?List.of():List.of(Map.of("ref","EQP-001","text","관측 자료","values",Map.of()))))),"warnings",warning?List.of("RETENTION_UNVERIFIED"):List.of(),"metadata",Map.of("missingRanges",List.of(),"unverifiedRanges",ranges))))}));
         if(!seam.isEmpty())toolRows.clear();
     }
     private Object response(String job){var payload=new LinkedHashMap<String,Object>();payload.put("status",seam.isEmpty()?"SUCCESS":"UNSUPPORTED");payload.put("blocks",List.of());if(!seam.isEmpty())payload.put("validationTrace",List.of(Map.of("step",6,"passed",false,"reason",seam)));return Map.of("jobId",returnedJob==null?job:returnedJob,"jobStatus","SUCCEEDED","result",Map.of("status",payload.get("status"),"payload",payload));}

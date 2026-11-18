@@ -7,7 +7,6 @@ import java.util.*;
 
 public final class ManifestLoader {
     private final JsonNode manifestSchema = resource("contracts/capability-manifest.schema.json");
-    private final JsonNode workflowSchema = resource("contracts/workflow.schema.json");
     public List<CapabilityManifest> load(Path path) {
         if (Files.isDirectory(path)) {
             try (var files = Files.list(path)) {
@@ -20,10 +19,6 @@ public final class ManifestLoader {
     public List<CapabilityManifest> loadClasspath(String index) {
         return indexed(index).stream().map(name -> decode(resource(name))).toList();
     }
-    public List<WorkflowDefinition> loadWorkflowsClasspath(String index) {
-        return indexed(index).stream().map(name -> decodeWorkflow(resource(name))).toList();
-    }
-    public WorkflowDefinition loadWorkflow(Path path) { return decodeWorkflow(read(path)); }
     private CapabilityManifest loadOne(Path path) { return decode(read(path)); }
     public CapabilityManifest decode(JsonNode node) {
         if (!SchemaContracts.matches(manifestSchema, node)) throw new IllegalArgumentException("Manifest 계약이 잘못되었습니다");
@@ -34,11 +29,6 @@ public final class ManifestLoader {
         if (!SchemaContracts.digest(manifest.inputSchema(), manifest.outputSchema()).equals(manifest.schemaDigest()))
             throw new IllegalArgumentException("Schema digest가 일치하지 않습니다");
         return manifest;
-    }
-    public WorkflowDefinition decodeWorkflow(JsonNode node) {
-        if (!SchemaContracts.matches(workflowSchema, node)) throw new IllegalArgumentException("Workflow 계약이 잘못되었습니다");
-        try { return SchemaContracts.JSON.treeToValue(node, WorkflowDefinition.class); }
-        catch (RuntimeException e) { throw new IllegalArgumentException("Workflow 계약이 잘못되었습니다"); }
     }
     private List<String> indexed(String name) {
         JsonNode node = resource(name);

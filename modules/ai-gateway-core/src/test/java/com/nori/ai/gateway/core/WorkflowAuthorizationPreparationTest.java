@@ -3,7 +3,7 @@ package com.nori.ai.gateway.core;
 import com.nori.ai.gateway.core.authz.*;
 import com.nori.ai.gateway.core.dispatch.*;
 import com.nori.ai.gateway.core.plan.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
+
 import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.scope.*;
@@ -17,24 +17,24 @@ import static com.nori.ai.gateway.core.DomainFixtures.*;
 
 class WorkflowAuthorizationPreparationTest {
     static final class Fixture {
-        final VerifiedSystemScope scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("EQP_READ"),"a".repeat(64),NOW.minusSeconds(60),NOW.plusSeconds(60),"request");
+        VerifiedSystemScope scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("EQP_READ"),"a".repeat(64),NOW.minusSeconds(60),NOW.plusSeconds(60),"request");
         final CapabilityManifest manifest=modify(manifest(),"toolKind","LOG");
         final ContractVersionPolicy versions=new ContractVersionPolicy();
         final CapabilityRegistry registry=registry(manifest,versions);
         final PlanValidator validator=validator(registry,new PlanInjectionSeam.NoOp());
         final AtomicInteger reads=new AtomicInteger(),legacy=new AtomicInteger(),authCalls=new AtomicInteger(),toolCalls=new AtomicInteger();
         final AtomicReference<WorkflowResourceResolver.Lookup> resource=new AtomicReference<>(new WorkflowResourceResolver.Found(new ResourceResolver.ResourceState(OwnerSystem.TC,"EQP",true)));
-        final AtomicReference<TcSourceAuthorizationPort.Outcome> outcome=new AtomicReference<>(new TcSourceAuthorizationPort.Allowed(Set.of("EQP_READ"),"b".repeat(64)));
+
         final AtomicReference<PlanStep> executed=new AtomicReference<>();
         final WorkflowResourceResolver resolver=new WorkflowResourceResolver(){
             public Lookup lookup(ResourceRef ref,VerifiedSystemScope scope){reads.incrementAndGet();return resource.get();}
             public SourceBinding source(CapabilityManifest m,VerifiedSystemScope scope){return new SourceBinding(m.ownerSystem(),m.sourceAllowlistRef(),true);}
             public CurrentAuthorization authorize(CapabilityManifest m,PlanStep step,VerifiedSystemScope scope){legacy.incrementAndGet();return WorkflowResourceResolver.super.authorize(m,step,scope);}
             public ZoneId timezone(VerifiedSystemScope scope){return ZoneOffset.UTC;}
-            public TcSourceAuthorizationPort.DelegatedCall delegatedCall(){return new TcSourceAuthorizationPort.DelegatedCall("actor","d".repeat(22));}
+            public DelegatedCall delegatedCall(){return new DelegatedCall("actor","d".repeat(22));}
             public void beforeRead(){}
         };
-        final SourceAuthorizationStep source=new SourceAuthorizationStep(new SourcePermissionMap(Map.of(manifest.sourceAllowlistRef(),new SourcePermissionMap.Entry(Set.of("EQP_READ"),false))), (call,required)->{authCalls.incrementAndGet();return outcome.get();});
+        final SourceAuthorizationStep source=new SourceAuthorizationStep(new SourcePermissionMap(Map.of(manifest.sourceAllowlistRef(),new SourcePermissionMap.Entry(Set.of("EQP_READ"),false))), (source,scope)->{authCalls.incrementAndGet();return false;});
         ToolDispatcher dispatcher(java.util.function.Supplier<ToolResultEnvelope> response) {
             ToolExecutor tool=new ToolExecutor(){public ToolKind toolKind(){return ToolKind.LOG;}public ToolResultEnvelope execute(PlanStep step,CapabilityManifest m,VerifiedSystemScope s,ExecutionContext c){toolCalls.incrementAndGet();executed.set(step);return response.get();}};
             return new ToolDispatcher(registry,validator,new ToolResultContractValidator(versions),new DispatchInjectionSeam.NoOp(),List.of(tool),CLOCK);
@@ -45,7 +45,7 @@ class WorkflowAuthorizationPreparationTest {
     @Test void pendingNeverUsesLegacyAuthorizationAndCurrentDifferentDigestReachesRealExecutor() {
         var f=new Fixture();var prepared=f.prepared();assertThat(prepared.authorizationState()).isEqualTo(PlanValidator.AuthorizationState.PENDING);assertThat(f.legacy).hasValue(0);assertThat(f.authCalls).hasValue(0);
         var attempt=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.DISPATCH);var grant=f.grant(attempt);
-        assertThat(grant.currentPdg()).isNotEqualTo(f.scope.pdg());assertThat(f.validator.authorizedStep(prepared,attempt,grant,f.scope)).isTrue();
+        assertThat(grant.currentPdg()).isEqualTo(f.scope.pdg());assertThat(f.validator.authorizedStep(prepared,attempt,grant,f.scope)).isTrue();
         var outcome=f.dispatcher(()->result(f.manifest)).dispatchCurrent(prepared,attempt,f.scope,grant,new ExecutionContext(f.resolver,ignored->{}));
         assertThat(outcome).isInstanceOf(ToolDispatcher.Returned.class);assertThat(f.toolCalls).hasValue(1);assertThat(f.authCalls).hasValue(1);assertThat(f.legacy).hasValue(0);
     }

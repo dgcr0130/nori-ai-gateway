@@ -16,7 +16,7 @@ class WorkflowContentTest {
     private static final String PRIVATE="연락 01012345678 token=local-secret user@example.com SENTINEL:private-content";
     private final ContentSanitizer sanitizer=new ContentSanitizer();
     private final VerifiedSystemScope scope=new VerifiedSystemScope(OwnerSystem.TC,"fixture",new ActorRef(PHONE),PHONE,Set.of("EQP_READ","AI_DOC_READ"),"a".repeat(64),Instant.parse("2026-11-06T00:00:00Z"),Instant.parse("2026-11-06T00:01:00Z"),PHONE);
-    private CapabilityManifest manifest(ToolKind kind){return new ManifestLoader().loadClasspath("manifests/tc/index.json").stream().filter(value->value.toolKind()==kind).findFirst().orElseThrow();}
+    private CapabilityManifest manifest(ToolKind kind){return new ManifestLoader().loadClasspath("fixtures/tools/index.json").stream().filter(value->value.toolKind()==kind).findFirst().orElseThrow();}
     @Test void validatedKnowledgeIdentifiersAndActorRemainExactWhileFreeContentIsMasked() {
         var manifest=manifest(ToolKind.KNOWLEDGE);var source="knowledge://TC/docs/"+PHONE;
         var row=Map.of("ownerSystem","TC","sourceRef",source,"chunkId",PHONE,"revision",PHONE,"text",PRIVATE);
@@ -33,7 +33,7 @@ class WorkflowContentTest {
     @Test void aContractValidNullClaimTextRemainsNullAndItsOwnedReferencesRemainExact() {
         var manifest=manifest(ToolKind.BUSINESS);var raw=ToolResults.result(manifest,scope,ResultStatus.SUCCESS,List.of(Map.of("text",PRIVATE)),scope.issuedAt(),List.of(),Set.of(),List.of(),null);
         var tree=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.valueToTree(raw);tree.set("claims",SchemaContracts.JSON.valueToTree(List.of(new Claim(PHONE,Verdict.PROBABLE,null,List.of(new OwnedReference(OwnerSystem.TC,"evidence://TC/"+PHONE))))));raw=SchemaContracts.JSON.treeToValue(tree,ToolResultEnvelope.class);
-        var versions=new ContractVersionPolicy();new CapabilityRegistry(List.of(manifest),List.of(),Set.of(ImplementationPhase.PHASE_1),versions);assertThat(new com.nori.ai.gateway.core.dispatch.ToolResultContractValidator(versions).validate(raw,manifest)).isSameAs(raw);
+        var versions=new ContractVersionPolicy();new CapabilityRegistry(List.of(manifest),Set.of(ImplementationPhase.PHASE_1),versions);assertThat(new com.nori.ai.gateway.core.dispatch.ToolResultContractValidator(versions).validate(raw,manifest)).isSameAs(raw);
         var masked=WorkflowContent.tool(raw,manifest,scope,sanitizer);assertThat(masked.claims().getFirst().text()).isNull();assertThat(masked.claims().getFirst().claimId()).isEqualTo(PHONE);assertThat(masked.claims().getFirst().evidenceRefs()).isEqualTo(raw.claims().getFirst().evidenceRefs());
     }
     // mask-v1 전화 규칙과 겹치는 규격 값입니다: hex32 traceId, hex16 spanId(소/대문자), 9/10자리 start/end, numeric pipeline version.
@@ -71,7 +71,7 @@ class WorkflowContentTest {
         assertThat(reversed.path("endTimeUnixNano").asString()).contains("[마스킹]");assertThat(reversed.path("serviceVersion").asString()).contains("[마스킹]");
         assertThat(nonNumeric.path("spanId").asString()).contains("[마스킹]");assertThat(nonNumeric.path("startTimeUnixNano").asString()).contains("[마스킹]");
         assertThat(nonNumeric.path("endTimeUnixNano").asString()).contains("[마스킹]");assertThat(nonNumeric.path("serviceVersion").asString()).contains("[마스킹]");
-        assertThat(foreign.path("spanId").asString()).isEqualTo(LOWER_SPAN);assertThat(foreign.path("serviceVersion").asString()).contains("[마스킹]");
+        assertThat(foreign.path("spanId").asString()).isEqualTo(LOWER_SPAN);assertThat(foreign.path("serviceVersion").asString()).isEqualTo(VERSION);
         for(var span:invalid.path("spans"))assertThat(span.path("name").asString()).contains("[마스킹]").doesNotContain("SENTINEL:span-name");
     }
     private void assertMasked(String value){assertThat(value).contains("[마스킹]").doesNotContain(PHONE,"local-secret","user@example.com","SENTINEL:private-content");}

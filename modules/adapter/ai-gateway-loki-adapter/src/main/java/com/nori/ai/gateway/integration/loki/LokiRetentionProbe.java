@@ -13,8 +13,8 @@ public final class LokiRetentionProbe {
     private final SourceHttpClient http;
     private final TimeWindow probeWindow;
     public LokiRetentionProbe(SourceHttpClient http, TimeWindow probeWindow) { this.http = Objects.requireNonNull(http); this.probeWindow = Objects.requireNonNull(probeWindow); }
-    public Optional<ProbeObservation> measure(String app) {
-        var batch = LokiLogConnector.query(http, app, List.of(), probeWindow, 1, "forward", http.deadline(Duration.ofSeconds(30)));
+    public Optional<ProbeObservation> measure(String app,String namespace) {
+        var batch = LokiLogConnector.query(http, app,namespace, List.of(), probeWindow, 1, "forward", http.deadline(Duration.ofSeconds(30)));
         if (batch.rejectedLabels() != 0) throw new SourceHttpClient.Failure(false, false);
         return batch.items().stream().findFirst().map(line -> new ProbeObservation(line.occurredAt(), probeWindow.startAt()));
     }

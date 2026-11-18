@@ -16,7 +16,7 @@ import java.security.SecureRandom;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.Base64;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 

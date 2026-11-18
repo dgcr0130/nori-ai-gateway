@@ -16,6 +16,7 @@ public final class AppProcessHarness implements AutoCloseable {
     private final AtomicInteger sentinelCount=new AtomicInteger();
     private final List<String> sentinels=new CopyOnWriteArrayList<>();
     private Process process;private int port;
+    private com.nori.ai.gateway.integration.fixtures.ProtectedProcessOutput output;private Future<?> outputReader;
     public AppProcessHarness(String sentinel){watch(sentinel);}
     public void watch(String sentinel){if(sentinel!=null&&!sentinel.isBlank()&&!sentinels.contains(sentinel))sentinels.add(sentinel);}
     public Process launch(Path state,Map<String,String> properties,String fingerprintOverride)throws Exception{return launch(state,properties,fingerprintOverride,Map.of());}
@@ -27,7 +28,7 @@ public final class AppProcessHarness implements AutoCloseable {
         String fingerprint=fingerprintOverride==null?HarnessFingerprint.calculate(classpath):fingerprintOverride;
         Path argfile=Files.createTempFile(state,"harness-",".args");var lines=new ArrayList<String>();
         // 공용 하네스도 운영 기본 OTLP endpoint로 보내지 않습니다. 시험이 명시한 값이 있으면 그 값이 우선합니다.
-        var effective=new TreeMap<String,String>(Map.of("ai.gateway.otlp.metrics.enabled","false","ai.gateway.otlp.traces.enabled","false","ai.gateway.otlp.logs.enabled","false"));com.nori.ai.gateway.integration.testing.InferenceFixtures.properties().forEach((key,value)->effective.put(key,value.toString()));effective.putAll(properties);
+        var effective=new TreeMap<String,String>(Map.of("spring.config.import","optional:file:config/ai-gateway-db.properties","ai.gateway.otlp.metrics.enabled","false","ai.gateway.otlp.traces.enabled","false","ai.gateway.otlp.logs.enabled","false"));com.nori.ai.gateway.integration.testing.InferenceFixtures.properties().forEach((key,value)->effective.put(key,value.toString()));effective.put("aigw.rootDir",Objects.requireNonNull(System.getProperty("aigw.rootDir"),"하네스 rootDir가 필요합니다"));effective.putAll(properties);
         effective.forEach((key,value)->lines.add(quote("-D"+key+"="+value)));
         lines.add("-cp");lines.add(quote(classpath));lines.add(HarnessMain.class.getName());
         for(String value:List.of("--fingerprint",fingerprint,"--config",HarnessP09TestPorts.class.getName(),"--state-dir",state.toString()))lines.add(quote(value));
@@ -38,13 +39,14 @@ public final class AppProcessHarness implements AutoCloseable {
         }
         env.putAll(environment);
         builder.redirectErrorStream(true);process=builder.start();children.add(process);var child=process;
-        readers.submit(()->{try(var input=new java.io.BufferedReader(new java.io.InputStreamReader(child.getInputStream(),StandardCharsets.UTF_8))){String line;while((line=input.readLine())!=null){boolean found=false;for(String sentinel:sentinels)found|=line.contains(sentinel);if(found)sentinelCount.incrementAndGet();}}catch(java.io.IOException failure){if(child.isAlive())throw new IllegalStateException("자식 출력 검사에 실패했습니다");}});
+        output=new com.nori.ai.gateway.integration.fixtures.ProtectedProcessOutput();var childOutput=output;
+        outputReader=readers.submit(()->{try(var input=new java.io.BufferedReader(new java.io.InputStreamReader(child.getInputStream(),StandardCharsets.UTF_8))){String line;while((line=input.readLine())!=null){boolean found=false;for(String sentinel:sentinels)found|=line.contains(sentinel);if(found)sentinelCount.incrementAndGet();else childOutput.record(line);}}catch(java.io.IOException failure){if(child.isAlive())throw new IllegalStateException("자식 출력 검사에 실패했습니다");}});
         return process;
     }
     public Map<String,Object> awaitReady(Path state)throws Exception{
         long deadline=System.nanoTime()+Duration.ofSeconds(120).toNanos();var http=HttpClient.newHttpClient();
         while(System.nanoTime()<deadline){
-            if(!process.isAlive())throw new AssertionError("자식 JVM 기동 실패 exit="+process.exitValue());
+            if(!process.isAlive()){outputReader.get(5,TimeUnit.SECONDS);throw new AssertionError("자식 JVM 기동 실패 exit="+process.exitValue()+" diagnostics="+output.tail());}
             Path ready=state.resolve("harness-ready.json");
             if(Files.isRegularFile(ready)){
                 @SuppressWarnings("unchecked") var data=(Map<String,Object>)JsonMapper.builder().build().readValue(Files.readString(ready),Map.class);

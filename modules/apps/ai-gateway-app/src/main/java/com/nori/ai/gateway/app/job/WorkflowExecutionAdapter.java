@@ -31,8 +31,8 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         expiry.assertLive(job.cancellation());
         TaskType task=TaskType.valueOf((String)job.classification().get("taskType"));
         audit.writeForJob(AuditEvent.jobClassified(job.scope(),job.conversationId(),job.jobId(),task));
-        var definition=registry.workflow(job.scope(),task).orElse(null);
-        if(definition==null)return TerminalSpec.outcome(JobStatus.SUCCEEDED,ResultStatus.UNSUPPORTED,null,Map.of("status",ResultStatus.UNSUPPORTED.name()));
+        if(task==TaskType.UNSUPPORTED_REQUEST)return TerminalSpec.outcome(JobStatus.SUCCEEDED,ResultStatus.UNSUPPORTED,null,Map.of("status",ResultStatus.UNSUPPORTED.name()));
+        var definition=builder.definition(job);
         try{builder.checkOptions(definition,job);}catch(WorkflowPlanBuilder.Blocked blocked){return finishClarification(job,ErrorCode.PLAN_INVALID,List.of("options"));}
         var context=object(job.requestInput().requestFields().get("context"));
         TimeWindowResolver.Resolved resolved;
@@ -49,7 +49,8 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
                 }
             }catch(RuntimeException failure){expiry.assertLive(job.cancellation());throw failure;}
         }
-        var plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());
+        final WorkflowExecutionPlan plan;
+        try{plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());}catch(WorkflowPlanBuilder.Invalid invalid){return finishClarification(job,ErrorCode.PLAN_INVALID,invalid.fields());}
         ZoneId zone=context.get("timezone") instanceof String value?ZoneId.of(value):null;
         var outcome=executor.run(job,plan,resolvers.forJob(job,zone));
         var spec=composeAndAssemble(job,definition,outcome);
@@ -79,7 +80,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
             outcome.evidence().forEach(value->pairs.add(new TerminalSpec.StoredEvidence(value,Optional.empty())));
             var documents=new LinkedHashSet<ResultSourceDeps.DocKey>();
             for(var stage:outcome.stages()) {
-                var manifest=registry.find(stage.result().capabilityId()).orElse(null);if(manifest==null)continue;
+                var manifest=registry.find(job.scope(),stage.result().capabilityId()).orElse(null);if(manifest==null)continue;
                 for(var hit:EvidenceAssembler.projectKnowledge(manifest,stage.result(),job.scope()))documents.add(hit.document());
                 EvidenceAssembler.knowledgeEvidence(manifest,stage.result(),job.scope()).forEach(value->pairs.add(new TerminalSpec.StoredEvidence(value.value(),Optional.of(value.source()))));
             }
@@ -161,7 +162,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         if(outcome!=null&&original.has("trace"))copy.set("trace",SchemaContracts.JSON.valueToTree(outcome.trace()));
         Map<com.nori.ai.gateway.core.scope.OwnedReference,List<EvidenceAssembler.KnowledgeHit>> documents=new HashMap<>();
         if(outcome!=null)for(var stage:outcome.stages()) {
-            var manifest=registry.find(stage.result().capabilityId()).orElse(null);if(manifest==null)continue;
+            var manifest=registry.find(job.scope(),stage.result().capabilityId()).orElse(null);if(manifest==null)continue;
             var hits=EvidenceAssembler.projectKnowledge(manifest,stage.result(),job.scope());
             if(!hits.isEmpty())for(var block:stage.result().blocks())documents.put(block.dataRef(),hits);
         }

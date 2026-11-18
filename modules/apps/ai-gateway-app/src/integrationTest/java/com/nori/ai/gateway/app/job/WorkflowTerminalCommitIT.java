@@ -23,7 +23,7 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
         @org.springframework.context.annotation.Bean ClockTrip terminalClockTrip(){return new ClockTrip();}
         @org.springframework.context.annotation.Bean CallFault actualBusinessCallFault(){return new CallFault();}
         @org.springframework.context.annotation.Bean static org.springframework.beans.factory.config.BeanPostProcessor failAfterActualBusinessCall(org.springframework.beans.factory.ObjectProvider<CallFault> faults){return new org.springframework.beans.factory.config.BeanPostProcessor(){
-            public Object postProcessAfterInitialization(Object bean,String name){if(!(bean instanceof com.nori.ai.gateway.tcmock.MockTcBusinessReadAdapter original))return bean;var actual=spy(original);doAnswer(invocation->{var value=invocation.callRealMethod();var failure=faults.getObject().next.getAndSet(null);if(failure!=null)throw failure;return value;}).when(actual).getEqpSnapshot(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.anyString());return actual;}
+            public Object postProcessAfterInitialization(Object bean,String name){if(!(bean instanceof com.nori.ai.gateway.integration.system.HttpSystemQueryAdapter original))return bean;var actual=spy(original);doAnswer(invocation->{var value=invocation.callRealMethod();var failure=faults.getObject().next.getAndSet(null);if(failure!=null)throw failure;return value;}).when(actual).query(org.mockito.ArgumentMatchers.any());return actual;}
         };}
         @org.springframework.context.annotation.Bean static org.springframework.beans.factory.config.BeanPostProcessor observeSharedClock(org.springframework.beans.factory.ObjectProvider<ClockTrip> trips){return new org.springframework.beans.factory.config.BeanPostProcessor(){
             public Object postProcessAfterInitialization(Object bean,String name){if(!(bean instanceof ControllableClock original))return bean;var actual=spy(original);doAnswer(invocation->{var trip=trips.getObject();if(trip.thread==Thread.currentThread()&&++trip.calls==2){trip.thread=null;actual.advance(1);}return invocation.callRealMethod();}).when(actual).instant();return actual;}
@@ -34,13 +34,13 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
     private record Prepared(JobAdmissionService.Accepted accepted,JobContext job) {}
     private Prepared prepare(String key) {
         pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");pauses().hold(PausePointRegistry.Point.SWEEPER_HOLD,"*");
-        hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false));
+        hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.LIVE_QUERY)));
         String delegation=registeredDlg("actor");
         var accepted=inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"실제 저장 자료",workflowFields(),key,delegation)));
         var queue=context.getBean(QueueJobRepository.class);context.getBean(TransactionTemplate.class).executeWithoutResult(tx->assertThat(queue.start(accepted.jobId(),clock().instant())).isTrue());
         var row=queue.nonterminal().stream().filter(value->value.jobId().equals(accepted.jobId())).findFirst().orElseThrow();var workerScope=context.getBean(ScopeAssembler.class).forWorker(row);
         var request=context.getBean(JobRequestInputReader.class).findRequestInput(workerScope,accepted.jobId()).orElseThrow();
-        var job=new JobContext(accepted.jobId(),accepted.conversationId(),workerScope,delegation,new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",TaskType.LIVE_QUERY.name()),request);
+        var job=new JobContext(accepted.jobId(),accepted.conversationId(),workerScope,delegation,new CancellationToken(),InferenceMode.DISABLED,Map.of("taskType",TaskType.LIVE_QUERY.name(),"toolCalls",StandardSystemConfiguration.calls(TaskType.LIVE_QUERY),"targets",request.selectedResourceRefs()),request);
         return new Prepared(accepted,job);
     }
     private Produced produce(String key) throws Exception {

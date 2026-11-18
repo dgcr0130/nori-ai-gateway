@@ -5,36 +5,40 @@ import java.util.*;
 
 public final class CapabilityRegistry {
     private final Map<String, CapabilityManifest> manifests;
-    private final List<WorkflowDefinition> workflows;
     private final Set<ImplementationPhase> activePhases;
-    public CapabilityRegistry(List<CapabilityManifest> candidates, List<WorkflowDefinition> workflows,
+    public CapabilityRegistry(List<CapabilityManifest> candidates,
             Set<ImplementationPhase> activePhases, ContractVersionPolicy versions) {
-        this.activePhases = Set.copyOf(activePhases); this.workflows = List.copyOf(workflows);
+        this.activePhases = Set.copyOf(activePhases);
         Map<String, CapabilityManifest> registered = new LinkedHashMap<>();
         Set<String> ids = new HashSet<>();
         for (CapabilityManifest manifest : candidates) {
-            if (!ids.add(manifest.capabilityId())) throw new IllegalArgumentException("Capability가 중복되었습니다");
+            String key = manifest.ownerSystem().name() + "/" + manifest.capabilityId();
+            if (!ids.add(key)) throw new IllegalArgumentException("Capability가 중복되었습니다");
             SchemaContracts.validateSchema(manifest.inputSchema()); SchemaContracts.validateSchema(manifest.outputSchema());
             if (!SchemaContracts.digest(manifest.inputSchema(), manifest.outputSchema()).equals(manifest.schemaDigest()))
                 throw new IllegalArgumentException("Schema digest가 일치하지 않습니다");
             if (!versions.supports(manifest.contractVersion())) continue;
-            registered.put(manifest.capabilityId(), manifest); versions.register(manifest);
-        }
-        Set<String> workflowKeys = new HashSet<>();
-        for (WorkflowDefinition workflow : workflows) {
-            if (!workflowKeys.add(workflow.ownerSystem().name() + "/" + workflow.taskType().name())) throw new IllegalArgumentException("Workflow가 중복되었습니다");
+            registered.put(key, manifest); versions.register(manifest);
         }
         this.manifests = Collections.unmodifiableMap(registered);
     }
-    public Optional<CapabilityManifest> find(String id) { return Optional.ofNullable(manifests.get(id)); }
-    public boolean phaseActive(ImplementationPhase phase) { return activePhases.contains(phase); }
-    public Optional<WorkflowDefinition> workflow(VerifiedSystemScope scope, TaskType task) {
-        return workflows.stream().filter(w -> java.util.Objects.equals(w.ownerSystem(),scope.boundSystem()) && w.taskType() == task).findFirst();
+    public Optional<CapabilityManifest> find(String id) {
+        var found = manifests.values().stream().filter(value -> value.capabilityId().equals(id)).toList();
+        return found.size() == 1 ? Optional.of(found.getFirst()) : Optional.empty();
     }
+    public Optional<CapabilityManifest> find(VerifiedSystemScope scope,String id) {
+        return find(scope.boundSystem(),id);
+    }
+    public Optional<CapabilityManifest> find(com.nori.ai.gateway.core.scope.OwnerSystem owner,String id) {
+        return Optional.ofNullable(manifests.get(owner.name()+"/"+id));
+    }
+    public List<CapabilityManifest> all(){return List.copyOf(manifests.values());}
+    public boolean hasToolId(String id) { return manifests.values().stream().anyMatch(value -> value.toolId().equals(id)); }
+    public boolean phaseActive(ImplementationPhase phase) { return activePhases.contains(phase); }
     public RegistryView view(VerifiedSystemScope scope) {
         return new RegistryView(scope.boundSystem(), manifests.values().stream().filter(m -> java.util.Objects.equals(m.ownerSystem(),scope.boundSystem())
             && m.availability() == Availability.IMPLEMENTED && phaseActive(m.implementationPhase())
-            && m.requiredPermission().stream().anyMatch(scope.perm()::contains)
+            && !m.requiredPermission().isEmpty() && scope.perm().containsAll(m.requiredPermission())
             && m.requiredActorScope().equals("READ")).toList());
     }
 }

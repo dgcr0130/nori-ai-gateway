@@ -1,7 +1,7 @@
 package com.nori.ai.gateway.acceptance;
 
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
-import com.nori.ai.gateway.tcmock.verify.ResidueScanner;
+
+import com.nori.ai.gateway.integration.fixtures.verify.ResidueScanner;
 import com.nori.ai.gateway.integration.loki.LokiSourcePolicy;
 import java.sql.*;
 import java.time.Instant;
@@ -58,10 +58,8 @@ public final class OracleQueries {
     /** LLM 호출 시도 감사(LLM_CALL) 1행의 토큰·축소 값(SPEC §14.5·§12.3, 원문 0). {@code promptTokens} 는 응답 usage 가 있을 때만이다. */
     public record LlmCall(String callType, boolean sent, int inputTokens, int maxTokens, Optional<Integer> promptTokens, List<ReductionStep> reduction, String status, Optional<String> errorCode) {}
     public record ReductionStep(int stage, int beforeTokens, int afterTokens) {}
-    public record CommSource(String source, String status, int itemCount, Set<String> warnings, List<Range> missing, List<Range> unverified,
-            long count, long maximum, Optional<Instant> oldest, long retentionHours, boolean applied, boolean deletionPathsExcluded) {}
     public record ToolObservation(String status, String errorCode, int itemCount, Set<String> warnings, Set<String> apps, Set<String> namespaces,
-            List<Range> missing, List<CommSource> sources, int blockCount, int evidenceCount, int claimCount, int citationCount, int composerInputCount) {}
+            List<Range> missing, List<Range> unverified, int blockCount, int evidenceCount, int claimCount, int citationCount, int composerInputCount) {}
 
     private final Connector connector;
     public OracleQueries(Connector connector) { this.connector = connector; }
@@ -96,19 +94,16 @@ public final class OracleQueries {
     public long sourceBlockCount(String job) { return count(Query.SOURCE_BLOCK_COUNT,id(job)); }
     /** Tool 본문은 메모리에서만 투영하며 로그 텍스트·자격·업무 행은 밖으로 반환하지 않습니다. */
     public List<ToolObservation> tools(String job,String capability) {
-        if(capability==null||!capability.matches("tc\\.[A-Za-z0-9.]{1,100}"))throw new IllegalArgumentException("CAPABILITY_INVALID");
+        if(capability==null||!capability.matches("[A-Za-z0-9_.-]{1,128}"))throw new IllegalArgumentException("CAPABILITY_INVALID");
         return query(Query.TOOL_PROJECTION,rows->{var observations=new ArrayList<ToolObservation>();while(rows.next()) {
             try {
                 var root=CanonicalJson.MAPPER.readTree(rows.getString(1));var result=root.path("result");
-                int itemCount=0;var apps=new TreeSet<String>();var namespaces=new TreeSet<String>();var sources=new ArrayList<CommSource>();
+                int itemCount=0;var apps=new TreeSet<String>();var namespaces=new TreeSet<String>();
                 for(var block:result.path("blocks"))for(var item:block.path("content").path("items")) {
                     itemCount++;if(item.has("app"))apps.add(item.path("app").asText());if(item.has("namespace"))namespaces.add(item.path("namespace").asText());
-                    if(capability.equals("tc.commLogs.search")) {
-                        var complete=item.path("completeness");String oldest=complete.path("oldestRetainedAt").asText("");
-                        sources.add(new CommSource(item.path("source").asText(),item.path("status").asText(),item.path("items").size(),strings(item.path("warnings")),ranges(item.path("retentionMeta").path("missingRanges")),ranges(item.path("retentionMeta").path("unverifiedRanges")),complete.path("count").asLong(-1),complete.path("maxEntriesPerKey").asLong(-1),oldest.isEmpty()?Optional.empty():Optional.of(Instant.parse(oldest)),complete.path("retentionHours").asLong(-1),complete.path("appliedValuesVerified").asBoolean(),complete.path("otherDeletionPathsExcluded").asBoolean()));
-                    }
+
                 }
-                observations.add(new ToolObservation(root.path("status").asText(),root.path("errorCode").asText(""),itemCount,strings(result.path("warnings")),Set.copyOf(apps),Set.copyOf(namespaces),ranges(result.path("metadata").path("missingRanges")),List.copyOf(sources),result.path("blocks").size(),result.path("evidence").size(),result.path("claims").size(),result.path("citations").size(),result.path("composerInputs").size()));
+                observations.add(new ToolObservation(root.path("status").asText(),root.path("errorCode").asText(""),itemCount,strings(result.path("warnings")),Set.copyOf(apps),Set.copyOf(namespaces),ranges(result.path("metadata").path("missingRanges")),ranges(result.path("metadata").path("unverifiedRanges")),result.path("blocks").size(),result.path("evidence").size(),result.path("claims").size(),result.path("citations").size(),result.path("composerInputs").size()));
             }catch(java.io.IOException|java.time.DateTimeException invalid){throw new IllegalStateException("ORACLE_TOOL_INVALID");}
         }return List.copyOf(observations);},id(job),capability);
     }
@@ -154,8 +149,8 @@ public final class OracleQueries {
     }
     /** P14 저장 키 그대로: {@code SourceRetentionProbeScheduler} 가 쓰는 {@link LokiSourcePolicy#retentionSourceId} (허용 앱 목록 포함)를 재사용한다. */
     public Optional<RetentionProbe> retentionProbe(String lokiApp) {
-        if (!TcSourcePolicy.APPS.contains(lokiApp)) throw new IllegalArgumentException("SOURCE_ID_INVALID");
-        String sourceId = LokiSourcePolicy.retentionSourceId(lokiApp);
+        if (!F1Fixture.APPS.contains(lokiApp)) throw new IllegalArgumentException("SOURCE_ID_INVALID");
+        String sourceId = LokiSourcePolicy.retentionSourceId("TC","tc",lokiApp);
         return query(Query.RETENTION_PROBE, rows -> rows.next() ? Optional.of(new RetentionProbe(instant(rows, 1), instant(rows, 2), instant(rows, 3).orElseThrow())) : Optional.<RetentionProbe>empty(), sourceId);
     }
     public List<JobTiming> jobTimings(List<String> jobIds) {

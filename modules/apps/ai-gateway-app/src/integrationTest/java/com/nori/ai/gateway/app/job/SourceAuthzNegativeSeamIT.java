@@ -4,7 +4,7 @@ import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.core.authz.*;
 import com.nori.ai.gateway.core.dispatch.*;
 import com.nori.ai.gateway.core.plan.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.DelegatedCall;
+import com.nori.ai.gateway.core.authz.DelegatedCall;
 import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.scope.*;
 import com.nori.ai.gateway.core.result.ResultStatus;
@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class SourceAuthzNegativeSeamIT extends P09QueueSupport {
-    private VerifiedSystemScope runtimeScope(String job){var now=clock().instant();return new VerifiedSystemScope(OwnerSystem.TC,"job-worker",new ActorRef("actor"),"actor",Set.of("EQP_READ"),P09TestPorts.PDG,now.minusSeconds(1),now.plusSeconds(60),job);}
+    private VerifiedSystemScope runtimeScope(String job){var now=clock().instant();return new VerifiedSystemScope(OwnerSystem.TC,"job-worker",new ActorRef("actor"),"actor",Set.of("EQP_READ","AI_LOG_READ"),P09TestPorts.PDG,now.minusSeconds(1),now.plusSeconds(60),job);}
     private final String capability="tc.eqp.getOperationalSnapshot";
     private PlanStep step(){return new PlanStep("one",capability,List.of(),List.of(new ResourceRef("EQP","EQP_001")),SchemaContracts.parse("{\"eqp\":\"EQP_001\"}"));}
     private ResourceResolver resolver(){return new ResourceResolver(){
@@ -41,11 +41,11 @@ class SourceAuthzNegativeSeamIT extends P09QueueSupport {
         pauses().release(PausePointRegistry.Point.BEFORE_CLASSIFICATION,job.jobId());await(()->state(job.jobId()).equals("SUCCEEDED"));
     }
     @Test void permissionMapDropDeniesOnlyMatchingJobBeforeAnyFurtherTcOrSourceCall()throws Exception{
-        var job=armed("drop",Map.of("kind","PERMISSION_MAP_DROP","sourceId","sources://TC/logs"));String delegation=registeredDlg("actor");var step=context.getBean(SourceAuthorizationStep.class);long before=calls().count("authorize");
-        assertThat(step.authorizeBefore("sources://TC/logs",runtimeScope(job.jobId()),new DelegatedCall("actor",delegation))).isInstanceOf(SourceAuthorizationStep.Denied.class);
-        assertThat(calls().count("authorize")).isEqualTo(before);
-        assertThat(step.authorizeBefore("sources://TC/logs",runtimeScope("next-job"),new DelegatedCall("actor",delegation))).isInstanceOf(SourceAuthorizationStep.Granted.class);
-        assertThat(context.getBean(SourcePermissionMap.class).find("sources://TC/logs")).isPresent();
+        var job=armed("drop",Map.of("kind","PERMISSION_MAP_DROP","sourceId","sources://TC/logs.search"));String delegation=registeredDlg("actor");var step=context.getBean(SourceAuthorizationStep.class);long before=calls().requests.size();
+        assertThat(step.authorizeBefore("sources://TC/logs.search",runtimeScope(job.jobId()),new DelegatedCall("actor",delegation))).isInstanceOf(SourceAuthorizationStep.Denied.class);
+        assertThat(calls().requests.size()).isEqualTo(before);
+        assertThat(step.authorizeBefore("sources://TC/logs.search",runtimeScope("next-job"),new DelegatedCall("actor",delegation))).isInstanceOf(SourceAuthorizationStep.Granted.class);
+        assertThat(context.getBean(SourcePermissionMap.class).find("sources://TC/logs.search")).isPresent();
         pauses().release(PausePointRegistry.Point.BEFORE_CLASSIFICATION,job.jobId());await(()->state(job.jobId()).equals("SUCCEEDED"));
     }
     @Test void validatorUsesBoundScopeForImmutablePlannedProjectionAndNextJobIsUnaffected()throws Exception{

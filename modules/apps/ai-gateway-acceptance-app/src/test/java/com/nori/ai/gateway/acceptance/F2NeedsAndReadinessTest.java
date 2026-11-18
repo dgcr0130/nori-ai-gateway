@@ -10,39 +10,19 @@ import static org.assertj.core.api.Assertions.*;
 
 /** AC-32-NEEDS 사례표 판정과 readiness stub leaf 판정을 loopback 대역으로 실행한다(대역 값은 시험 지정이며 제품 증거가 아님). */
 class F2NeedsAndReadinessTest {
-    private static final Map<String,List<String>> BOUND = Map.of("[\"S\",\"H\"]", List.of("S", "H"), "[\"H\",\"S\"]", List.of("S", "H"), "[\"C\"]", List.of("H", "N", "I", "C"), "[\"N\"]", List.of("S", "N"));
-    private static final Map<String,List<String>> ADDED = Map.of("[\"C\"]", List.of("H", "N", "I"), "[\"N\"]", List.of("S"));
-
-    /** 시험이 기대 정규화 결과를 상세 보고 표 행으로 돌려주는 대역. {@code wrongAdded} 이면 ⓒ 의 서버 보완을 일부러 틀린다. */
-    private static F2LocalFixture.Outcome needs(Map.Entry<JsonNode,String> entry, boolean wrongAdded) {
-        var script = entry.getKey().path("llmScript");
-        JsonNode wire; try { wire = CanonicalJson.MAPPER.readTree(script.get(0).path("content").asText()); } catch (Exception e) { wire = CanonicalJson.MAPPER.nullNode(); }
-        if (script.size() > 1 && script.get(1).path("callType").asText().equals("CLASSIFY")) return new F2LocalFixture.Outcome().failed("PLAN_INVALID").watch("CLASSIFY", 0, 2).watch("CLASSIFY", 1, 1);
-        var outcome = new F2LocalFixture.Outcome().watch("CLASSIFY", 0, 1);
-        String n = wire.path("n").toString();
-        if (wire.path("t").asText().equals("KQ") || !BOUND.containsKey(n)) { if (!BOUND.containsKey(n) && !wire.path("t").asText().equals("KQ")) outcome.failed("RESOURCE_NOT_FOUND"); return outcome; }
-        var added = new ArrayList<>(ADDED.getOrDefault(n, List.of())); if (wrongAdded && n.equals("[\"C\"]")) added.remove("I");
-        var rows = new ArrayList<Map<String,Object>>();
-        for (String code : BOUND.get(n)) rows.add(Map.of("evidence", F2JobChecks.NEED_LABELS.get(code), "serverAdded", added.contains(code)));
-        outcome.payload = new LinkedHashMap<>(Map.of("blocks", List.of(Map.of("type", "snapshot"), Map.of("type", "table", "content", Map.of("columns", F2JobChecks.REPORT_COLUMNS, "rows", rows)))));
-        return outcome;
+    /** 실행 목록 0~4와 동일 도구 3회 제한을 판정하는 HTTP 대역입니다. */
+    private static F2LocalFixture.Outcome execution(Map.Entry<JsonNode,String> entry,boolean wrongCount){
+        JsonNode wire;try{wire=CanonicalJson.MAPPER.readTree(entry.getKey().path("llmScript").get(0).path("content").asText());}catch(Exception invalid){throw new IllegalStateException(invalid);}
+        if(wire.has("systemId"))return new F2LocalFixture.Outcome().failed("CONTRACT_INVALID").watch("CLASSIFY",0,1);
+        int count=wire.path("toolCalls").size();var result=new F2LocalFixture.Outcome().watch("CLASSIFY",0,1);for(int i=0;i<Math.min(count,3)+(wrongCount?1:0);i++)result.tool("tc.eqp.getOperationalSnapshot","SUCCESS");
+        if(count==4)result.payload=new LinkedHashMap<>(Map.of("trace",List.of(Map.of("stepId","call-4","outcome","TOOL_LIMIT_REACHED"))));return result;
     }
-
-    @Test void needsCasesCheckBoundEvidenceAndServerAddedThroughTheDetailedReportAndLeaveUnobservableCasesNotRun() throws Exception {
-        try (var fixture = new F2LocalFixture()) {
-            fixture.responder = entry -> needs(entry, false);
-            assertThatThrownBy(() -> fixture.checks(Optional.of(120)).run("AC-32-NEEDS")).isInstanceOf(TestAbortedException.class).hasMessage("NEEDS_CASE_UNOBSERVED_d");
-            assertThat(fixture.jobs).as("ⓐ~ⓞ 사례마다 새 Job").isEqualTo(15);
-            var scenarios = new ArrayList<>(fixture.armed.values());
-            assertThat(scenarios.get(0).path("llmScript").get(0).path("content").asText()).contains("\"n\":[\"S\",\"H\"]", "\"a\":\"D\"");
-            assertThat(scenarios.get(5).path("promptWatch").path("sentinels").get(1).asText()).isEqualTo("오류: SCHEMA_KEYS_INVALID)");
-            var maximum = scenarios.getLast().path("llmScript").get(0);
-            assertThat(maximum.path("usage").path("completionTokens").asInt()).as("ⓞ 하네스 tokenizer 계수를 그대로 무장").isEqualTo(120);
-            assertThat(fixture.questions.getLast()).contains("\"" + "검".repeat(256) + "\"");
-            assertThatThrownBy(() -> fixture.checks(Optional.empty()).run("AC-32-NEEDS")).hasMessage("NEEDS_CASE_UNOBSERVED_do");
-            assertThatThrownBy(() -> fixture.checks(Optional.of(769)).run("AC-32-NEEDS")).isInstanceOf(AssertionError.class).hasMessage("F2_NEEDS_MAX_WIRE_BUDGET");
-            fixture.responder = entry -> needs(entry, true);
-            assertThatThrownBy(() -> fixture.checks(Optional.of(120)).run("AC-32-NEEDS")).isInstanceOf(AssertionError.class).hasMessage("F2_NEEDS_SERVER_ADDED_c");
+    @Test void executionListCasesCheckExactCountsSingleClassificationAndExplicitToolLimit()throws Exception {
+        try(var fixture=new F2LocalFixture()){
+            fixture.responder=entry->execution(entry,false);fixture.checks(Optional.empty()).run("AC-32-NEEDS");assertThat(fixture.jobs).isEqualTo(6);
+            var scenarios=new ArrayList<>(fixture.armed.values());for(int count=0;count<=4;count++)assertThat(CanonicalJson.MAPPER.readTree(scenarios.get(count).path("llmScript").get(0).path("content").asText()).path("toolCalls")).hasSize(count);
+            fixture.responder=entry->execution(entry,true);assertThatThrownBy(()->fixture.checks(Optional.empty()).run("AC-32-NEEDS")).hasMessage("F2_EXECUTION_LIST_COUNT");
+            fixture.responder=entry->{var value=execution(entry,false);value.watch.clear();return value.watch("CLASSIFY",0,2);};assertThatThrownBy(()->fixture.checks(Optional.empty()).run("AC-32-NEEDS")).hasMessage("F2_CLASSIFY_SINGLE_CALL");
         }
     }
 

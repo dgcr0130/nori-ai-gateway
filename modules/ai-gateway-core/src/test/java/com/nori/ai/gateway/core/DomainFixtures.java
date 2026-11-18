@@ -22,7 +22,7 @@ final class DomainFixtures {
     static VerifiedSystemScope scope(OwnerSystem owner, Set<String> perms) {
         return new VerifiedSystemScope(owner, "service", new ActorRef("actor"), "actor", perms, "digest", NOW.minusSeconds(60), NOW.plusSeconds(60), "request");
     }
-    static CapabilityManifest manifest() { return new ManifestLoader().loadClasspath("manifests/tc/index.json").stream().filter(m -> m.capabilityId().equals(ID)).findFirst().orElseThrow(); }
+    static CapabilityManifest manifest() { return new ManifestLoader().loadClasspath("fixtures/tools/index.json").stream().filter(m -> m.capabilityId().equals(ID)).findFirst().orElseThrow(); }
     static CapabilityManifest modify(CapabilityManifest manifest, String field, Object value) {
         ObjectNode node = SchemaContracts.JSON.valueToTree(manifest);
         node.set(field, SchemaContracts.JSON.valueToTree(value));
@@ -33,11 +33,8 @@ final class DomainFixtures {
         node.put("ownerSystem", "WM").put("toolId", "wm.eqp.getOperationalSnapshot").put("capabilityId", "wm.eqp.getOperationalSnapshot").put("sourceAllowlistRef", "sources://WM/eqp-backend");
         return new ManifestLoader().decode(node);
     }
-    static List<WorkflowDefinition> workflows() {
-        return new ManifestLoader().loadWorkflowsClasspath("workflows/tc/index.json");
-    }
     static CapabilityRegistry registry(CapabilityManifest m, ContractVersionPolicy versions) {
-        return new CapabilityRegistry(List.of(m), workflows(), Set.of(ImplementationPhase.PHASE_1), versions);
+        return new CapabilityRegistry(List.of(m), Set.of(ImplementationPhase.PHASE_1), versions);
     }
     static PlanStep step() { return step(SchemaContracts.parse("{\"eqp\":\"EQP_001\",\"q\":\"WM 으로 보낸 메시지\"}")); }
     static PlanStep step(JsonNode args) { return new PlanStep("s1", ID, List.of(), List.of(new ResourceRef("EQP", "EQP_001")), args); }

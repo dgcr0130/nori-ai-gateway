@@ -26,12 +26,16 @@ public final class ToolCallBudget {
     /** 호출할 수 있으면 세고 true, 한도를 넘으면 세지 않고 false. */
     public boolean tryAcquire(String capabilityId, ToolKind kind) {
         int same = perTool.getOrDefault(capabilityId, 0);
-        boolean search = kind == ToolKind.KNOWLEDGE && capabilityId.endsWith(".knowledge.search");
-        if (total >= totalLimit || same >= sameToolLimit || search && knowledge >= knowledgeLimit) return false;
-        total++; perTool.put(capabilityId, same + 1); if (search) knowledge++;
+        if (total >= totalLimit || same >= sameToolLimit) return false;
+        total++; perTool.put(capabilityId, same + 1);
         return true;
     }
 
+    /** 하이브리드 세 경로는 이 메서드의 한 호출로 셉니다. */
+    public boolean tryAcquireDocumentSearch(){
+        if(knowledge>=knowledgeLimit||total>=totalLimit)return false;
+        knowledge++;total++;return true;
+    }
     /** 근거 보완 round 를 시작할 수 있으면 세고 true. */
     public boolean tryStartSupplementRound() {
         if (rounds >= roundLimit) return false;

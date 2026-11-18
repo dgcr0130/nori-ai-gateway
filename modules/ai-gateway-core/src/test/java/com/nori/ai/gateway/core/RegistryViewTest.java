@@ -8,9 +8,9 @@ import static org.assertj.core.api.Assertions.*;
 import static com.nori.ai.gateway.core.DomainFixtures.*;
 
 class RegistryViewTest {
-    @Test void filtersByOwnerAvailabilityPhaseAndAnyPermissionWithDefaultDeny() {
+    @Test void filtersByOwnerAvailabilityPhaseAndAllPermissionsWithDefaultDeny() {
         var a = manifest(); var b = otherOwner(a);
-        var registry = new CapabilityRegistry(List.of(a,b), workflows(), Set.of(ImplementationPhase.PHASE_1), new ContractVersionPolicy());
+        var registry = new CapabilityRegistry(List.of(a,b), Set.of(ImplementationPhase.PHASE_1), new ContractVersionPolicy());
         assertThat(registry.view(scope()).capabilities()).containsExactly(a);
         assertThat(registry.view(scope(OwnerSystem.WM,Set.of("EQP_READ"))).capabilities()).containsExactly(b);
         assertThat(registry.view(scope(OwnerSystem.TC,Set.of())).capabilities()).isEmpty();
@@ -18,8 +18,9 @@ class RegistryViewTest {
             assertThat(registry(modify(a,"availability",availability),new ContractVersionPolicy()).view(scope()).capabilities()).isEmpty();
         assertThat(registry(modify(a,"implementationPhase",ImplementationPhase.PHASE_2),new ContractVersionPolicy()).view(scope()).capabilities()).isEmpty();
         assertThat(registry(modify(a,"requiredPermission",List.of()),new ContractVersionPolicy()).view(scope()).capabilities()).isEmpty();
-        var any = modify(a,"requiredPermission",List.of("UNMAPPED", "EQP_READ"));
-        assertThat(registry(any,new ContractVersionPolicy()).view(scope()).capabilities()).containsExactly(any);
+        var all = modify(a,"requiredPermission",List.of("UNMAPPED", "EQP_READ"));
+        assertThat(registry(all,new ContractVersionPolicy()).view(scope()).capabilities()).isEmpty();
+        assertThat(registry(all,new ContractVersionPolicy()).view(scope(OwnerSystem.TC,Set.of("UNMAPPED","EQP_READ"))).capabilities()).containsExactly(all);
     }
     @Test void registryAndScopeAreDefensiveAndScopeExpiryBoundaryIsExclusive() {
         Set<String> perms = new HashSet<>(Set.of("EQP_READ")); var scope=scope(OwnerSystem.TC,perms);perms.clear();

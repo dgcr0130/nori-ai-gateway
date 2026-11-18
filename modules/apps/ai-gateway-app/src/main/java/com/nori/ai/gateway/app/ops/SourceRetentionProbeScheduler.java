@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.app.ops;
 
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
+import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory;
 import com.nori.ai.gateway.app.config.SourceConnectorConfiguration.ProbeWindowInput;
 import com.nori.ai.gateway.app.job.recovery.ReadinessGate;
@@ -32,15 +32,16 @@ public final class SourceRetentionProbeScheduler implements AutoCloseable {
     private final SourceRetentionProbeRepository probes;
     private final ObjectProvider<LokiProbeFactory> factories;
     private final ObjectProvider<ProbeWindowInput> windows;
+    private final GatewaySystemsProperties systems;
     private final Clock clock;
     private final Counter failures;
     private volatile boolean started;
     private Instant nextRunAt;
 
     public SourceRetentionProbeScheduler(SourceRetentionProbeRepository probes, ObjectProvider<LokiProbeFactory> factories,
-            ObjectProvider<ProbeWindowInput> windows, Clock clock, MeterRegistry meters) {
+            ObjectProvider<ProbeWindowInput> windows, Clock clock, MeterRegistry meters,GatewaySystemsProperties systems) {
         this.probes = Objects.requireNonNull(probes); this.factories = Objects.requireNonNull(factories); this.windows = Objects.requireNonNull(windows);
-        this.clock = Objects.requireNonNull(clock); failures = Counter.builder(MetricsCatalog.RETENTION_PROBE_FAILURES).register(meters);
+        this.systems=Objects.requireNonNull(systems);this.clock = Objects.requireNonNull(clock); failures = Counter.builder(MetricsCatalog.RETENTION_PROBE_FAILURES).register(meters);
     }
     @EventListener public void start(ReadinessGate.RecoveryCompleted event) {
         if (started) return;
@@ -62,12 +63,12 @@ public final class SourceRetentionProbeScheduler implements AutoCloseable {
         LokiProbeFactory factory = factories.getIfAvailable();
         ProbeWindowInput input = windows.getIfAvailable();
         if (factory == null || input == null) return;
-        for (String app : TcSourcePolicy.APPS) {
-            String sourceId = LokiSourcePolicy.retentionSourceId(app);
+        for(var system:systems.systems().entrySet()) for(var app:system.getValue().apps()) {
+            String sourceId = LokiSourcePolicy.retentionSourceId(system.getKey(),app.namespace(),app.name());
             var window = input.window(sourceId, now);
             if (window.isEmpty()) continue;
             Optional<LokiRetentionProbe.ProbeObservation> observed;
-            try { observed = factory.create(window.get()).measure(app); }
+            try { observed = factory.create(window.get()).measure(app.name(),app.namespace()); }
             catch (RuntimeException failure) { failures.increment(); continue; }
             observed.ifPresent(value -> probes.upsert(sourceId, value.verifiedOldestAt(), value.probeLimit(), now));
         }

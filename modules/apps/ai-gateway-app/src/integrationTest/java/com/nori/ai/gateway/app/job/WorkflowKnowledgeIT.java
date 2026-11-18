@@ -32,14 +32,15 @@ class WorkflowKnowledgeIT extends P09QueueSupport {
             public ToolKind toolKind(){return ToolKind.KNOWLEDGE;}
             public ToolResultEnvelope execute(com.nori.ai.gateway.core.plan.PlanStep step,CapabilityManifest manifest,VerifiedSystemScope scope,ExecutionContext context){documents.calls.add(step);documents.original=ToolResults.result(manifest,scope,documents.hits.isEmpty()?ResultStatus.EMPTY:ResultStatus.SUCCESS,documents.hits,clock.instant(),List.of(),Set.of(),List.of(),"envelope-revision");return documents.original;}
         };}
-        @Bean static BeanPostProcessor knowledgeContractFixture(ObjectProvider<Documents> documents,ObjectProvider<ManifestLoader> loader) {return new BeanPostProcessor(){
+        @Bean static BeanPostProcessor knowledgeContractFixture(ObjectProvider<Documents> documents,ObjectProvider<ContractVersionPolicy> versions) {return new BeanPostProcessor(){
             @Override public Object postProcessAfterInitialization(Object bean,String name) {
                 if(bean instanceof CapabilityRegistry) {
-                    var manifests=loader.getObject().loadClasspath("manifests/tc/index.json").stream().map(manifest->{
-                        if(manifest.toolKind()!=ToolKind.KNOWLEDGE)return manifest;
-                        var tree=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.valueToTree(manifest);tree.put("availability","IMPLEMENTED");return loader.getObject().decode(tree);
-                    }).toList();
-                    return new CapabilityRegistry(manifests,loader.getObject().loadWorkflowsClasspath("workflows/tc/index.json"),Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy());
+                    // 문서 실행은 시험 전용 제공자가 직접 공급합니다. 운영/LLM 도구 목록에는 등록하지 않습니다.
+                    var manifests=new ArrayList<>(((CapabilityRegistry)bean).all());
+                    manifests.add(ConfiguredTool.create(OwnerSystem.TC,"fixture.document.read","문서 근거 계약 시험",ToolKind.KNOWLEDGE,
+                        SchemaContracts.parse("{\"type\":\"object\",\"additionalProperties\":false}"),
+                        SchemaContracts.parse("{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}},\"required\":[\"items\"],\"additionalProperties\":false}"),List.of("AI_DOC_READ"),10000));
+                    return new CapabilityRegistry(manifests,Set.of(ImplementationPhase.PHASE_1),versions.getObject());
                 }
                 if(bean instanceof FailClosedKnowledgeDocumentStateReader)return (KnowledgeDocumentStateReader)(permissions,keys)->{
                     var states=new HashMap<ResultSourceDeps.DocKey,KnowledgeDocumentStateReader.State>();keys.forEach(key->states.put(key,documents.getObject().state));return states;
@@ -56,7 +57,7 @@ class WorkflowKnowledgeIT extends P09QueueSupport {
     @Override protected Class<?>[] extraSources(){return new Class<?>[]{HarnessObservationsEndpoint.class,KnowledgePorts.class,WorkflowSourceFixture.class};}
     @Override protected VerifiedSystemScope scope(String actor){var original=super.scope(actor);return new VerifiedSystemScope(original.boundSystem(),original.authenticatedServiceRef(),original.actorRef(),original.sub(),Set.of("EQP_READ","AI_DOC_READ"),original.pdg(),original.issuedAt(),original.expiresAt(),original.requestId());}
     @Override protected Map<String,Object> claims(String actor,String delegation){var values=new HashMap<>(super.claims(actor,delegation));values.put("perm",List.of("EQP_READ","AI_DOC_READ"));return values;}
-    private JobAdmissionService.Accepted knowledge(String key) {hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.KNOWLEDGE_QUERY,Set.of(),null,false));return accept("actor",key,"문서 조회",null,registeredDlg("actor"));}
+    private JobAdmissionService.Accepted knowledge(String key) {hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.KNOWLEDGE_QUERY,Set.of(),null,false,Optional.empty(),List.of(),Optional.empty(),List.of(Map.of("toolId","fixture.document.read","arguments",Map.of()))));return accept("actor",key,"문서 조회",null,registeredDlg("actor"));}
     private HttpResponse<String> get(String path)throws Exception {return HttpClient.newHttpClient().send(HttpRequest.newBuilder(uri(path)).header("Authorization","Bearer "+serviceToken).header("X-Actor-Assertion",signer.sign(claims("actor",null),clock().instant())).GET().build(),HttpResponse.BodyHandlers.ofString());}
     @Test void phoneShapedDocumentRevisionIsExactInEveryTypedStoredProjectionAndFreeTextIsStillMasked() throws Exception {
         String revision="01012345678";var fixture=context.getBean(Documents.class);var hit=new LinkedHashMap<>(Documents.hit("TC",SOURCE,"a:0",revision));hit.put("text","연락 01012345678 token=local-secret user@example.com SENTINEL:document");fixture.hits=List.of(hit);
@@ -109,25 +110,13 @@ class WorkflowKnowledgeIT extends P09QueueSupport {
     private void assertDenied(HttpResponse<String> response) {
         assertThat(response.statusCode()).isEqualTo(200);var body=json.readTree(response.body());assertThat(body.properties().stream().map(Map.Entry::getKey)).containsExactlyInAnyOrder("jobId","jobStatus","createdAt","terminalAt","resultAccess");assertThat(body.path("resultAccess").asString()).isEqualTo("DENIED");assertThat(response.body()).doesNotContain("검증된 문서 근거",SOURCE,"a:0");
     }
-    @Test void implementedOptionalKnowledgeUsesOnlyRealSummaryTermsAndFalseOrEmptyBindingsNeverCallIt() throws Exception {
-        var server=context.getBean(WorkflowSourceFixture.Server.class);server.logText="EQP-001 EQUIPMENT_ERROR";
-        var first=incidentDocuments("optional-implemented",workflowFields());await(()->state(first.jobId()).equals("SUCCEEDED"));
-        assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution WHERE job_id=:job AND capability_id='tc.knowledge.search'").param("job",first.jobId()).query(Integer.class).single()).isOne();
-        var actual=context.getBean(Documents.class).calls.getFirst();assertThat(actual.resources()).containsExactly(new com.nori.ai.gateway.core.plan.ResourceRef("EQP","EQP-001"));assertThat(actual.arguments().path("eqp").asString()).isEqualTo("EQP-001");assertThat(actual.arguments().path("q").asString()).contains("EQUIPMENT_ERROR");
-        var fields=new LinkedHashMap<String,Object>(workflowFields());fields.put("options",Map.of("allowKnowledge",false));hooks().arm("actor","optional-disabled",new TestHookRegistry.Scenario(TaskType.INCIDENT_ANALYSIS,Set.of(),null,false));
-        var blocked=inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"선택 문서 제외",fields,"optional-disabled",registeredDlg("actor"))));await(()->state(blocked.jobId()).equals("SUCCEEDED"));
-        var payload=json.readTree(jdbc().sql("SELECT payload::text FROM gw.result WHERE job_id=:job").param("job",blocked.jobId()).query(String.class).single());assertThat(payload.path("trace").toString()).contains("knowledge","OPTIONAL_STEP_OMITTED");assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution WHERE job_id=:job AND capability_id='tc.knowledge.search'").param("job",blocked.jobId()).query(Integer.class).single()).isZero();
-        server.logText="EQP-001 정상 관측";var noInput=incidentDocuments("optional-empty",workflowFields());await(()->state(noInput.jobId()).equals("SUCCEEDED"));
-        var empty=json.readTree(jdbc().sql("SELECT payload::text FROM gw.result WHERE job_id=:job").param("job",noInput.jobId()).query(String.class).single());assertThat(empty.path("trace").toString()).contains("knowledge","SKIPPED_NO_INPUT");assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution WHERE job_id=:job AND capability_id='tc.knowledge.search'").param("job",noInput.jobId()).query(Integer.class).single()).isZero();
-        assertThat(jdbc().sql("SELECT count(*) FROM gw.cache_entry WHERE capability_id='tc.knowledge.search'").query(Integer.class).single()).isZero();
-    }
     @Test void falseRequiredKnowledgeStopsBeforeAnyResourceToolOrCacheAndReturnsOnlyClarification() throws Exception {
-        hooks().arm("actor","required-disabled",new TestHookRegistry.Scenario(TaskType.KNOWLEDGE_QUERY,Set.of(),null,false));var accepted=inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"문서 차단",Map.of("options",Map.of("allowKnowledge",false)),"required-disabled",registeredDlg("actor"))));await(()->state(accepted.jobId()).equals("FAILED"));
-        var payload=json.readTree(jdbc().sql("SELECT payload::text FROM gw.result WHERE job_id=:job").param("job",accepted.jobId()).query(String.class).single());assertThat(payload.properties().stream().map(Map.Entry::getKey)).containsExactly("clarification");assertThat(payload.path("clarification").path("reason").asString()).isEqualTo("PLAN_INVALID");assertThat(calls().authorizationRequests()).containsExactly(Set.of());assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution").query(Integer.class).single()).isZero();assertThat(count("cache_entry")).isZero();
+        hooks().arm("actor","required-disabled",new TestHookRegistry.Scenario(TaskType.KNOWLEDGE_QUERY,Set.of(),null,false,Optional.empty(),List.of(),Optional.empty(),List.of()));var accepted=inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"문서 차단",Map.of("options",Map.of("allowKnowledge",false)),"required-disabled",registeredDlg("actor"))));await(()->state(accepted.jobId()).equals("FAILED"));
+        var payload=json.readTree(jdbc().sql("SELECT payload::text FROM gw.result WHERE job_id=:job").param("job",accepted.jobId()).query(String.class).single());assertThat(payload.properties().stream().map(Map.Entry::getKey)).containsExactly("clarification");assertThat(payload.path("clarification").path("reason").asString()).isEqualTo("PLAN_INVALID");assertThat(jdbc().sql("SELECT count(*) FROM gw.tool_execution").query(Integer.class).single()).isZero();assertThat(count("cache_entry")).isZero();
     }
 
     private JobAdmissionService.Accepted incidentDocuments(String key,Map<String,Object> fields) {
-        hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.INCIDENT_ANALYSIS,Set.of(),null,false));
+        hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.INCIDENT_ANALYSIS,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.INCIDENT_ANALYSIS)));
         return inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"선택 문서 검색",fields,key,registeredDlg("actor"))));
     }
 

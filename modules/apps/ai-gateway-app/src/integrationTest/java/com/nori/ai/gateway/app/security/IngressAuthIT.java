@@ -2,7 +2,7 @@ package com.nori.ai.gateway.app.security;
 
 import com.nori.ai.gateway.app.StackContextSupport;
 import com.nori.ai.gateway.persistence.audit.auth.AuthRejectionReason;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.*;
 import com.nimbusds.jose.jwk.*;

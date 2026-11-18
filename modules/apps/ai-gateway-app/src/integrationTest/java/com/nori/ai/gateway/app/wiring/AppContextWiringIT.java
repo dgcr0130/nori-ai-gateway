@@ -4,7 +4,7 @@ import com.nori.ai.gateway.app.StackContextSupport;
 import com.nori.ai.gateway.app.config.CoreBeansConfiguration;
 import com.nori.ai.gateway.integration.InferenceAdapterModuleConfiguration;
 import com.nori.ai.gateway.persistence.PersistenceModuleConfiguration;
-import com.nori.ai.gateway.tcmock.TcMockModuleConfiguration;
+import com.nori.ai.gateway.integration.system.SystemAdapterModuleConfiguration;
 import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.plan.*;
 import com.nori.ai.gateway.core.dispatch.*;
@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.*;
 @org.junit.jupiter.api.Tag("label-MOCK_API")
 class AppContextWiringIT extends StackContextSupport {
     static final class BoundaryClock extends java.time.Clock {
-        java.time.Instant now=java.time.Instant.parse("2040-01-01T00:00:00Z");
+        volatile java.time.Instant now=java.time.Instant.parse("2040-01-01T00:00:00Z");
         public java.time.ZoneId getZone(){return java.time.ZoneOffset.UTC;}
         public java.time.Clock withZone(java.time.ZoneId zone){return this;}
         public java.time.Instant instant(){return now;}
@@ -38,15 +38,21 @@ class AppContextWiringIT extends StackContextSupport {
         var step=new PlanStep("one","tc.eqp.getOperationalSnapshot",List.of(),List.of(new ResourceRef("EQP","EQP_001")),SchemaContracts.parse("{\"eqp\":\"EQP_001\"}"));
         for(long nanos:new long[]{-1,0,1}){
             clock.now=scope.expiresAt().plusNanos(nanos);var reads=new java.util.concurrent.atomic.AtomicInteger();
-            ResourceResolver resolver=new ResourceResolver(){
-                public ResourceState resolve(ResourceRef resource,VerifiedSystemScope actual){reads.incrementAndGet();return new ResourceState(OwnerSystem.TC,"EQP",true);}
+            var cancellation=new com.nori.ai.gateway.core.job.CancellationToken();
+            String delegation="boundary-clock-delegation";var backend=context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class);backend.reset();backend.register(scope.sub(),delegation);
+            com.nori.ai.gateway.core.plan.WorkflowResourceResolver resolver=new com.nori.ai.gateway.core.plan.WorkflowResourceResolver(){
+                public Lookup lookup(ResourceRef resource,VerifiedSystemScope actual){reads.incrementAndGet();return new Found(new ResourceState(OwnerSystem.TC,"EQP",true));}
                 public SourceBinding source(CapabilityManifest manifest,VerifiedSystemScope actual){return new SourceBinding(OwnerSystem.TC,manifest.sourceAllowlistRef(),true);}
                 public CurrentAuthorization authorize(CapabilityManifest manifest,PlanStep step,VerifiedSystemScope actual){return new CurrentAuthorization(OwnerSystem.TC,manifest.sourceAllowlistRef(),actual.actorRef(),actual.pdg(),true,actual.perm(),Set.of("READ"));}
                 public java.time.ZoneId timezone(VerifiedSystemScope actual){return java.time.ZoneOffset.UTC;}
+                public com.nori.ai.gateway.core.authz.DelegatedCall delegatedCall(){return new com.nori.ai.gateway.core.authz.DelegatedCall(scope.sub(),delegation);}
+                public com.nori.ai.gateway.core.job.CancellationToken cancellation(){return cancellation;}
+                public void beforeRead(){new com.nori.ai.gateway.core.expiry.ExpiryCheckpoint().assertLive(cancellation);}
             };
             assertThat(validator.validate(plan,scope,null).accepted()).isEqualTo(nanos<0);
             var result=dispatcher.dispatch(step,scope,new ExecutionContext(resolver,trace->{}));
             assertThat(reads.get()).isEqualTo(nanos<0?1:0);
+            assertThat(backend.requests).hasSize(nanos<0?1:0);
             assertThat(result.errorCode()).isEqualTo(nanos<0?null:com.nori.ai.gateway.core.result.ErrorCode.SYSTEM_SCOPE_MISMATCH);
         }
     }
@@ -93,7 +99,7 @@ class AppContextWiringIT extends StackContextSupport {
         start();
         assertThat(context.getEnvironment().getActiveProfiles()).contains("verify");
         for (Class<?> type : new Class<?>[]{CoreBeansConfiguration.class, InferenceAdapterModuleConfiguration.class,
-                PersistenceModuleConfiguration.class, TcMockModuleConfiguration.class, ManifestLoader.class,
+                PersistenceModuleConfiguration.class, SystemAdapterModuleConfiguration.class, ManifestLoader.class,
                 CapabilityRegistry.class, ContractVersionPolicy.class, PlanValidator.class, ToolDispatcher.class,
                 ToolResultContractValidator.class, PlanInjectionSeam.class, DispatchInjectionSeam.class,
                 com.nori.ai.gateway.core.result.ResultAccessEvaluator.class,com.nori.ai.gateway.core.result.KnowledgeDocumentStateReader.class,
@@ -102,8 +108,6 @@ class AppContextWiringIT extends StackContextSupport {
         for(Class<?> type:List.of(com.nori.ai.gateway.core.workflow.LogSummarizer.class,com.nori.ai.gateway.core.blocks.GeneralQueryHelpBuilder.class,com.nori.ai.gateway.core.evidence.EvidenceAssembler.class,com.nori.ai.gateway.core.workflow.WorkflowExecutor.class,com.nori.ai.gateway.app.job.WorkflowExecutionAdapter.class))assertThat(context.getBeansOfType(type)).hasSize(1);
         assertThat(context.getBeansOfType(com.nori.ai.gateway.core.workflow.ResultSourceDepsRecorder.class)).isEmpty();
         // Plan §16.4 P20 배선: 승인 근거 프로필 loader·planner(WorkflowExecutionConfiguration)와 순수 Coverage 평가기(CoreBeansConfiguration)는 각각 하나이며 실제 경로에 주입된다.
-        for(Class<?> type:List.of(com.nori.ai.gateway.app.job.EvidenceProfileLoader.class,com.nori.ai.gateway.core.workflow.EvidencePlanBuilder.class,com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator.class,com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder.class))assertThat(context.getBeansOfType(type)).as(type.getSimpleName()).hasSize(1);
-        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(context.getBean(com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder.class),"evidence")).isEqualTo(java.util.Optional.of(context.getBean(com.nori.ai.gateway.core.workflow.EvidencePlanBuilder.class)));
         assertThat(org.springframework.test.util.ReflectionTestUtils.getField(context.getBean(com.nori.ai.gateway.core.workflow.WorkflowExecutor.class),"coverage")).isSameAs(context.getBean(com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator.class));
         var actual=context.getBean(com.nori.ai.gateway.core.workflow.WorkflowExecutor.class);
         assertThat(org.springframework.test.util.ReflectionTestUtils.getField(actual,"summarizer")).isSameAs(context.getBean(com.nori.ai.gateway.core.workflow.LogSummarizer.class));
@@ -112,20 +116,20 @@ class AppContextWiringIT extends StackContextSupport {
         assertThat(context.getBean(PlanInjectionSeam.class)).isExactlyInstanceOf(PlanInjectionSeam.NoOp.class);
         assertThat(context.getBean(DispatchInjectionSeam.class)).isExactlyInstanceOf(DispatchInjectionSeam.NoOp.class);
         assertThat(context.getBeansOfType(ToolExecutor.class).values()).extracting(ToolExecutor::toolKind).containsExactlyInAnyOrder(ToolKind.BUSINESS,ToolKind.LOG,ToolKind.TRACE,ToolKind.GIT);
-        var loader=context.getBean(ManifestLoader.class);var manifests=loader.loadClasspath("manifests/tc/index.json");
-        assertThat(manifests).hasSize(10);
+        var loader=context.getBean(ManifestLoader.class);var manifests=context.getBean(CapabilityRegistry.class).all();
+        assertThat(manifests).hasSize(6);
         var now=Instant.now();var scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("EQP_READ","DLQ_READ","MODEL_READ","AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ","AI_DOC_READ"),"digest",now.minusSeconds(1),now.plusSeconds(60),"request");
         var registry=context.getBean(CapabilityRegistry.class);var view=registry.view(scope);
         assertThat(view.ownerSystem()).isEqualTo(scope.boundSystem());
         var snapshot=manifests.stream().filter(m -> m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
         assertThat(view.find(snapshot.capabilityId())).contains(snapshot);
-        assertThat(view.capabilities()).hasSize(6).allSatisfy(m -> {
+        assertThat(view.capabilities()).hasSize(5).allSatisfy(m -> {
             assertThat(m.ownerSystem()).isEqualTo(scope.boundSystem());assertThat(m.availability()).isEqualTo(Availability.IMPLEMENTED);
             assertThat(context.getBean(ContractVersionPolicy.class).accepts(m.contractVersion(),m.schemaDigest())).isTrue();
         });
-        assertThat(view.find("tc.event.getRecent")).isEmpty();
-        assertThat(view.find("tc.knowledge.search")).isEmpty();
-        assertThat(registry.workflow(scope,TaskType.INCIDENT_ANALYSIS)).isPresent();
+        assertThat(view.find("fixture.event.read")).isEmpty();
+        assertThat(view.find("document.search")).isEmpty();
+        assertThat(registry.view(scope).capabilities()).isNotEmpty();
         for (Class<?> type : List.of(java.time.Clock.class, com.nori.ai.gateway.persistence.schema.SchemaVersionGuard.class,
                 org.springframework.jdbc.core.simple.JdbcClient.class, org.springframework.transaction.support.TransactionTemplate.class,
                 com.nori.ai.gateway.persistence.repository.ConversationRepository.class,
@@ -249,6 +253,8 @@ class AppContextWiringIT extends StackContextSupport {
     private org.springframework.context.annotation.AnnotationConfigApplicationContext sourceChild(String declaration) {
         var child = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
         child.setParent(context);
+        var parent=context.getBean(com.nori.ai.gateway.app.config.GatewaySystemsProperties.class);var tc=parent.systems().get("TC");
+        child.registerBean(com.nori.ai.gateway.app.config.GatewaySystemsProperties.class,()->new com.nori.ai.gateway.app.config.GatewaySystemsProperties(Map.of("TC",new com.nori.ai.gateway.app.config.GatewaySystemsProperties.SystemConfig(tc.issuer(),tc.serviceTokenSha256File(),tc.actorJwksFile(),tc.backendUrl(),tc.gatewayTokenFile(),tc.tools(),tc.documents(),tc.apps(),List.of(new com.nori.ai.gateway.app.config.GatewaySystemsProperties.Repository("22","main","src/main",List.of("AI_CODE_READ"))),tc.traces(),tc.reviewPermission(),tc.glossary()))),definition->definition.setPrimary(true));
         child.register(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.FactoryConfiguration.class);
         new com.nori.ai.gateway.app.config.SourceConnectorConfiguration.Registrar(declaration)
             .registerBeanDefinitions(org.springframework.core.type.AnnotationMetadata.introspect(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.class), child);
@@ -262,7 +268,7 @@ class AppContextWiringIT extends StackContextSupport {
         com.nori.ai.gateway.app.job.DirectSourceToolExecutor.GitExecutionScopes.class);
 
     @Test void productionSourceDeclarationRegistersNoSourceBeanAndOnlyTheActualRetentionReader() throws Exception {
-        var declared = java.nio.file.Path.of(System.getProperty("aigw.rootDir"), "modules/apps/ai-gateway-app/src/main/resources/config/sources/tc-sources-v1.json");
+        var declared = java.nio.file.Path.of(System.getProperty("aigw.rootDir"), "modules/apps/ai-gateway-app/src/main/resources/config/sources/shared-v1.json");
         byte[] before = java.nio.file.Files.readAllBytes(declared);
         start();
         for (Class<?> type : SOURCE_BEANS) assertThat(context.getBeansOfType(type)).as(type.getName()).isEmpty();
@@ -316,7 +322,7 @@ class AppContextWiringIT extends StackContextSupport {
                 assertThat(hits).as("기동 중 Source I/O 0").hasValue(0);
                 var now = context.getBean(java.time.Clock.class).instant();
                 assertThat(child.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory.class)
-                    .create(new com.nori.ai.gateway.core.retention.TimeWindow(now.minusSeconds(3600), now)).measure("tc-gateway")).isEmpty();
+                    .create(new com.nori.ai.gateway.core.retention.TimeWindow(now.minusSeconds(3600), now)).measure("tc-gateway","tc")).isEmpty();
                 assertThat(hits.get()).isPositive();
             }
             int afterPositive = hits.get();
@@ -357,16 +363,16 @@ class AppContextWiringIT extends StackContextSupport {
             try (var child = sourceChild(sourceDeclaration(target(true, base) + probe + "{\"startAt\":\"" + startAt + "\",\"approvalRef\":\"local-gate-approval\"}", "", ""))) {
                 var input = child.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.ProbeWindowInput.class);
                 assertThat(hits).as("기동 중 Source I/O 0").hasValue(afterPositive);
-                for (String app : com.nori.ai.gateway.integration.source.TcSourcePolicy.APPS) {
-                    String sourceId = com.nori.ai.gateway.integration.loki.LokiSourcePolicy.retentionSourceId(app);
+                for (String app : List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front")) {
+                    String sourceId = com.nori.ai.gateway.integration.loki.LokiSourcePolicy.retentionSourceId("TC","tc",app);
                     assertThat(input.window(sourceId, now)).contains(new com.nori.ai.gateway.core.retention.TimeWindow(startAt, now));
                     assertThat(input.window(sourceId, now.plus(java.time.Duration.ofHours(24)))).contains(new com.nori.ai.gateway.core.retention.TimeWindow(startAt, now.plus(java.time.Duration.ofHours(24))));
                     assertThat(input.window(sourceId, startAt)).as("startAt이 주기 now보다 앞서지 않으면 창 0").isEmpty();
                     assertThat(input.window(sourceId, startAt.minusSeconds(1))).isEmpty();
                 }
                 assertThat(input.window("loki:other-app", now)).isEmpty();
-                var window = input.window(com.nori.ai.gateway.integration.loki.LokiSourcePolicy.retentionSourceId("tc-gateway"), now).orElseThrow();
-                assertThat(child.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory.class).create(window).measure("tc-gateway")).isEmpty();
+                var window = input.window(com.nori.ai.gateway.integration.loki.LokiSourcePolicy.retentionSourceId("TC","tc","tc-gateway"), now).orElseThrow();
+                assertThat(child.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory.class).create(window).measure("tc-gateway","tc")).isEmpty();
                 assertThat(hits.get()).isGreaterThan(afterPositive);
             }
             int afterProbe = hits.get();

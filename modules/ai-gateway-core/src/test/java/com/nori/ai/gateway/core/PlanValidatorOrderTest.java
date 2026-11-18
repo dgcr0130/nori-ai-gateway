@@ -44,11 +44,11 @@ class PlanValidatorOrderTest {
         resolver.pdg="digest";resolver.sourceAllowed=false;
         assertThat(validator.validate(plan(step()),scope(),resolver).trace().getLast().step()).isEqualTo(4);
     }
-    @Test void deniesEmptyPermissionMappingsAndUsesBackendAnyOf() {
+    @Test void deniesEmptyPermissionMappingsAndRequiresAllBackendPermissions() {
         var m=modify(manifest(),"requiredPermission",List.of());
         assertThat(validator(registry(m,new ContractVersionPolicy()),new PlanInjectionSeam.NoOp()).validate(plan(step()),scope(),new Resolver()).rejectReason()).isEqualTo(RejectReason.DENIED);
         m=modify(manifest(),"requiredPermission",List.of("UNKNOWN","EQP_READ"));
-        assertThat(validator(registry(m,new ContractVersionPolicy()),new PlanInjectionSeam.NoOp()).validate(plan(step()),scope(),new Resolver()).accepted()).isTrue();
+        assertThat(validator(registry(m,new ContractVersionPolicy()),new PlanInjectionSeam.NoOp()).validate(plan(step()),scope(),new Resolver()).accepted()).isFalse();
     }
     @Test void rejectsCyclesDuplicatesCostsAndQRefAtStepSeven() {
         var a=new PlanStep("s1",ID,List.of("s1"),List.of(),step().arguments());
@@ -60,7 +60,7 @@ class PlanValidatorOrderTest {
     @Test void resourceTypeAndMissingWorkflowAreDistinctAndUnsupportedIsLast() {
         var resolver=new Resolver();resolver.actualType="MODEL";
         assertThat(validator.validate(plan(step()),scope(),resolver).rejectReason()).isEqualTo(RejectReason.RESOURCE_NOT_FOUND);
-        var emptyRegistry=new CapabilityRegistry(List.of(manifest()),List.of(),Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy());
+        var emptyRegistry=new CapabilityRegistry(List.of(manifest()),Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy());
         assertThat(validator(emptyRegistry,new PlanInjectionSeam.NoOp()).validate(plan(step()),scope(),new Resolver()).trace().getLast().step()).isEqualTo(9);
         var uns=new PlanEnvelope("request","conversation","질문",List.of(),TaskType.UNSUPPORTED_REQUEST,List.of());
         assertThat(validator.validate(uns,scope(),new Resolver()).status()).isEqualTo(ResultStatus.UNSUPPORTED);

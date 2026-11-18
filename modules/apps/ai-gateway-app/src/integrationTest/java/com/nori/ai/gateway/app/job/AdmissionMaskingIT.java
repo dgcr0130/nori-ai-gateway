@@ -33,7 +33,7 @@ class AdmissionMaskingIT extends P09QueueSupport {
         String content=jdbc().sql("SELECT content_masked FROM gw.message").query(String.class).single();assertThat(content).doesNotContain("PRIVATE_123","someone@","abcdef","홍길동","010-").contains("[마스킹]");
         assertThat(observed.text()).isEqualTo(content);assertThat(observed.ruleSetVersion()).isEqualTo("mask-v1");assertThat(observed.applied()).isTrue();
         var before=java.util.List.of(count("job"),count("message"),count("conversation"),count("job_event"));
-        hooks().arm("actor","mask-fail",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false));
+        hooks().arm("actor","mask-fail",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));
         doThrow(new IllegalStateException("마스킹 적용 확인 실패")).when(context.getBean(com.nori.ai.gateway.core.sanitize.ContentSanitizer.class)).sanitize("비밀 입력");
         var failed=postQuery("actor","mask-fail","비밀 입력");assertThat(failed.statusCode()).isEqualTo(500);assertThat(failed.body()).doesNotContain("비밀 입력");
         assertThat(java.util.List.of(count("job"),count("message"),count("conversation"),count("job_event"))).isEqualTo(before);assertThat(hooks().armed("actor","mask-fail")).isPresent();

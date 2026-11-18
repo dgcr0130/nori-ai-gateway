@@ -45,7 +45,7 @@ public final class GitLabPipelineLineageReader {
     private Lineage siblingCommitsGuarded(SourceReadAccess.Request request, GitLabSourcePolicy.LineageEntry entry, long pipelineId) {
         Objects.requireNonNull(entry);
         if (!policy.allows(entry) || pipelineId <= 0 || "nori-common".equals(entry.sourceRepo())) return unknown(entry, pipelineId, Reason.NOT_APPROVED);
-        ResultStatus authorized = access.check(request, GitLabSourcePolicy.SOURCE_REF);
+        ResultStatus authorized = access.check(request, request.sourceAllowlistRef());
         if (authorized != ResultStatus.SUCCESS) return unknown(entry, pipelineId, authorized == ResultStatus.DENIED ? Reason.DENIED : Reason.SOURCE_UNAVAILABLE);
         long deadline = http.deadline(Duration.ofSeconds(30));
         try {
@@ -53,7 +53,7 @@ public final class GitLabPipelineLineageReader {
             do {
                 requireAccess(request);
                 var response = http.json(http.uri(List.of("api", "v4", "projects", Long.toString(entry.execProjectId()), "pipelines", Long.toString(pipelineId), "jobs"),
-                    Map.of("scope[]", "success", "include_retried", true, "per_page", 100, "page", page)), token, deadline,()->access.require(request,GitLabSourcePolicy.SOURCE_REF));
+                    Map.of("scope[]", "success", "include_retried", true, "per_page", 100, "page", page)), token, deadline,()->access.require(request,request.sourceAllowlistRef()));
                 if (!response.body().isArray()) return unknown(entry, pipelineId, Reason.PACKAGE_JOB_AMBIGUOUS);
                 for (JsonNode job : response.body()) if (job.path("name").isTextual() && job.path("status").isTextual()
                         && entry.packageJobName().equals(job.path("name").asText()) && "success".equals(job.path("status").asText())) {
@@ -72,12 +72,12 @@ public final class GitLabPipelineLineageReader {
             if (packageJob == null) return unknown(entry, pipelineId, Reason.PACKAGE_JOB_AMBIGUOUS);
             requireAccess(request);
             List<String> matches = http.stream(http.uri(List.of("api", "v4", "projects", Long.toString(entry.execProjectId()), "jobs", Long.toString(packageJob), "trace"), Map.of()),
-                token, deadline, stream -> siblingLines(stream, entry.sourceRepo()),()->access.require(request,GitLabSourcePolicy.SOURCE_REF));
+                token, deadline, stream -> siblingLines(stream, entry.sourceRepo()),()->access.require(request,request.sourceAllowlistRef()));
             if (matches.size() != 1) return unknown(entry, pipelineId, Reason.SIBLING_COMMIT_AMBIGUOUS);
             String shortSha = matches.getFirst();
             requireAccess(request);
             try {
-                JsonNode commit = http.json(http.uri(List.of("api", "v4", "projects", Long.toString(entry.siblingProjectId()), "repository", "commits", shortSha), Map.of()), token, deadline,()->access.require(request,GitLabSourcePolicy.SOURCE_REF)).body();
+                JsonNode commit = http.json(http.uri(List.of("api", "v4", "projects", Long.toString(entry.siblingProjectId()), "repository", "commits", shortSha), Map.of()), token, deadline,()->access.require(request,request.sourceAllowlistRef())).body();
                 if (!commit.isObject() || !commit.path("id").isTextual()) return unknown(entry, pipelineId, Reason.SHORT_SHA_UNRESOLVED);
                 String sha = commit.path("id").asText();
                 if (!sha.matches("[0-9a-f]{40}") || !sha.startsWith(shortSha)) return unknown(entry, pipelineId, Reason.SHORT_SHA_UNRESOLVED);
@@ -115,7 +115,7 @@ public final class GitLabPipelineLineageReader {
     }
     private static final class AccessDenied extends RuntimeException {}
     private void requireAccess(SourceReadAccess.Request request) {
-        ResultStatus result = access.check(request, GitLabSourcePolicy.SOURCE_REF);
+        ResultStatus result = access.check(request, request.sourceAllowlistRef());
         if (result == ResultStatus.DENIED) throw new AccessDenied();
         if (result != ResultStatus.SUCCESS) throw new SourceHttpClient.Failure(false, false);
     }

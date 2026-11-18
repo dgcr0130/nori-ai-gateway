@@ -5,7 +5,7 @@ import com.nori.ai.gateway.core.budget.ChatMessage;
 import com.nori.ai.gateway.core.budget.PromptTokenCounting;
 import com.nori.ai.gateway.core.registry.CapabilityRegistry;
 import com.nori.ai.gateway.core.registry.SchemaContracts;
-import com.nori.ai.gateway.tcmock.MockScenarioStore;
+import com.nori.ai.gateway.integration.fixtures.StandardSystemStub;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
@@ -24,14 +24,14 @@ class LlmCallAuditIT extends LlmStubSupport {
     @Test void everyClassificationAndComposerAttemptLeavesOneTextFreeAuditRowWithTokensVersionsAndReduction() throws Exception {
         String wrong = "EQP-WRONGAUDIT";
         var job = admitScripted("llm-audit", "AUDITQZ EQP-001 상태 알려줘", windowOnly(),
-            List.of(classify("{\"t\":\"LQ\",\"eqp\":\"" + wrong + "\",\"from\":null,\"to\":null,\"n\":[\"S\"],\"a\":\"B\"}"), classify(wire("LQ", "EQP-001", null, null, null)), compose("COMPOSEDQZ 연결 중이다[e1].")),
+            List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("COMPOSEDQZ 연결 중이다[e1].")),
             Optional.empty(), null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");
         var rows = rows(job.jobId());
-        assertThat(rows).hasSize(3);
-        assertThat(rows).extracting(row -> json.readTree((String) row.get("tokens")).path("callType").asString()).containsExactly("CLASSIFY", "CLASSIFY", "COMPOSER");
-        assertThat(rows).extracting(row -> row.get("status")).containsExactly("FAILED", "SUCCESS", "SUCCESS");
-        assertThat(rows.getFirst().get("error_code")).isEqualTo("PLAN_INVALID");
+        assertThat(rows).hasSize(2);
+        assertThat(rows).extracting(row -> json.readTree((String) row.get("tokens")).path("callType").asString()).containsExactly("CLASSIFY", "COMPOSER");
+        assertThat(rows).extracting(row -> row.get("status")).containsExactly("SUCCESS", "SUCCESS");
+        assertThat(rows.getFirst().get("error_code")).isNull();
         var accepted = jdbc().sql("SELECT request_id, trace_id FROM gw.audit_event WHERE job_id=:job AND event_type='JOB_ACCEPTED'").param("job", job.jobId()).query().singleRow();
         for (var row : rows) {
             var tokens = json.readTree((String) row.get("tokens"));
@@ -47,9 +47,9 @@ class LlmCallAuditIT extends LlmStubSupport {
             assertThat((String) row.get("row")).doesNotContain("AUDITQZ", wrong, "COMPOSEDQZ", "상태 알려줘", "연결 중이다");
         }
         assertThat(json.readTree((String) rows.get(0).get("versions")).path("prompt").asString()).isEqualTo("classify-v3");
-        assertThat(json.readTree((String) rows.get(2).get("versions")).path("prompt").asString()).isEqualTo("compose-v1");
+        assertThat(json.readTree((String) rows.get(1).get("versions")).path("prompt").asString()).isEqualTo("compose-v1");
         assertThat(json.readTree((String) rows.get(0).get("reduction"))).isEmpty();
-        assertThat(json.readTree((String) rows.get(2).get("reduction")).isArray()).isTrue();
+        assertThat(json.readTree((String) rows.get(1).get("reduction")).isArray()).isTrue();
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.CLASSIFY) + scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).as("행 수 = 실제 전송 수").isEqualTo(rows.size());
     }
 
@@ -68,7 +68,7 @@ class LlmCallAuditIT extends LlmStubSupport {
     }
 
     @Test void theComposerOversizeScenarioStillExceedsTheComposerLimitAfterReductionWhileClassificationIsSentWithinItsLimit() throws Exception {
-        var store = context.getBean(MockScenarioStore.class);
+        var store = context.getBean(StandardSystemStub.class);
         store.select("composer-oversize");
         try {
             var job = admitScripted("llm-audit-oversize", "EQP-001 상태와 적용 모델 정의 알려줘", windowOnly(),
@@ -84,8 +84,8 @@ class LlmCallAuditIT extends LlmStubSupport {
                 assertThat(tokens.path("inputTokens").asInt()).isPositive().isLessThanOrEqualTo(5_120); assertThat(row.get("status")).isEqualTo("SUCCESS");
             });
             // 축소 4단계(outputSchema 필수 필드만) 뒤의 모델 조회 결과 하나만으로도 Composer 입력 상한을 넘는다.
-            var stored = json.readTree(jdbc().sql("SELECT payload::text FROM gw.tool_execution WHERE job_id=:id AND capability_id='tc.model.read'").param("id", job.jobId()).query(String.class).single());
-            var schema = context.getBean(CapabilityRegistry.class).find("tc.model.read").orElseThrow().outputSchema();
+            var stored = json.readTree(jdbc().sql("SELECT payload::text FROM gw.tool_execution WHERE job_id=:id AND capability_id='tc.eqp.getOperationalSnapshot'").param("id", job.jobId()).query(String.class).single());
+            var schema = context.getBean(CapabilityRegistry.class).find("tc.eqp.getOperationalSnapshot").orElseThrow().outputSchema();
             var required = SchemaContracts.JSON.createArrayNode();
             for (var block : stored.path("result").path("blocks")) required.add(ComposerInputs.requiredOnly(block.path("content"), schema));
             assertThat(required.toString()).contains("STEP-320");

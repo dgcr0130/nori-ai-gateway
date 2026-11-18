@@ -33,26 +33,31 @@ public final class GitLabCodeConnector {
     private CodeResult searchGuarded(SourceReadAccess.Request request,String term,CodeScope scope,String ref,Optional<GitLabPipelineLineageReader.Lineage> lineage) {
         Objects.requireNonNull(scope); Objects.requireNonNull(lineage);
         var repo = policy.repository(scope.sourceRepo()).orElse(null);
-        if (repo == null || !GitLabSourcePolicy.pathAllowed(repo, scope.pathPrefix()) || ref == null
+        if (repo == null || request.locations().repositories().stream().noneMatch(location -> location.projectId().equals(repo.projectId()) && (location.ref().equals(ref)||lineage.filter(value->value.status()==GitLabPipelineLineageReader.Status.VERIFIED&&value.sourceRepo().equals(repo.sourceRepo())&&ref.equals(value.commitSha())&&repo.refs().contains(location.ref())).isPresent()) && (location.pathPrefix().isEmpty() || scope.pathPrefix().equals(location.pathPrefix()) || scope.pathPrefix().startsWith(location.pathPrefix()+"/")) && request.scope().perm().containsAll(location.requiredPermissions())) || !GitLabSourcePolicy.pathAllowed(repo, scope.pathPrefix()) || ref == null
                 || !(repo.refs().contains(ref) || lineage.filter(value -> value.status() == GitLabPipelineLineageReader.Status.VERIFIED
                     && value.sourceRepo().equals(scope.sourceRepo()) && ref.equals(value.commitSha())).isPresent())) return result(ResultStatus.DENIED);
-        if (term == null || term.isBlank()) throw new IllegalArgumentException("검색어가 필요합니다");
-        ResultStatus authorized = access.check(request, GitLabSourcePolicy.SOURCE_REF);
+        boolean browse = term == null || term.isBlank();
+        ResultStatus authorized = access.check(request, request.sourceAllowlistRef());
         if (authorized != ResultStatus.SUCCESS) return result(authorized);
         long deadline = http.deadline(Duration.ofSeconds(30));
         try {
             String token = tokenFile.read(); int page = 1; List<Snippet> snippets = new ArrayList<>();
             do {
-                authorized = access.check(request, GitLabSourcePolicy.SOURCE_REF);
+                authorized = access.check(request, request.sourceAllowlistRef());
                 if (authorized != ResultStatus.SUCCESS) return result(authorized);
-                var response = http.json(http.uri(List.of("api", "v4", "projects", Long.toString(repo.projectId()), "search"),
-                    Map.of("scope", "blobs", "search", term, "ref", ref, "per_page", 100, "page", page)), token, deadline,()->access.require(request,GitLabSourcePolicy.SOURCE_REF));
+                var response = http.json(browse
+                    ? http.uri(List.of("api","v4","projects",repo.projectId(),"repository","tree"),Map.of("path",scope.pathPrefix(),"ref",ref,"recursive",true,"per_page",100,"page",page))
+                    : http.uri(List.of("api", "v4", "projects", repo.projectId(), "search"),Map.of("scope", "blobs", "search", term, "ref", ref, "per_page", 100, "page", page)), token, deadline,()->access.require(request,request.sourceAllowlistRef()));
                 if (!response.body().isArray()) throw new SourceHttpClient.Failure(false, false);
                 for (JsonNode hit : response.body()) {
                     String path = hit.path("path").asText();
-                    if (!GitLabSourcePolicy.pathAllowed(repo, path) || !(path.equals(scope.pathPrefix()) || path.startsWith(scope.pathPrefix().endsWith("/") ? scope.pathPrefix() : scope.pathPrefix() + "/"))) continue;
-                    if (!hit.path("data").isTextual()) throw new SourceHttpClient.Failure(false, false);
-                    String text = hit.path("data").asText();
+                    if (!GitLabSourcePolicy.pathAllowed(repo, path) || !(scope.pathPrefix().isEmpty() || path.equals(scope.pathPrefix()) || path.startsWith(scope.pathPrefix().endsWith("/") ? scope.pathPrefix() : scope.pathPrefix() + "/"))) continue;
+                    if(browse&&!hit.path("type").asText().equals("blob"))continue;
+                    String text;
+                    if(browse){var file=http.json(http.uri(List.of("api","v4","projects",repo.projectId(),"repository","files",path),Map.of("ref",ref)),token,deadline,()->access.require(request,request.sourceAllowlistRef())).body();
+                        if(!file.path("file_path").asText().equals(path)||!file.path("encoding").asText().equals("base64")||!file.path("content").isTextual())throw new SourceHttpClient.Failure(false,false);
+                        text=new String(Base64.getMimeDecoder().decode(file.path("content").asText()),java.nio.charset.StandardCharsets.UTF_8);
+                    }else{if (!hit.path("data").isTextual()) throw new SourceHttpClient.Failure(false, false);text=hit.path("data").asText();}
                     int count = text.codePointCount(0, text.length());
                     if (count > MAX_SNIPPET_CODEPOINTS) text = text.substring(0, text.offsetByCodePoints(0, MAX_SNIPPET_CODEPOINTS));
                     snippets.add(new Snippet(repo.sourceRepo(), path, ref, text));

@@ -48,7 +48,7 @@ class JobQueueIT extends P09QueueSupport {
         var first=admit("actor","sixty",Set.of());clock().advance(60);pauses().release(PausePointRegistry.Point.SWEEPER_HOLD,"*");
         context.getBean(JobTimeoutSweeper.class).sweepNow();assertThat(state(first.jobId())).isEqualTo("QUEUED");
         clock().advance(1);context.getBean(JobTimeoutSweeper.class).sweepNow();assertThat(state(first.jobId())).isEqualTo("FAILED");assertResult(first.jobId(),"FAILED","QUEUE_TIMEOUT","QUEUE_TIMEOUT");
-        var second=admit("actor","late",Set.of());clock().advance(181);context.getBean(JobTimeoutSweeper.class).sweepNow();assertResult(second.jobId(),"FAILED","QUEUE_TIMEOUT","QUEUE_TIMEOUT");assertThat(calls().count("authorize")).isEqualTo(0);
+        var second=admit("actor","late",Set.of());clock().advance(181);context.getBean(JobTimeoutSweeper.class).sweepNow();assertResult(second.jobId(),"FAILED","QUEUE_TIMEOUT","QUEUE_TIMEOUT");assertThat(calls().requests.size()).isEqualTo(0);
     }
     @Test @Tag("AC-28-JOBLIMIT") @Tag("AC-28-SLOT") void exactLifetimeBoundaryAndOneSlotRelease()throws Exception{
         pauses().hold(PausePointRegistry.Point.SWEEPER_HOLD,"*");var job=admit("actor","lifetime",Set.of(PausePointRegistry.Point.BEFORE_CLASSIFICATION));await(()->pauses().reachedCount(PausePointRegistry.Point.BEFORE_CLASSIFICATION,job.jobId())==1);
@@ -108,14 +108,12 @@ class JobQueueIT extends P09QueueSupport {
     @Test @Tag("AC-28-ATOMIC") void twoAdmissionsAtLastQueuePlaceProduceExactlyOneAcceptance()throws Exception{
         var running=admit("actor","running",Set.of(PausePointRegistry.Point.BEFORE_CLASSIFICATION));await(()->state(running.jobId()).equals("RUNNING"));for(int i=0;i<3;i++)admit("actor","fill"+i,Set.of());
         var barrier=new CyclicBarrier(2);try(var executor=Executors.newVirtualThreadPerTaskExecutor()){
-            var tasks=new ArrayList<Future<Integer>>();for(String key:List.of("a","b")){hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false));tasks.add(executor.submit(()->{barrier.await();try{accept("actor",key,"질문",null,dlg());return 202;}catch(JobAdmissionService.Rejected e){return e.status();}}));}
+            var tasks=new ArrayList<Future<Integer>>();for(String key:List.of("a","b")){hooks().arm("actor",key,new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));tasks.add(executor.submit(()->{barrier.await();try{accept("actor",key,"질문",null,dlg());return 202;}catch(JobAdmissionService.Rejected e){return e.status();}}));}
             assertThat(List.of(tasks.get(0).get(),tasks.get(1).get())).containsExactlyInAnyOrder(202,503);
         }assertThat(count("job")).isEqualTo(5);assertThat(count("message")).isEqualTo(5);pauses().release(PausePointRegistry.Point.BEFORE_CLASSIFICATION,running.jobId());
     }
-    @Test void startGateDenialUnavailabilityAndCatalogPreventAllClassification()throws Exception{
-        for(String gate:List.of("INVALID","DOWN","CATALOG_DOWN")){
-            context.getBean(com.nori.ai.gateway.tcmock.MockScenarioStore.class).select(gate.equals("INVALID")?"logout":gate.equals("DOWN")?"authz-down":"catalog-down");var job=admit("actor","gate"+gate,Set.of());await(()->state(job.jobId()).equals("FAILED"));assertResult(job.jobId(),gate.equals("INVALID")?"DENIED":"SOURCE_UNAVAILABLE",null,gate.equals("INVALID")?"START_GATE_DENIED":"START_GATE_UNAVAILABLE");
-        }assertThat(observations().workflows).isEmpty();assertThat(calls().count("authorize")).isEqualTo(3);
+    @Test void generalQueriesDoNotCallTheRemovedRemotePreflight()throws Exception {
+        var job=admit("actor","no-preflight",Set.of());await(()->state(job.jobId()).equals("SUCCEEDED"));assertThat(observations().workflows).hasSize(1);assertThat(calls().requests).isEmpty();
     }
     @Test void terminalRejectsOuterTransactionAndLosingRaceCreatesNoDuplicate()throws Exception{
         pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");var job=admit("actor","terminal-race",Set.of());var committer=context.getBean(JobTerminalCommitter.class);

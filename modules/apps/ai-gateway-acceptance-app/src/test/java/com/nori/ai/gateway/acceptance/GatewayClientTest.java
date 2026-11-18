@@ -1,7 +1,7 @@
 package com.nori.ai.gateway.acceptance;
 
 import com.nimbusds.jose.JWSObject;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import com.sun.net.httpserver.HttpServer;
 import java.io.*;
 import java.math.BigDecimal;
@@ -29,7 +29,7 @@ class GatewayClientTest {
                 calls.add(key + " " + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 if (key.startsWith("POST /v1/")) for (String name : List.of("Authorization", "X-Actor-Assertion", "Idempotency-Key")) headers.put(name, exchange.getRequestHeaders().getFirst(name));
                 byte[] body = key.equals("GET /__test/clock") ? ("{\"now\":\"" + CLOCK + "\",\"mode\":\"FROZEN\"}").getBytes(StandardCharsets.UTF_8) : new byte[0];
-                int status = key.equals("POST /__test/tcmock/delegations") ? 204 : key.startsWith("POST /v1/") ? 202 : 200;
+                int status = key.equals("POST /__fixture/delegations") ? 204 : key.startsWith("POST /v1/") ? 202 : 200;
                 exchange.sendResponseHeaders(status, body.length == 0 ? -1 : body.length);
                 if (body.length > 0) exchange.getResponseBody().write(body);
             }
@@ -51,7 +51,7 @@ class GatewayClientTest {
             var response = client.submit("/v1/query", "fixture-req-1", Map.of("iss", "tc-ui-backend", "aud", "ai-gateway", "sys", "TC", "sub", "acceptance-actor"), dlg, "{\"query\":\"q\"}");
             assertThat(response.statusCode()).isEqualTo(202);
         } finally { System.setOut(originalOut); System.setErr(originalErr); }
-        int delegation = indexOf("POST /__test/tcmock/delegations"), admission = indexOf("POST /v1/query");
+        int delegation = indexOf("POST /__fixture/delegations"), admission = indexOf("POST /v1/query");
         assertThat(delegation).isNotNegative().isLessThan(admission);
         assertThat(calls.get(delegation)).contains("\"sub\":\"acceptance-actor\"").contains(dlg);
         var payload = JWSObject.parse(headers.get("X-Actor-Assertion")).getPayload().toJSONObject();

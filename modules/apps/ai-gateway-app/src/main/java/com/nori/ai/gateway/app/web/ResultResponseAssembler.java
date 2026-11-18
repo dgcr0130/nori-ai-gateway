@@ -54,9 +54,16 @@ public final class ResultResponseAssembler {
     }
     public void assertLive(Access access) { conversations.find(access.scope(),access.conversation().id()).orElseThrow(UniformNotFound::new); }
     private boolean referencesMatch(tools.jackson.databind.JsonNode node,com.nori.ai.gateway.core.scope.OwnerSystem owner) {
-        if(node.isObject())for(var field:node.properties()) {
-            if(Set.of("ownerSystem","systemId").contains(field.getKey())&&(!field.getValue().isString()||!owner.name().equals(field.getValue().asString())))return false;
-            if(!referencesMatch(field.getValue(),owner))return false;
+        if(node.isObject()) {
+            boolean standardItem=node.size()==3&&node.path("ref").isString()&&node.path("text").isString()&&node.path("values").isObject()
+                &&node.path("ref").asString().codePointCount(0,node.path("ref").asString().length())>=1&&node.path("ref").asString().codePointCount(0,node.path("ref").asString().length())<=256
+                &&node.path("text").asString().codePointCount(0,node.path("text").asString().length())>=1&&node.path("text").asString().codePointCount(0,node.path("text").asString().length())<=4000;
+            for(var field:node.properties()) {
+                // 표준 단건 values는 업무 자료입니다. 동명 업무 필드를 Gateway 소유 메타데이터로 해석하지 않습니다.
+                if(standardItem&&field.getKey().equals("values"))continue;
+                if(Set.of("ownerSystem","systemId").contains(field.getKey())&&(!field.getValue().isString()||!owner.name().equals(field.getValue().asString())))return false;
+                if(!referencesMatch(field.getValue(),owner))return false;
+            }
         }
         if(node.isArray())for(var item:node)if(!referencesMatch(item,owner))return false;
         if(node.isString()) {String value=node.asString();if((value.startsWith("system://")||value.startsWith("result://"))&&!new com.nori.ai.gateway.core.scope.OwnedReference(owner,value).belongsTo(owner))return false;}

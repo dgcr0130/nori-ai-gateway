@@ -20,13 +20,13 @@ class HookArmingIT extends P09QueueSupport {
     }
     @Test void sameActorSeparateKeysBindOnceAndDoNotCrossJobs()throws Exception{
         pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");
-        hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false));hooks().arm("actor","two",new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false));
-        assertThatThrownBy(()->hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false))).isInstanceOf(TestHookRegistry.Conflict.class);
+        hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));hooks().arm("actor","two",new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.LIVE_QUERY)));
+        assertThatThrownBy(()->hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.LIVE_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.LIVE_QUERY)))).isInstanceOf(TestHookRegistry.Conflict.class);
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
             var a=pool.submit(()->accept("actor","one","질문",null,dlg()));var b=pool.submit(()->inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"질문",workflowFields(),"two",registeredDlg("actor")))));var one=a.get();var two=b.get();
             assertThat(hooks().binding(one.jobId()).orElseThrow().taskType()).isEqualTo(TaskType.GENERAL_QUERY);assertThat(hooks().binding(two.jobId()).orElseThrow().taskType()).isEqualTo(TaskType.LIVE_QUERY);
             int count=hooks().reservationCount();assertThat(accept("actor","one","질문",null,dlg()).jobId()).isEqualTo(one.jobId());assertThat(hooks().reservationCount()).isEqualTo(count);
-            assertThatThrownBy(()->hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false))).isInstanceOf(TestHookRegistry.Conflict.class);
+            assertThatThrownBy(()->hooks().arm("actor","one",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)))).isInstanceOf(TestHookRegistry.Conflict.class);
             assertThatThrownBy(()->accept("actor","one","변경",null,dlg())).isInstanceOf(JobAdmissionService.Rejected.class);assertThat(hooks().reservationCount()).isEqualTo(count);
             assertThat(hook("/__test/reset","POST","{}",hookToken).statusCode()).isEqualTo(409);
             pauses().release(PausePointRegistry.Point.DISPATCH_HOLD,"*");await(()->state(one.jobId()).equals("SUCCEEDED")&&state(two.jobId()).equals("SUCCEEDED"));
@@ -35,7 +35,7 @@ class HookArmingIT extends P09QueueSupport {
         }
     }
     @Test void bindingExistsWhenPollerWinsBeforeAfterCommitWake()throws Exception{
-        hooks().arm("actor","aftercommit",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(PausePointRegistry.Point.ADMISSION_AFTER_COMMIT),null,false));
+        hooks().arm("actor","aftercommit",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(PausePointRegistry.Point.ADMISSION_AFTER_COMMIT),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));
         try(var pool=Executors.newVirtualThreadPerTaskExecutor()){
             var response=pool.submit(()->accept("actor","aftercommit","질문",null,dlg()));await(()->count("job")==1);
             String id=jdbc().sql("SELECT id FROM gw.job").query(String.class).single();await(()->pauses().reachedCount(PausePointRegistry.Point.ADMISSION_AFTER_COMMIT,id)==1);
@@ -45,7 +45,7 @@ class HookArmingIT extends P09QueueSupport {
     }
     @Test void reservationRollsBackAndArmingTtlAndClockRulesAreEnforced()throws Exception{
         var directive=new com.nori.ai.gateway.app.hooks.SeamRegistry.Directive(com.nori.ai.gateway.app.hooks.SeamRegistry.Kind.PERMISSION_MAP_DROP,null,"sources://TC/logs",null);
-        pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");hooks().arm("actor","rollback",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,Optional.of(directive)));
+        pauses().hold(PausePointRegistry.Point.DISPATCH_HOLD,"*");hooks().arm("actor","rollback",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,Optional.of(directive),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));
         var reserved=new CountDownLatch(1);var rollback=new CountDownLatch(1);
         doAnswer(invocation->{
             invocation.callRealMethod();
@@ -69,7 +69,7 @@ class HookArmingIT extends P09QueueSupport {
         assertThat(hooks().armed("actor","rollback").orElseThrow().seam()).contains(directive);
         doCallRealMethod().when(hooks()).bindOnAdmission(eq("actor"),eq("rollback"),anyString());var accepted=accept("actor","rollback","질문",null,dlg());assertThat(hooks().binding(accepted.jobId())).isPresent();
         assertThat(hooks().binding(accepted.jobId()).orElseThrow().seam()).contains(directive);
-        hooks().arm("other","expire",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false));clock().advance(60);assertThat(hooks().armed("other","expire")).isEmpty();
+        hooks().arm("other","expire",new TestHookRegistry.Scenario(TaskType.GENERAL_QUERY,Set.of(),null,false,java.util.Optional.empty(),java.util.List.of(),java.util.Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(TaskType.GENERAL_QUERY)));clock().advance(60);assertThat(hooks().armed("other","expire")).isEmpty();
         assertThatThrownBy(()->clock().freezeAt(NOW.minusSeconds(1),false)).isInstanceOf(IllegalArgumentException.class);assertThatThrownBy(()->clock().advance(0)).isInstanceOf(IllegalArgumentException.class);
     }
 }

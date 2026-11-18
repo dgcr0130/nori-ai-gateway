@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.*;
 
 class MetricLabelCardinalityTest {
     private static final com.nori.ai.gateway.core.registry.CapabilityRegistry REGISTRY = new com.nori.ai.gateway.core.registry.CapabilityRegistry(
-        new com.nori.ai.gateway.core.registry.ManifestLoader().loadClasspath("manifests/tc/index.json"), new com.nori.ai.gateway.core.registry.ManifestLoader().loadWorkflowsClasspath("workflows/tc/index.json"),
+        new com.nori.ai.gateway.core.registry.ManifestLoader().loadClasspath("fixtures/tools/index.json"),
         java.util.Set.of(com.nori.ai.gateway.core.registry.ImplementationPhase.PHASE_1), new com.nori.ai.gateway.core.registry.ContractVersionPolicy());
     private static final List<String> SECTION_10_2 = List.of("aigw.jobs.accepted", "aigw.jobs.rejected", "aigw.jobs.terminal", "aigw.job.queue.wait",
         "aigw.job.execution", "aigw.job.e2e", "aigw.queue.depth", "aigw.running.jobs", "aigw.generation.inflight", "aigw.llm.call", "aigw.llm.tokens",
@@ -80,24 +80,24 @@ class MetricLabelCardinalityTest {
     @Test void toolIdMustBeARegisteredCanonicalToolAndTheMeterTypeMustMatchTheDeclaration() {
         var registry = new SimpleMeterRegistry();
         registry.config().meterFilter(MetricsCatalog.filter(REGISTRY));
-        assertThat(REGISTRY.find("tc.logs.search")).isPresent();
+        assertThat(REGISTRY.find("logs.search")).isPresent();
         assertThat(REGISTRY.find("tc.secretValue")).isEmpty();
-        Timer.builder("aigw.tool.call").tags("tool_id", "tc.logs.search", "status", "SUCCESS").register(registry).record(Duration.ofMillis(5));
+        Timer.builder("aigw.tool.call").tags("tool_id", "logs.search", "status", "SUCCESS").register(registry).record(Duration.ofMillis(5));
         // 형식은 맞지만 등록되지 않은 이름·대소문자만 다른 이름은 거부합니다.
         Timer.builder("aigw.tool.call").tags("tool_id", "tc.secretValue", "status", "SUCCESS").register(registry).record(Duration.ofMillis(5));
         Timer.builder("aigw.tool.call").tags("tool_id", "TC.LOGS.SEARCH", "status", "SUCCESS").register(registry).record(Duration.ofMillis(5));
-        Timer.builder("aigw.tool.call").tags("tool_id", "tc.logs.search", "status", "NOT_A_STATUS").register(registry).record(Duration.ofMillis(5));
+        Timer.builder("aigw.tool.call").tags("tool_id", "logs.search", "status", "NOT_A_STATUS").register(registry).record(Duration.ofMillis(5));
         // 선언과 다른 meter type은 같은 이름·라벨이어도 거부합니다. 같은 id의 Timer가 이미 있으면 Micrometer가 filter 전에
         // type 충돌 예외를 내므로, 이 사례는 그 Timer가 없는 새 registry에서 filter 거부를 확인합니다.
         var fresh = new SimpleMeterRegistry();
         fresh.config().meterFilter(MetricsCatalog.filter(REGISTRY));
-        Counter.builder("aigw.tool.call").tags("tool_id", "tc.logs.search", "status", "SUCCESS").register(fresh).increment();
+        Counter.builder("aigw.tool.call").tags("tool_id", "logs.search", "status", "SUCCESS").register(fresh).increment();
         assertThat(fresh.getMeters()).isEmpty();
         Timer.builder(MetricsCatalog.RETENTION_PURGE_FAILURES).register(registry).record(Duration.ofMillis(1));
         io.micrometer.core.instrument.Gauge.builder(MetricsCatalog.AUDIT_WRITE_FAILURES, () -> 1).register(registry);
         Counter.builder(MetricsCatalog.SOURCE_REQUESTS).tags("source_id", "loki", "method", "GET", "status_class", "2xx").register(registry).increment();
         Counter.builder(MetricsCatalog.AUDIT_WRITE_FAILURES).register(registry).increment();
         assertThat(registry.getMeters().stream().map(meter -> meter.getId().getType() + ":" + meter.getId().getName() + meter.getId().getTags()))
-            .containsExactlyInAnyOrder("TIMER:aigw.tool.call[tag(status=SUCCESS), tag(tool_id=tc.logs.search)]", "COUNTER:" + MetricsCatalog.AUDIT_WRITE_FAILURES + "[]");
+            .containsExactlyInAnyOrder("TIMER:aigw.tool.call[tag(status=SUCCESS), tag(tool_id=logs.search)]", "COUNTER:" + MetricsCatalog.AUDIT_WRITE_FAILURES + "[]");
     }
 }

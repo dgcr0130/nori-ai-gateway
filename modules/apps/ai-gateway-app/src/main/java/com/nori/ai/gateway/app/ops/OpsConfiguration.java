@@ -22,7 +22,7 @@ public class OpsConfiguration {
         return new RetentionPurgeJob(retention, clock, pauses, meters);
     }
     @Bean SourceRetentionProbeScheduler sourceRetentionProbeScheduler(SourceRetentionProbeRepository probes, ObjectProvider<LokiProbeFactory> factories,
-            ObjectProvider<ProbeWindowInput> windows, Clock clock, MeterRegistry meters) {
-        return new SourceRetentionProbeScheduler(probes, factories, windows, clock, meters);
+            ObjectProvider<ProbeWindowInput> windows, Clock clock, MeterRegistry meters,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems) {
+        return new SourceRetentionProbeScheduler(probes, factories, windows, clock, meters,systems);
     }
 }

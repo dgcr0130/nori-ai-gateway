@@ -14,8 +14,7 @@ import static org.assertj.core.api.Assertions.*;
 
 class AuditFieldAllowlistTest {
     private static final String TRACE = "0af7651916cd43dd8448eb211c80319c";
-    private final CapabilityRegistry registry = new CapabilityRegistry(new ManifestLoader().loadClasspath("manifests/tc/index.json"),
-        new ManifestLoader().loadWorkflowsClasspath("workflows/tc/index.json"), Set.of(ImplementationPhase.PHASE_1), new ContractVersionPolicy());
+    private final CapabilityRegistry registry = new CapabilityRegistry(new ManifestLoader().loadClasspath("fixtures/tools/index.json"), Set.of(ImplementationPhase.PHASE_1), new ContractVersionPolicy());
     private final AuditFieldAllowlist allowlist = new AuditFieldAllowlist(new ContentSanitizer(), registry);
     private final VerifiedSystemScope scope = scope(OwnerSystem.TC, "service:TC", UUID.randomUUID().toString());
     private final String conversation = UUID.randomUUID().toString(), job = UUID.randomUUID().toString();
@@ -26,7 +25,7 @@ class AuditFieldAllowlistTest {
     }
 
     @Test void eachGeneralEventAcceptsOnlyItsFieldSetWithRegisteredToolValues() {
-        var tool = registry.find("tc.logs.search").orElseThrow();
+        var tool = registry.find("logs.search").orElseThrow();
         assertThatCode(() -> allowlist.requireGeneral(AuditEvent.apiRequest(scope, TRACE))).doesNotThrowAnyException();
         assertThatCode(() -> allowlist.requireGeneral(AuditEvent.jobAccepted(scope, TRACE, conversation, job))).doesNotThrowAnyException();
         assertThatCode(() -> allowlist.requireGeneral(AuditEvent.jobClassified(scope, conversation, job, TaskType.INCIDENT_ANALYSIS))).doesNotThrowAnyException();
@@ -51,7 +50,7 @@ class AuditFieldAllowlistTest {
     }
 
     @Test void fieldsOutsideTheEventSetAndUnregisteredOrForeignToolsAreRejected() {
-        var tool = registry.find("tc.logs.search").orElseThrow();
+        var tool = registry.find("logs.search").orElseThrow();
         assertThatThrownBy(() -> allowlist.requireGeneral(new AuditEvent(scope, AuditEventType.API_REQUEST, TRACE, null, null, tool.toolId(), null, null, null, null, null, null)))
             .hasMessageContaining("field");
         assertThatThrownBy(() -> allowlist.requireGeneral(new AuditEvent(scope, AuditEventType.JOB_CLASSIFIED, TRACE, conversation, job, null, null, TaskType.LIVE_QUERY, null, null, null, null)))

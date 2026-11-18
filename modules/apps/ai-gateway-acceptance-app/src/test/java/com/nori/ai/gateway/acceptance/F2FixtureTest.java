@@ -11,20 +11,9 @@ class F2FixtureTest {
     private static JsonNode manifest(Path directory, String entry) throws Exception { return CanonicalJson.MAPPER.readTree(Files.readString(directory.resolve(entry.substring(entry.lastIndexOf('/') + 1)))); }
 
     @Test void pinnedCapabilityListsAndManifestSnippetMatchTheApplicationManifests() throws Exception {
-        Path directory = Path.of(System.getProperty("aigw.rootDir"), "modules/apps/ai-gateway-app/src/main/resources/manifests/tc");
-        var implemented = new ArrayList<String>(); var authorized = new ArrayList<String>(); var planned = new ArrayList<String>(); String snippetSource = null;
-        for (var entry : CanonicalJson.MAPPER.readTree(Files.readString(directory.resolve("index.json")))) {
-            var value = manifest(directory, entry.asText()); String id = value.path("capabilityId").asText();
-            assertThat(value.path("ownerSystem").asText()).isEqualTo("TC");
-            if (value.path("availability").asText().equals("PLANNED")) { planned.add(id); continue; }
-            assertThat(value.path("availability").asText()).isEqualTo("IMPLEMENTED"); implemented.add(id);
-            var permissions = new ArrayList<String>(); value.path("requiredPermission").forEach(permission -> permissions.add(permission.asText()));
-            if (permissions.stream().anyMatch(F1Fixture.PERMISSIONS::contains)) { authorized.add(id); if (snippetSource == null) snippetSource = value.path("description").asText(); }
-        }
-        assertThat(F2Fixture.IMPLEMENTED).containsExactlyElementsOf(implemented);
-        assertThat(F2Fixture.GQ_HELP_ROWS).containsExactlyElementsOf(authorized);
-        assertThat(F2Fixture.PLANNED).containsExactlyInAnyOrderElementsOf(planned);
-        assertThat(snippetSource).startsWith(F2Fixture.GQ_MANIFEST_SNIPPET);
+        Path config=Path.of(System.getProperty("aigw.rootDir"),"config/ai-gateway.yaml");var implemented=new ArrayList<String>();String snippetSource=null;
+        for(String line:Files.readAllLines(config)){String text=line.strip();if(text.startsWith("- {\"id\":")){var value=CanonicalJson.MAPPER.readTree(text.substring(2));implemented.add(value.path("id").asText());if(snippetSource==null)snippetSource=value.path("description").asText();}}
+        implemented.add("logs.search");implemented.add("trace.search");assertThat(F2Fixture.IMPLEMENTED).containsExactlyElementsOf(implemented);assertThat(F2Fixture.GQ_HELP_ROWS).containsExactlyElementsOf(implemented);assertThat(F2Fixture.PLANNED).isEmpty();assertThat(snippetSource).startsWith(F2Fixture.GQ_MANIFEST_SNIPPET);
         assertThat(F2Fixture.GQ_MANIFEST_SNIPPET.codePointCount(0, F2Fixture.GQ_MANIFEST_SNIPPET.length())).isBetween(1, 64);
     }
 

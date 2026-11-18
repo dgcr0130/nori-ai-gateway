@@ -3,13 +3,12 @@ plugins { application }
 application { mainClass = "com.nori.ai.gateway.acceptance.AcceptanceMain" }
 dependencies {
     implementation(project(":ai-gateway-core"))
-    implementation(project(":adapter:ai-gateway-tc-mock-adapter"))
     // inference adapter 코드는 쓰지 않지만 종전 gateway-integration 의존이 주던 실행 classpath(logback 등)를 바꾸지 않으려고 유지한다(U3 동작 변경 0, 정리는 별도 결정).
     implementation(project(":adapter:ai-gateway-inference-adapter"))
     implementation(project(":adapter:ai-gateway-source-support"))
     implementation(project(":adapter:ai-gateway-loki-adapter"))
     implementation("com.fasterxml.jackson.core:jackson-databind")
-    implementation(testFixtures(project(":adapter:ai-gateway-tc-mock-adapter")))
+    implementation(testFixtures(project(":adapter:ai-gateway-system-adapter")))
     implementation("org.junit.jupiter:junit-jupiter-api")
     implementation("org.junit.platform:junit-platform-launcher")
     implementation("org.postgresql:postgresql")

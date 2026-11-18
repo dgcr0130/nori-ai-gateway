@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.acceptance;
 
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.*;

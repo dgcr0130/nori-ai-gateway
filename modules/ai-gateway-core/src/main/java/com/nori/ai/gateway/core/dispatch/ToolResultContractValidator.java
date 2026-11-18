@@ -21,7 +21,7 @@ public final class ToolResultContractValidator {
             && refs(result.citations(), manifest.ownerSystem()) && refs(result.composerInputs(), manifest.ownerSystem());
         if (valid) {
             valid = result.blocks().stream().allMatch(b -> optionalRef(b.dataRef(), manifest.ownerSystem())
-                && (b.content() == null || SchemaContracts.matches(manifest.outputSchema(), b.content())))
+                && (b.content() == null || outputMatches(manifest, b.content())))
                 && result.claims().stream().allMatch(c -> c.verdict() != null && refs(c.evidenceRefs(), manifest.ownerSystem()))
                 && result.evidence().stream().allMatch(e -> java.util.Objects.equals(e.ownerSystem(),manifest.ownerSystem()) && e.sourceRef() != null
                     && e.sourceRef().belongsTo(manifest.ownerSystem()) && manifest.sourceAllowlistRef().equals(e.sourceRef().ref())
@@ -41,5 +41,18 @@ public final class ToolResultContractValidator {
             List.of(), List.of(), List.of(), List.of(), List.of());
     }
     private boolean optionalRef(OwnedReference ref, OwnerSystem owner) { return ref == null || ref.belongsTo(owner); }
+    public static boolean outputMatches(CapabilityManifest manifest, tools.jackson.databind.JsonNode content) {
+        if (manifest.toolKind() != ToolKind.BUSINESS || !"system-query-1".equals(manifest.adapterVersion()))
+            return SchemaContracts.matches(manifest.outputSchema(), content);
+        if (!content.isObject() || !Set.copyOf(content.propertyNames()).equals(Set.of("items")) || !content.path("items").isArray() || content.path("items").size()>100) return false;
+        for (var item : content.get("items")) if (!item.isObject() || !Set.copyOf(item.propertyNames()).equals(Set.of("ref","text","values"))
+                || !item.path("ref").isString() || !item.path("text").isString() || !item.path("values").isObject()
+                || item.path("ref").asString().codePointCount(0,item.path("ref").asString().length())<1
+                || item.path("ref").asString().codePointCount(0,item.path("ref").asString().length())>256
+                || item.path("text").asString().codePointCount(0,item.path("text").asString().length())<1
+                || item.path("text").asString().codePointCount(0,item.path("text").asString().length())>4000
+                || !SchemaContracts.matches(manifest.outputSchema(),item.get("values"))) return false;
+        return true;
+    }
     private boolean refs(List<OwnedReference> refs, OwnerSystem owner) { return refs.stream().allMatch(r -> r.belongsTo(owner)); }
 }

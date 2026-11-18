@@ -36,8 +36,9 @@ class ToolResultCacheTest {
         var value=new ToolResultCache.CachedValue(ID,SchemaContracts.JSON.valueToTree(result(f.manifest)),new ResultSourceDeps(List.of(new ResultSourceDeps.Source(f.manifest.sourceAllowlistRef(),Set.of("EQP_READ"))),List.of()),NOW.plusSeconds(600));
         var put=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.CACHE_PUT);assertThat(cache.put(prepared,put,f.grant(put),job,inputs(),value)).isTrue();
         var find=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.CACHE_LOOKUP);assertThat(cache.find(prepared,find,f.grant(find),job,inputs())).isPresent();
-        assertThat(store.calls.get(0).get(2)).isEqualTo(store.calls.get(1).get(2));assertThat(store.calls.get(0)).contains("conversation","b".repeat(64));assertThat(store.values.values().iterator().next().expiresAt()).isEqualTo(NOW.plusSeconds(60));
-        f.outcome.set(new com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.Allowed(Set.of("EQP_READ"),"c".repeat(64)));
+        assertThat(store.calls.get(0).get(2)).isEqualTo(store.calls.get(1).get(2));assertThat(store.calls.get(0)).contains("conversation","a".repeat(64));assertThat(store.values.values().iterator().next().expiresAt()).isEqualTo(NOW.plusSeconds(60));
+        f.scope=new VerifiedSystemScope(f.scope.boundSystem(),f.scope.authenticatedServiceRef(),f.scope.actorRef(),f.scope.sub(),f.scope.perm(),"c".repeat(64),f.scope.issuedAt(),f.scope.expiresAt(),f.scope.requestId());
+        prepared=f.prepared();job=job(f,"conversation");
         find=prepared.newAttempt(step(),f.scope,StepAttempt.Purpose.CACHE_LOOKUP);assertThat(cache.find(prepared,find,f.grant(find),job,inputs())).isEmpty();assertThat(store.calls.get(2).get(2)).isNotEqualTo(store.calls.get(0).get(2));
     }
     @Test void conversationMismatchAndPurposeSwapHaveNoStoreAccessAndReuseFails() {

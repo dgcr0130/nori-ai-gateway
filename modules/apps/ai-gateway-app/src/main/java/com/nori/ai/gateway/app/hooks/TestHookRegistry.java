@@ -12,8 +12,9 @@ public final class TestHookRegistry {
      * 둘 다 이 Job 에만 적용된다.
      */
     public record Scenario(TaskType taskType, Set<PausePointRegistry.Point> pauseAt, PausePointRegistry.Point haltAt, boolean failSanitizer, Optional<SeamRegistry.Directive> seam,
-            List<LlmReply> llmScript, Optional<PromptWatch> promptWatch) {
-        public Scenario { Objects.requireNonNull(taskType);pauseAt=Set.copyOf(pauseAt);seam=Objects.requireNonNull(seam);llmScript=List.copyOf(llmScript);promptWatch=Objects.requireNonNull(promptWatch); }
+            List<LlmReply> llmScript, Optional<PromptWatch> promptWatch,List<Map<String,Object>> toolCalls) {
+        public Scenario { toolCalls=toolCalls.stream().map(com.nori.ai.gateway.core.job.JobRequestInput::immutableFields).toList();if(toolCalls.size()>4)throw new IllegalArgumentException("실행 목록 상한 초과");Objects.requireNonNull(taskType);pauseAt=Set.copyOf(pauseAt);seam=Objects.requireNonNull(seam);llmScript=List.copyOf(llmScript);promptWatch=Objects.requireNonNull(promptWatch); }
+        public Scenario(TaskType taskType, Set<PausePointRegistry.Point> pauseAt, PausePointRegistry.Point haltAt, boolean failSanitizer, Optional<SeamRegistry.Directive> seam,List<LlmReply> replies,Optional<PromptWatch> watch){this(taskType,pauseAt,haltAt,failSanitizer,seam,replies,watch,List.of());}
         public Scenario(TaskType taskType, Set<PausePointRegistry.Point> pauseAt, PausePointRegistry.Point haltAt, boolean failSanitizer, Optional<SeamRegistry.Directive> seam) {
             this(taskType, pauseAt, haltAt, failSanitizer, seam, List.of(), Optional.empty());
         }

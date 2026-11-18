@@ -4,7 +4,7 @@
 
 | 문서 | 내용 |
 |---|---|
-| [api/](api/) | 외부 계약: Gateway API(`gateway-api-v1`), 인증(`auth-v1`), TC AI 읽기 API(`tc-ai-read-api-v1`), 시험 hook(`test-hooks-v1`) |
+| [api/](api/) | 외부 계약: Gateway API(`gateway-api-v1`), 인증(`auth-v1`), 시스템 표준 조회 API(`system-query-v1`), 시험 hook(`test-hooks-v1`) |
 | [runbooks/](runbooks/) | 운영 절차: DB 서버 선행조건, 런타임 자격, 검증 자격, 추론 서버 운영 |
 | [deployment-prerequisites.md](deployment-prerequisites.md) | 배포 선행조건 상태: 배포 입력 승인 기록 위치, 관측 수신·경보 전달, Source 선택자 |
 | [stack-compatibility.md](stack-compatibility.md) | 고정 기술 스택 호환 확인 기록 |

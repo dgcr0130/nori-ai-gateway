@@ -2,7 +2,7 @@ package com.nori.ai.gateway.app.job;
 
 import com.nori.ai.gateway.app.hooks.*;
 import com.nori.ai.gateway.core.registry.TaskType;
-import com.nori.ai.gateway.tcmock.MockScenarioStore;
+import com.nori.ai.gateway.integration.fixtures.StandardSystemStub;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
@@ -13,27 +13,23 @@ class P16WorkflowCompletenessIT extends P09QueueSupport {
     @Override protected Map<String,Object> claims(String actor,String dlg){var values=new HashMap<>(super.claims(actor,dlg));values.put("perm",List.of("EQP_READ","COMM_LOG_READ","DLQ_READ","AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ"));return values;}
     @Override protected com.nori.ai.gateway.core.scope.VerifiedSystemScope scope(String actor){var old=super.scope(actor);return new com.nori.ai.gateway.core.scope.VerifiedSystemScope(old.boundSystem(),old.authenticatedServiceRef(),old.actorRef(),old.sub(),Set.of("EQP_READ","COMM_LOG_READ","DLQ_READ","AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ"),old.pdg(),old.issuedAt(),old.expiresAt(),old.requestId());}
     private String run(String key,Map<String,Object> seam)throws Exception {
-        var scenario=new HashMap<String,Object>();scenario.put("taskType","INCIDENT_ANALYSIS");if(!seam.isEmpty())scenario.put("seam",seam);
+        var scenario=new HashMap<String,Object>();scenario.put("taskType","INCIDENT_ANALYSIS");var window=json.valueToTree(workflowFields()).path("context").path("timeWindow");scenario.put("toolCalls",List.of(Map.of("toolId","tc.eqp.getOperationalSnapshot","arguments",Map.of("eqp","EQP-001")),Map.of("toolId","tc.commLogs.search","arguments",Map.of("eqp","EQP-001","from",window.path("from").asString(),"to",window.path("to").asString())),Map.of("toolId","logs.search","arguments",Map.of("targetRef","EQP-001")),Map.of("toolId","trace.search","arguments",Map.of())));if(!seam.isEmpty())scenario.put("seam",seam);
         assertThat(hook("/__test/arm","POST",json.writeValueAsString(Map.of("actorSub","actor","requestKey",key,"scenario",scenario)),hookToken).statusCode()).isEqualTo(204);
         var accepted=inRequestSpan(()->context.getBean(JobAdmissionService.class).accept(scope("actor"),new JobAdmissionService.AdmissionRequest("/v1/query",null,"설비 장애 통신 로그 조회",workflowFields(),key,registeredDlg("actor"))));
         await(()->!Set.of("QUEUED","RUNNING").contains(state(accepted.jobId())));return accepted.jobId();
     }
     private tools.jackson.databind.JsonNode payload(String job){return json.readTree(jdbc().sql("SELECT payload::text FROM gw.result WHERE job_id=:id").param("id",job).query(String.class).single());}
-    @Test void commReadOccursTwiceWithSourceAttributedCompletenessInFinalBlocks()throws Exception {
-        context.getBean(MockScenarioStore.class).select("comm-trim");String job=run("comm-trim",Map.of());var result=payload(job);
-        assertThat(calls().count("getEqpSnapshot")).isOne();assertThat(calls().count("getCommLogs")).isEqualTo(2);
-        var rows=result.path("blocks").get(1).path("content").path("rows");assertThat(rows).hasSize(2);
-        assertThat(rows.get(0).path("source").asString()).isEqualTo("gateway");assertThat(rows.get(1).path("source").asString()).isEqualTo("business");
-        assertThat(rows.get(0).path("warnings").toString()).contains("RETENTION_UNVERIFIED");
-        assertThat(rows.get(0).path("retentionMeta").path("unverifiedRanges")).hasSize(1);
+    @Test void oneStandardReadPreservesWarningsNanosecondRangeAndRemainsUncached()throws Exception {
+        context.getBean(StandardSystemStub.class).select("comm-trim");String job=run("comm-trim",Map.of());
+        assertThat(calls().count("getEqpSnapshot")).isOne();assertThat(calls().count("getCommLogs")).isOne();
+        var stored=json.readTree(jdbc().sql("SELECT payload::text FROM gw.tool_execution WHERE job_id=:id AND capability_id='tc.commLogs.search'").param("id",job).query(String.class).single()).path("result");
+        assertThat(stored.path("warnings").toString()).contains("RETENTION_UNVERIFIED");
+        var ranges=stored.path("metadata").path("unverifiedRanges");assertThat(ranges).hasSize(1);
         var requested=json.valueToTree(workflowFields()).path("context").path("timeWindow");
-        var from=java.time.Instant.parse(requested.path("from").asString());var to=java.time.Instant.parse(requested.path("to").asString());
-        var timeBoundary=NOW.minus(java.time.Duration.ofHours(1));var oldest=java.time.Instant.parse("2026-11-05T23:50:00Z");
-        var expectedStart=from.isAfter(timeBoundary)?from:timeBoundary;var expectedEnd=to.isBefore(oldest)?to:oldest;
-        var ranges=rows.get(0).path("retentionMeta").path("unverifiedRanges");assertThat(ranges).hasSize(1);assertThat(ranges.get(0).path("startAt").asString()).isEqualTo(expectedStart.toString());assertThat(ranges.get(0).path("endAt").asString()).isEqualTo(expectedEnd.toString());
-        assertThat(rows.get(1).path("retentionMeta").path("unverifiedRanges")).isEmpty();assertThat(rows.get(1).path("warnings").toString()).contains("RETENTION_UNVERIFIED");assertThat(rows.get(1).path("completeness").path("count").asLong()).isEqualTo(1);assertThat(rows.get(1).path("completeness").path("appliedValuesVerified").asBoolean()).isFalse();
-        assertThat(rows.get(0).path("retentionMeta").path("missingRanges")).isEmpty();
-        assertThat(rows.get(0).path("completeness").path("count").asLong()).isEqualTo(5000);
+        assertThat(ranges.get(0).path("from").asString()).isEqualTo(requested.path("from").asString());
+        assertThat(ranges.get(0).path("to").asString()).isEqualTo(NOW.minusSeconds(600).toString());
+        assertThat(stored.path("metadata").path("missingRanges")).isEmpty();
+        assertThat(payload(job).toString()).contains("RETENTION_UNVERIFIED");
         assertThat(jdbc().sql("SELECT count(*) FROM gw.cache_entry WHERE capability_id='tc.commLogs.search'").query(Long.class).single()).isZero();
     }
     @Test void unsupportedAvailabilityReachesValidatorSixAndExecutesNoBusinessTool()throws Exception {
@@ -54,7 +50,7 @@ class P16WorkflowCompletenessIT extends P09QueueSupport {
     @Test void actualSourceServerRequestsMatchAuthenticatedJobCaptureAndUnboundJobsCannotReadIt()throws Exception {
         String job=run("source-capture",Map.of());var server=context.getBean(WorkflowSourceFixture.Server.class);
         assertThat(server.logs).hasValue(4);var response=hook("/__test/source-observations/"+job,"GET",null,hookToken);assertThat(response.statusCode()).isEqualTo(200);var body=json.readTree(response.body());
-        var logs=java.util.stream.StreamSupport.stream(body.path("observations").spliterator(),false).filter(value->value.path("capabilityId").asString().equals("tc.logs.search")).findFirst().orElseThrow();
+        var logs=java.util.stream.StreamSupport.stream(body.path("observations").spliterator(),false).filter(value->value.path("capabilityId").asString().equals("logs.search")).findFirst().orElseThrow();
         assertThat(logs.path("status").asString()).isEqualTo("COMPLETE");assertThat(logs.path("count").asInt()).isEqualTo(4);
         assertThat(java.util.stream.StreamSupport.stream(logs.path("attempts").spliterator(),false).map(value->value.path("digest").asString()).toList()).containsExactlyInAnyOrderElementsOf(server.requestDigests);
         assertThat(response.body()).doesNotContain("EQP-001","query_range","127.0.0.1","2026-");

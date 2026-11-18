@@ -1,7 +1,7 @@
 package com.nori.ai.gateway.integration.source;
 
 import com.nori.ai.gateway.core.authz.SourceAuthorizationStep;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.DelegatedCall;
+import com.nori.ai.gateway.core.authz.DelegatedCall;
 import com.nori.ai.gateway.core.result.ResultStatus;
 import com.nori.ai.gateway.core.scope.*;
 import java.time.Clock;
@@ -9,8 +9,9 @@ import java.util.Objects;
 
 /** Source의 소유권과 실행 시점 인가는 기존 중앙 계약으로 확인합니다. */
 public final class SourceReadAccess {
-    public record Request(VerifiedSystemScope scope, DelegatedCall delegatedCall, String sourceAllowlistRef,Runnable beforeRead) {
-        public Request(VerifiedSystemScope scope,DelegatedCall delegatedCall,String sourceAllowlistRef){this(scope,delegatedCall,sourceAllowlistRef,()->{});}
+    public record Request(VerifiedSystemScope scope, DelegatedCall delegatedCall, String sourceAllowlistRef,Runnable beforeRead,SystemSourceScope locations) {
+        public Request(VerifiedSystemScope scope,DelegatedCall delegatedCall,String sourceAllowlistRef){this(scope,delegatedCall,sourceAllowlistRef,()->{},SystemSourceScope.empty());}
+        public Request(VerifiedSystemScope scope,DelegatedCall call,String source,Runnable guard){this(scope,call,source,guard,SystemSourceScope.empty());}
         public Request { Objects.requireNonNull(scope); Objects.requireNonNull(delegatedCall); Objects.requireNonNull(sourceAllowlistRef);Objects.requireNonNull(beforeRead); }
         @Override public String toString() { return "SourceReadRequest[보호됨]"; }
     }
@@ -32,7 +33,7 @@ public final class SourceReadAccess {
     }
     public ResultStatus check(Request request, String expectedRef) {
         Objects.requireNonNull(request);
-        if (!java.util.Objects.equals(request.scope().boundSystem(),OwnerSystem.TC) || !expectedRef.equals(request.sourceAllowlistRef())) return ResultStatus.DENIED;
+        if (!new OwnedReference(request.scope().boundSystem(),expectedRef).belongsTo(request.scope().boundSystem()) || !expectedRef.equals(request.sourceAllowlistRef())) return ResultStatus.DENIED;
         guard(request);
         if(!request.scope().validAt(clock.instant()))return ResultStatus.DENIED;
         var decision = authorization.authorizeBefore(expectedRef, request.scope(), request.delegatedCall());

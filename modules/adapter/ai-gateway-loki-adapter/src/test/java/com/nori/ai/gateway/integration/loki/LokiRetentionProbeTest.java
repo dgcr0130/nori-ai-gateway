@@ -16,7 +16,7 @@ class LokiRetentionProbeTest {
             Instant limit = NOW.minus(Duration.ofDays(31)); Instant oldest = limit.plusNanos(123);
             stub.responder = req -> new Response(200, loki("tc-gateway", "tc", List.of(oldest)));
             var probe = new LokiRetentionProbe(stub.http("loki"), new TimeWindow(limit, NOW));
-            assertThat(probe.measure("tc-gateway")).contains(new LokiRetentionProbe.ProbeObservation(oldest, limit));
+            assertThat(probe.measure("tc-gateway","tc")).contains(new LokiRetentionProbe.ProbeObservation(oldest, limit));
             assertThat(stub.requests).singleElement().satisfies(req -> {
                 assertThat(req.method()).isEqualTo("GET");
                 assertThat(req.query()).containsEntry("direction", "forward").containsEntry("limit", "1")
@@ -27,8 +27,8 @@ class LokiRetentionProbeTest {
     @Test void zeroRecordsProduceNoObservationAndUnapprovedAppHasNoNetworkRead() throws Exception {
         try (var stub = new ConnectorTestSupport()) {
             var probe = new LokiRetentionProbe(stub.http("loki"), new TimeWindow(NOW.minusSeconds(60), NOW));
-            assertThat(probe.measure("tc-ui-front")).isEmpty();
-            assertThatThrownBy(() -> probe.measure("wm-ui-front")).isInstanceOf(IllegalArgumentException.class);
+            assertThat(probe.measure("tc-ui-front","tc")).isEmpty();
+            assertThatThrownBy(() -> probe.measure("","tc")).isInstanceOf(IllegalArgumentException.class);
             assertThat(stub.requests).hasSize(1);
         }
     }
@@ -36,9 +36,9 @@ class LokiRetentionProbeTest {
         try (var stub = new ConnectorTestSupport()) {
             var probe = new LokiRetentionProbe(stub.http("loki"), new TimeWindow(NOW.minusSeconds(60), NOW));
             stub.responder = req -> new Response(503, "오류");
-            assertThatThrownBy(() -> probe.measure("tc-gateway")).isInstanceOf(SourceHttpClient.Failure.class);
+            assertThatThrownBy(() -> probe.measure("tc-gateway","tc")).isInstanceOf(SourceHttpClient.Failure.class);
             stub.responder = req -> new Response(200, loki("wm-ui-front", "tc", List.of(NOW.minusSeconds(1))));
-            assertThatThrownBy(() -> probe.measure("tc-gateway")).isInstanceOf(SourceHttpClient.Failure.class);
+            assertThatThrownBy(() -> probe.measure("tc-gateway","tc")).isInstanceOf(SourceHttpClient.Failure.class);
         }
     }
     @Test void probeClassHasNoJdbcOrPersistenceDependency() throws Exception {

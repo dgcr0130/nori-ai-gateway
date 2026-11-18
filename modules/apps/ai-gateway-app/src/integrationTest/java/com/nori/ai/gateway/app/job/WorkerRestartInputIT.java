@@ -28,7 +28,7 @@ class WorkerRestartInputIT extends WorkerRestartProcessSupport {
             assertThat(input.requestFields()).isEqualTo(index==0?a:b);assertThat(input.jobSeq()).isGreaterThan(previous);previous=input.jobSeq();
             assertThat(payload.has("inputQuestion")).isFalse();assertThat(payload.has("requestFields")).isFalse();assertThat(payload.path("blocks").isArray()).isTrue();
         }
-        var observed=send("/__test/harness-observations","GET",null,null,null,false);assertThat(observed.statusCode()).isEqualTo(200);assertThat(json.readTree(observed.body()).path("authorization").asInt()).isEqualTo(2);assertThat(json.readTree(observed.body()).path("workflows").asInt()).isEqualTo(2);
+        var observed=send("/__test/harness-observations","GET",null,null,null,false);assertThat(observed.statusCode()).isEqualTo(200);assertThat(json.readTree(observed.body()).path("backendQueries").asInt()).isZero();assertThat(json.readTree(observed.body()).path("workflows").asInt()).isEqualTo(2);
         assertThat(jdbc.sql("SELECT count(*) FROM gw.tool_execution").query(Integer.class).single()).isZero();assertThat(jdbc.sql("SELECT count(*) FROM gw.cache_entry").query(Integer.class).single()).isZero();
 
     }

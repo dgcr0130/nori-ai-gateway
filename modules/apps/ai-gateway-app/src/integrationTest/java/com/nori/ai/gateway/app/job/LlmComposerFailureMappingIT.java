@@ -43,8 +43,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         var empty = new TestHookRegistry.LlmReply(CallType.COMPOSER, null, "stop", null, 0);
         var denied = new com.nori.ai.gateway.app.hooks.SeamRegistry.Directive(com.nori.ai.gateway.app.hooks.SeamRegistry.Kind.SOURCE_ALLOWLIST_REF_OVERRIDE,
             "tc.eqp.getOperationalSnapshot", null, com.nori.ai.gateway.core.scope.OwnerSystem.WM);
-        hooks().arm("actor", "composer-no-data", new TestHookRegistry.Scenario(com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY, java.util.Set.of(), null, false, Optional.of(denied),
-            List.of(classify(wire("LQ", "EQP-001", null, null, null)), empty), Optional.empty()));
+        hooks().arm("actor", "composer-no-data", new TestHookRegistry.Scenario(com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY,java.util.Set.of(),null,false,Optional.of(denied),List.of(classify(wire("LQ", "EQP-001", null, null, null)), empty),Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY)));
         var job = admitUnarmed("composer-no-data", "EQP-001 상태 알려줘", windowOnly(), null);
         assertThat(terminal(job)).isEqualTo("FAILED");
         assertThat(result(job.jobId())).containsEntry("status", "FAILED").containsEntry("error_code", "LLM_UNAVAILABLE");

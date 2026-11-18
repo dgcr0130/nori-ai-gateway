@@ -18,9 +18,9 @@ public final class SeamRegistry implements PlanInjectionSeam, DispatchInjectionS
     private final TestHookRegistry hooks;
     private final Set<String> capabilities;
     private final SourcePermissionMap permissions;
-    public SeamRegistry(TestHookRegistry hooks, ManifestLoader loader, SourcePermissionMap permissions) {
+    public SeamRegistry(TestHookRegistry hooks, CapabilityRegistry registry, SourcePermissionMap permissions) {
         this.hooks = hooks; this.permissions = permissions;
-        capabilities = Set.copyOf(loader.loadClasspath("manifests/tc/index.json").stream().map(CapabilityManifest::capabilityId).toList());
+        capabilities = Set.copyOf(registry.all().stream().map(CapabilityManifest::capabilityId).toList());
     }
     public void validate(Directive directive) {
         if (directive.kind() == Kind.PERMISSION_MAP_DROP) {

@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.app.ops;
 
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
+
 import com.nori.ai.gateway.app.config.SourceConnectorConfiguration;
 import com.nori.ai.gateway.app.job.HarnessObservationsEndpoint;
 import com.nori.ai.gateway.app.job.P09QueueSupport;
@@ -46,7 +46,7 @@ class RetentionProbeWiringIT extends P09QueueSupport {
                 try (exchange) {
                     var query = new LinkedHashMap<String,String>();
                     for (String part : exchange.getRequestURI().getRawQuery().split("&")) { var pair = part.split("=", 2); query.put(URLDecoder.decode(pair[0], StandardCharsets.UTF_8), URLDecoder.decode(pair[1], StandardCharsets.UTF_8)); }
-                    String app = TcSourcePolicy.APPS.stream().filter(value -> query.get("query").contains("app=\"" + value + "\"")).findFirst().orElseThrow();
+                    String app = List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front").stream().filter(value -> query.get("query").contains("app=\"" + value + "\"")).findFirst().orElseThrow();
                     starts.add(app + "@" + query.get("start"));
                     if (app.equals(failingApp)) { exchange.sendResponseHeaders(500, -1); return; }
                     // 창 시작 1시간 뒤의 가장 오래된 관측 한 줄만 돌려줍니다.
@@ -92,9 +92,9 @@ class RetentionProbeWiringIT extends P09QueueSupport {
         await(scheduler::started);
         await(() -> rows().size() == 4);
         Instant start = NOW.minus(Duration.ofDays(7));
-        assertThat(rows().keySet()).containsExactlyElementsOf(TcSourcePolicy.APPS.stream().map(LokiSourcePolicy::retentionSourceId).sorted().toList());
+        assertThat(rows().keySet()).containsExactlyElementsOf(List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front").stream().map(app->LokiSourcePolicy.retentionSourceId("TC","tc",app)).sorted().toList());
         assertThat(rows().values()).allSatisfy(row -> assertThat(row).containsExactly(start.plus(Duration.ofHours(1)), start, NOW));
-        assertThat(context.getBean(SourceRetentionAttributesProvider.class).loki("tc-gateway")).isEqualTo(new SourceRetentionAttributes.VerifiedOldest(start.plus(Duration.ofHours(1))));
+        assertThat(context.getBean(SourceRetentionAttributesProvider.class).loki("TC","tc","tc-gateway")).isEqualTo(new SourceRetentionAttributes.VerifiedOldest(start.plus(Duration.ofHours(1))));
         var loki = context.getBean(LocalLoki.class);
         var windows = context.getBean(Windows.class);
         assertThat(loki.starts).hasSize(4);
@@ -109,11 +109,11 @@ class RetentionProbeWiringIT extends P09QueueSupport {
         Instant second = NOW.plus(Duration.ofHours(24));
         // Scheduler는 APPS 순서로 앱을 차례로 처리하므로 첫 행 저장은 주기 완료가 아닙니다.
         // 성공 3앱(마지막 tc-ui-front 포함)의 이번 주기 저장·4앱 범위 요청·tc-business 실패 집계가 모두 끝날 때까지 기다립니다.
-        List<String> succeeded = TcSourcePolicy.APPS.stream().filter(app -> !app.equals("tc-business")).map(LokiSourcePolicy::retentionSourceId).toList();
+        List<String> succeeded = List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front").stream().filter(app -> !app.equals("tc-business")).map(app->LokiSourcePolicy.retentionSourceId("TC","tc",app)).toList();
         await(() -> succeeded.stream().allMatch(id -> rows().get(id)[2].equals(second)) && windows.requested.size() == 8 && failures.count() > before);
         Instant secondStart = second.minus(Duration.ofDays(3));
-        assertThat(rows().get(LokiSourcePolicy.retentionSourceId("tc-gateway"))).containsExactly(secondStart.plus(Duration.ofHours(1)), secondStart, second);
-        assertThat(rows().get(LokiSourcePolicy.retentionSourceId("tc-business"))).as("측정 실패 행은 바뀌지 않습니다").containsExactly(start.plus(Duration.ofHours(1)), start, NOW);
+        assertThat(rows().get(LokiSourcePolicy.retentionSourceId("TC","tc","tc-gateway"))).containsExactly(secondStart.plus(Duration.ofHours(1)), secondStart, second);
+        assertThat(rows().get(LokiSourcePolicy.retentionSourceId("TC","tc","tc-business"))).as("측정 실패 행은 바뀌지 않습니다").containsExactly(start.plus(Duration.ofHours(1)), start, NOW);
         assertThat(failures.count()).isGreaterThan(before);
         assertThat(loki.starts).contains("tc-gateway@" + SourceHttpClient.nanos(secondStart));
         assertThat(windows.requested).hasSize(8);

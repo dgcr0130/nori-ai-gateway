@@ -3,7 +3,7 @@ package com.nori.ai.gateway.integration;
 import com.nori.ai.gateway.integration.source.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nori.ai.gateway.core.authz.*;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.*;
+
 import com.nori.ai.gateway.core.scope.*;
 import ch.qos.logback.classic.*;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -23,6 +23,13 @@ import java.util.function.*;
 import static org.assertj.core.api.Assertions.*;
 
 public final class ConnectorTestSupport implements AutoCloseable {
+    public static final List<String> TEST_APPS=List.of("tc-gateway","tc-business","tc-ui-backend","tc-ui-front");
+    public sealed interface Decision permits PermissionSnapshot,Revoked {}
+    public record PermissionSnapshot(Set<String> allowed,String pdg) implements Decision {}
+    public record Revoked() implements Decision {}
+    @FunctionalInterface public interface FixtureAuthorization { Decision authorize(DelegatedCall call,Set<String> required); }
+    public static SystemSourceScope locations(){return new SystemSourceScope(TEST_APPS.stream().map(app->new SystemSourceScope.App(app,"tc",List.of("AI_LOG_READ"))).toList(),TEST_APPS.stream().map(app->new SystemSourceScope.Trace(app,"tc",List.of("AI_TRACE_READ"))).toList(),List.of(new SystemSourceScope.Repository("22","main","src/main",List.of("AI_CODE_READ")),new SystemSourceScope.Repository("22","release/a+b","src/main",List.of("AI_CODE_READ")),new SystemSourceScope.Repository("100","main","src",List.of("AI_CODE_READ"))));}
+
     public static final Instant NOW = Instant.parse("2026-11-06T00:00:00Z");
     public static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     public record Request(String method, String path, String rawQuery, Map<String, String> query, String token) {}
@@ -55,16 +62,16 @@ public final class ConnectorTestSupport implements AutoCloseable {
     }
     public URI base() { return URI.create("http://127.0.0.1:" + server.getAddress().getPort()); }
     public SourceHttpClient http(String source) { return new SourceHttpClient(base(), source, SourceObservability.noop()); }
-    public static SourceReadAccess access() { return access((call, required) -> new Allowed(required, "b".repeat(64))); }
-    public static SourceReadAccess access(com.nori.ai.gateway.core.port.TcSourceAuthorizationPort authorization) {
-        Map<String, SourcePermissionMap.Entry> entries = Map.of("sources://TC/logs", new SourcePermissionMap.Entry(Set.of("AI_LOG_READ"), true),
-            "sources://TC/trace", new SourcePermissionMap.Entry(Set.of("AI_TRACE_READ"), true), "sources://TC/git", new SourcePermissionMap.Entry(Set.of("AI_CODE_READ"), true));
-        return new SourceReadAccess(new SourceAuthorizationStep(new SourcePermissionMap(entries), authorization), CLOCK);
+    public static SourceReadAccess access() { return access((call, required) -> new PermissionSnapshot(required, "b".repeat(64))); }
+    public static SourceReadAccess access(FixtureAuthorization authorization) {
+        Map<String, SourcePermissionMap.Entry> entries = Map.of("sources://TC/logs.search", new SourcePermissionMap.Entry(Set.of("AI_LOG_READ"), true),
+            "sources://TC/trace.search", new SourcePermissionMap.Entry(Set.of("AI_TRACE_READ"), true), "sources://TC/git.searchCode", new SourcePermissionMap.Entry(Set.of("AI_CODE_READ"), true));
+        return new SourceReadAccess(new SourceAuthorizationStep(new SourcePermissionMap(entries), (source,scope)->{var decision=authorization.authorize(new DelegatedCall(scope.sub(),"d".repeat(22)),entries.get(source).requiredPermCodes());return !(decision instanceof PermissionSnapshot granted)||!granted.allowed().containsAll(entries.get(source).requiredPermCodes());}), CLOCK);
     }
     public static SourceReadAccess.Request request(String source) { return request(source, OwnerSystem.TC, NOW.plusSeconds(60)); }
     public static SourceReadAccess.Request request(String source, OwnerSystem owner, Instant expiresAt) {
-        var scope = new VerifiedSystemScope(owner, "service", new ActorRef("actor"), "actor", Set.of(), "a".repeat(64), NOW.minusSeconds(60), expiresAt, "req");
-        return new SourceReadAccess.Request(scope, new DelegatedCall("actor", "d".repeat(22)), source);
+        var scope = new VerifiedSystemScope(owner, "service", new ActorRef("actor"), "actor", Set.of("AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ"), "a".repeat(64), NOW.minusSeconds(60), expiresAt, "req");
+        return new SourceReadAccess.Request(scope, new DelegatedCall("actor", "d".repeat(22)), source,()->{},locations());
     }
     public static String emptyLoki() { return "{\"status\":\"success\",\"data\":{\"resultType\":\"streams\",\"result\":[]}}"; }
     public static String loki(String app, String namespace, List<Instant> times) {
@@ -75,7 +82,7 @@ public final class ConnectorTestSupport implements AutoCloseable {
         } catch (Exception failure) { throw new AssertionError(failure); }
     }
     public static String selectedApp(Request request) {
-        return TcSourcePolicy.APPS.stream().filter(app -> request.query().getOrDefault("query", "").startsWith("{app=\"" + app + "\", namespace=\"tc\"}")).findFirst().orElseThrow();
+        return TEST_APPS.stream().filter(app -> request.query().getOrDefault("query", "").startsWith("{app=\"" + app + "\", namespace=\"tc\"}")).findFirst().orElseThrow();
     }
     // Source 전송 관측(로그·span·meter)에 조회 원문이 남지 않는지 확인하는 수집기. Loki·GitLab 시험이 함께 쓴다.
     public static final class Capture implements AutoCloseable {

@@ -12,7 +12,7 @@ public final class BlockBuilder {
         List<ResultBlock> blocks=new ArrayList<>();
         for(var raw:result.blocks()) {
             var content=raw.content();
-            if(content==null||!SchemaContracts.matches(manifest.outputSchema(),content))throw new IllegalArgumentException("원천 블록 계약이 다릅니다");
+            if(content==null||!com.nori.ai.gateway.core.dispatch.ToolResultContractValidator.outputMatches(manifest,content))throw new IllegalArgumentException("원천 블록 계약이 다릅니다");
             var items=content.get("items");
             if(items==null||!items.isArray())throw new IllegalArgumentException("원천 행을 확인할 수 없습니다");
             LinkedHashSet<String> columns=new LinkedHashSet<>();

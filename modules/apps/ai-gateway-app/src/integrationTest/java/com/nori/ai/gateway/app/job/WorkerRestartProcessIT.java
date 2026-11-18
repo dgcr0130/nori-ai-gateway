@@ -22,7 +22,7 @@ class WorkerRestartProcessIT extends WorkerRestartProcessSupport {
         var input=requestInput(queued);assertThat(input.messageId()).isEqualTo(jdbc.sql("SELECT request_message_id FROM gw.job WHERE id=:id").param("id",queued).query(String.class).single());
         assertThat(input.maskedQuestion()).isEqualTo("시험 질의");assertThat(((Map<?,?>)input.requestFields().get("context")).get("referenceTime")).isEqualTo("2026-11-06T09:00:00+09:00");
         assertThat(payload.has("requestFields")).isFalse();assertThat(payload.path("blocks").isArray()).isTrue();
-        assertThat(count("result",queued)).isOne();var observations=send("/__test/harness-observations","GET",null,null,null,false);assertThat(json.readTree(observations.body()).get("authorization").asInt()).isOne();
+        assertThat(count("result",queued)).isOne();var observations=send("/__test/harness-observations","GET",null,null,null,false);assertThat(json.readTree(observations.body()).get("backendQueries").asInt()).isZero();
     }
     @Test @Tag("AC-18-WORKER-QUEUED-EXPIRED") void queuedAfterOneEightyOneRemainsQueueTimeoutAndRunningIsInterrupted()throws Exception{
         haltWithRunningAndQueued();String queued=job("queued"),running=job("running");launch(NOW.plusSeconds(181));
@@ -30,7 +30,7 @@ class WorkerRestartProcessIT extends WorkerRestartProcessSupport {
         assertThat(state(queued)).isEqualTo("FAILED");assertThat(jdbc.sql("SELECT error_code FROM gw.result WHERE job_id=:id").param("id",queued).query(String.class).single()).isEqualTo("QUEUE_TIMEOUT");
         assertThat(jdbc.sql("SELECT decision FROM gw.audit_event WHERE job_id=:id AND event_type='JOB_TERMINAL'").param("id",queued).query(String.class).single()).isEqualTo("QUEUE_TIMEOUT");
         assertThat(jdbc.sql("SELECT error_code FROM gw.result WHERE job_id=:id").param("id",running).query(String.class).single()).isEqualTo("WORKER_INTERRUPTED");
-        assertThat(json.readTree(send("/__test/harness-observations","GET",null,null,null,false).body()).get("authorization").asInt()).isZero();
+        assertThat(json.readTree(send("/__test/harness-observations","GET",null,null,null,false).body()).get("backendQueries").asInt()).isZero();
     }
     @Test @Tag("AC-18-WORKER-RACE-PRECOMMIT") void haltBeforeTerminalCommitRollsBackResultEventAndAudit()throws Exception{
         arm("pre","TERMINAL_PRECOMMIT",List.of());try{admit("pre");}catch(java.io.IOException interrupted){assertThat(interrupted).isNotNull();}

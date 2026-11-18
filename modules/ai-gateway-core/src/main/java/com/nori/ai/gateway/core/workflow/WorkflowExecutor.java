@@ -42,67 +42,25 @@ public final class WorkflowExecutor {
         if(preparation instanceof PlanValidator.Rejected rejected)return new WorkflowOutcome(List.of(),List.of(),List.of(),emptyDeps(),traces,List.of(),Optional.of(rejected.outcome()));
         if(preparation instanceof PlanValidator.ReadRejected rejected) {
             var denied=new ToolResultEnvelope(null,"resource.lookup",null,null,job.scope().boundSystem(),rejected.status(),null,List.of(),null,null,List.of(),List.of(),null,null,null,null,List.of(),List.of(),List.of(),List.of(),List.of());
-            return withCoverage(plan.definition().ownerSystem(),plan.evidence(),new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("resource",denied,false,0)),List.of(),List.of(),emptyDeps(),traces,List.of(),Optional.empty()));
+            return new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("resource",denied,false,0)),List.of(),List.of(),emptyDeps(),traces,List.of(),Optional.empty());
         }
         var prepared=(PlanValidator.Prepared)preparation;
         var state=new RunState(new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new HashSet<>(),new ResultSourceDepsRecorder(),new HashMap<>(),budgets.get(),traces);
         var rejected=runSteps(job,plan,prepared,plan.steps(),resolver,state);
         if(rejected.isPresent())return rejected.get();
-        var evidencePlan=plan.evidence();
-        if(evidencePlan.isPresent()) {
-            var round=supplementRound(plan,evidencePlan.get(),state);
-            if(!round.isEmpty()) {
-                var envelope=new PlanEnvelope(job.jobId(),job.conversationId(),job.requestInput().maskedQuestion(),List.of(),plan.definition().taskType(),round.stream().map(EvidencePlan.ProfileStep::step).toList());
-                // 보완 단계도 같은 PlanValidator 준비·단계별 Source 인가·Dispatcher·recorder 경로로 실행한다(두 번째 실행 엔진 없음).
-                if(validator.prepare(envelope,job.scope(),resolver) instanceof PlanValidator.Prepared extra) {
-                    List<WorkflowExecutionPlan.ExecutionStep> steps=new ArrayList<>();
-                    for(var candidate:round){var tool=candidate.step();steps.add(new WorkflowExecutionPlan.ExecutionStep(new WorkflowDefinition.Step(tool.stepId(),tool.capabilityId(),null,List.of(),false,List.of(),false),tool));}
-                    var failed=runSteps(job,plan,extra,steps,resolver,state);
-                    if(failed.isPresent())return failed.get();
-                    evidencePlan=Optional.of(evidencePlan.get().withSupplement(round));
-                } else for(var candidate:round)traces.add(new WorkflowOutcome.Trace(candidate.step().stepId(),WorkflowOutcome.TraceOutcome.SUPPLEMENT_REJECTED));
-            }
-        }
         var ui=new ArrayList<>(state.ui());
         if(plan.definition().answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW)ui.addAll(help.build(registry.view(job.scope()),job.scope().perm()));
-        return withCoverage(plan.definition().ownerSystem(),evidencePlan,new WorkflowOutcome(state.stages(),ui,state.evidence(),state.deps().snapshot(),traces,state.refs(),Optional.empty()));
+        return new WorkflowOutcome(state.stages(),ui,state.evidence(),state.deps().snapshot(),traces,state.refs(),Optional.empty());
     }
     /** 한 Job 실행의 누적 상태. 1차 단계와 보완 round 단계가 같은 기록·의존성·바인딩·호출 한도를 공유한다. */
     private record RunState(List<WorkflowOutcome.Stage> stages,List<ResultBlock> ui,List<Evidence> evidence,List<String> refs,Set<String> actualIds,
             ResultSourceDepsRecorder deps,Map<String,StepBinding> bindings,ToolCallBudget calls,List<WorkflowOutcome.Trace> traces) {}
-    /** 1차 실행 결과의 Coverage 로 근거 보완 round 후보를 고른다(SPEC §28.8 ①, round 1회). 1차 계획에 있던 Capability 는 결과와 무관하게 다시 고르지 않는다. */
-    private List<EvidencePlan.ProfileStep> supplementRound(WorkflowExecutionPlan plan,EvidencePlan evidencePlan,RunState state) {
-        var first=coverage.evaluate(evidencePlan,new WorkflowOutcome(state.stages(),state.ui(),state.evidence(),state.deps().snapshot(),state.traces(),state.refs(),Optional.empty()));
-        Set<String> planned=new HashSet<>();plan.toolPlan().plan().forEach(step->planned.add(step.capabilityId()));
-        return coverage.supplement(evidencePlan,first,planned,state.calls());
-    }
     /** 단계를 순서대로 실행한다. 입력 검증 실패면 그 시점까지의 결과와 거절을 담은 Outcome 을 돌려준다. */
     private Optional<WorkflowOutcome> runSteps(JobContext job,WorkflowExecutionPlan plan,PlanValidator.Prepared prepared,List<WorkflowExecutionPlan.ExecutionStep> executions,WorkflowResourceResolver resolver,RunState state) {
         var stages=state.stages();var ui=state.ui();var evidence=state.evidence();var refs=state.refs();var actualIds=state.actualIds();var deps=state.deps();var bindings=state.bindings();var calls=state.calls();var traces=state.traces();
         for(var execution:executions) {
             var definition=execution.definition();
-            if(definition.processor()!=null) {
-                List<String> lines=new ArrayList<>();StepBinding source=null;
-                for(String ancestor:ancestors(definition,plan.definition())) {
-                    var predecessor=plan.definition().steps().stream().filter(value->value.stepId().equals(ancestor)).findFirst().orElseThrow();
-                    var manifest=predecessor.capabilityId()==null?null:registry.find(predecessor.capabilityId()).orElse(null);
-                    var binding=bindings.get(ancestor);
-                    if(manifest==null||manifest.toolKind()!=ToolKind.LOG||binding==null)continue;
-                    if(source==null)source=binding;
-                    for(var item:binding.value().path("items"))if(item.path("text").isString())lines.add(item.get("text").asString());
-                }
-                var summary=summarizer.extract(lines);
-                if(source!=null){var value=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.valueToTree(summary);value.set("terms",SchemaContracts.JSON.valueToTree(summary.terms()));bindings.put(definition.stepId(),new StepBinding(job.scope().boundSystem(),source.dataRef(),value));}
-                continue;
-            }
             PlanStep step=execution.toolStep();
-            var bindingCondition=definition.includeWhen().stream().map(WorkflowDefinition.IncludeWhen::bindingNonEmpty).filter(Objects::nonNull).findFirst();
-            if(bindingCondition.isPresent()) {
-                String[] path=bindingCondition.get().split("\\.",2);var binding=bindings.get(path[0]);var terms=binding==null?null:binding.value().get("terms");
-                if(terms==null||terms.isEmpty()){traces.add(new WorkflowOutcome.Trace(definition.stepId(),WorkflowOutcome.TraceOutcome.SKIPPED_NO_INPUT));continue;}
-                var args=(tools.jackson.databind.node.ObjectNode)step.arguments();List<String> words=new ArrayList<>();terms.forEach(term->words.add(term.asString()));args.put("q",String.join(" ",words));
-                step=new PlanStep(step.stepId(),step.capabilityId(),step.dependsOn(),step.resources(),args);
-            }
             var manifest=prepared.manifest(step.stepId());
             var invalid=new InputValidator().validate(manifest,step.arguments(),resolver.timezone(job.scope()));
             if(invalid!=null) {
@@ -159,46 +117,17 @@ public final class WorkflowExecutor {
         }
         return Optional.empty();
     }
-    /**
-     * 근거 계획이 있으면 요구 근거별 Coverage 를 결속한다. 상세 요청(D)은 검증된 블록·Evidence 가 하나 이상일 때만 구조화 보고 블록을 더한다 —
-     * 파생 보고 블록이 검증 자료 0개 결과를 자료 있는 결과로 바꾸지 않게 한다(SPEC §5.4 ③ ⓑ).
-     */
-    private WorkflowOutcome withCoverage(com.nori.ai.gateway.core.scope.OwnerSystem owner,Optional<EvidencePlan> plan,WorkflowOutcome outcome) {
-        if(plan.isEmpty())return outcome;
-        var evidencePlan=plan.get();var value=coverage.evaluate(evidencePlan,outcome);
-        if(evidencePlan.answerMode()!=AnswerMode.D||outcome.blocks().isEmpty()&&outcome.evidence().isEmpty())return outcome.withCoverage(value);
-        var detailed=new ArrayList<>(outcome.blocks());detailed.add(reports.project(value,owner));
-        return new WorkflowOutcome(outcome.stages(),detailed,outcome.evidence(),outcome.sourceDeps(),outcome.trace(),outcome.toolExecutionRefs(),outcome.rejection(),value);
-    }
     private ResultSourceDeps emptyDeps(){return new ResultSourceDeps(List.of(),List.of());}
     private ExecutionContext executionContext(JobContext job,WorkflowExecutionPlan plan,PlanValidator.Prepared prepared,StepAttempt attempt,WorkflowResourceResolver resolver,Map<String,StepBinding> bindings,java.util.function.Consumer<ExecutionContext.DispatchTrace> trace) {
         var kind=prepared.manifest(attempt.binding().stepId()).toolKind();
-        if(kind==ToolKind.KNOWLEDGE)return new ExecutionContext(resolver,trace,Optional.empty(),Optional.of(knowledgeContext(job,plan,prepared,attempt)));
         if(kind!=ToolKind.GIT)return new ExecutionContext(resolver,trace);
         var step=prepared.plan().plan().stream().filter(value->value.stepId().equals(attempt.binding().stepId())).findFirst().orElseThrow();var ancestors=new HashSet<String>();
         collectToolAncestors(step,prepared.plan(),ancestors);var selected=new LinkedHashMap<String,StepBinding>();
         for(var candidate:prepared.plan().plan())if(ancestors.contains(candidate.stepId())&&prepared.manifest(candidate.stepId()).toolKind()==ToolKind.TRACE&&bindings.containsKey(candidate.stepId()))selected.put(candidate.stepId(),bindings.get(candidate.stepId()));
         return new ExecutionContext(resolver,trace,Optional.of(new ExecutionContext.BoundInputs(attempt,selected)));
     }
-    /**
-     * Knowledge 입력은 현재 Job·선택 단계·검증된 대상으로만 만든다(Plan §16.3 R1). 정확 q 는 qRef 복원 원문이고 의미 입력의 질문은 현재 Job 의 마스킹 질문이다.
-     * 근거 종류는 서버 결속 evidenceNeeds 이며 결속 값이 없는 F1 경로는 비어 있다.
-     */
-    private com.nori.ai.gateway.core.knowledge.KnowledgeSearchContext knowledgeContext(JobContext job,WorkflowExecutionPlan plan,PlanValidator.Prepared prepared,StepAttempt attempt) {
-        var step=prepared.plan().plan().stream().filter(value->value.stepId().equals(attempt.binding().stepId())).findFirst().orElseThrow();
-        var exact=job.classification().get("q") instanceof String q?Optional.of(q):Optional.<String>empty();
-        var needs=plan.evidence().map(value->value.requirements().stream().map(EvidenceRequirement::need).toList()).orElse(List.of());
-        return new com.nori.ai.gateway.core.knowledge.KnowledgeSearchContext(job.jobId(),step.stepId(),job.scope().boundSystem(),job.requestInput().maskedQuestion(),exact,step.resources(),needs);
-    }
     private void collectToolAncestors(PlanStep step,PlanEnvelope plan,Set<String> selected) {
         for(String id:step.dependsOn())if(selected.add(id))collectToolAncestors(plan.plan().stream().filter(value->value.stepId().equals(id)).findFirst().orElseThrow(),plan,selected);
-    }
-    private List<String> ancestors(WorkflowDefinition.Step step,WorkflowDefinition definition) {
-        Set<String> selected=new HashSet<>();collectAncestors(step,definition,selected);
-        return definition.steps().stream().map(WorkflowDefinition.Step::stepId).filter(selected::contains).toList();
-    }
-    private void collectAncestors(WorkflowDefinition.Step step,WorkflowDefinition definition,Set<String> selected) {
-        for(String id:step.dependsOn())if(selected.add(id))collectAncestors(definition.steps().stream().filter(value->value.stepId().equals(id)).findFirst().orElseThrow(),definition,selected);
     }
     private ToolResultEnvelope failure(CapabilityManifest manifest,ResultStatus status){return new ToolResultEnvelope(null,manifest.capabilityId(),manifest.contractVersion(),manifest.schemaDigest(),manifest.ownerSystem(),status,null,List.of(),null,null,List.of(),List.of(),null,null,null,null,List.of(),List.of(),List.of(),List.of(),List.of());}
 }

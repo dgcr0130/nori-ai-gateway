@@ -25,7 +25,7 @@ public final class F2Runtime {
             new F2ReadinessChecks(clients.gateway(), clients.hooks(), clients.oracle(), alerts).run(leaf);
             return;
         }
-        Optional<LokiDirectQuery> loki = readback ? Optional.of(new LokiDirectQuery(new SourceHttpClient(URI.create(url), LokiSourcePolicy.SOURCE_REF, SourceObservability.noop()))) : Optional.empty();
+        Optional<LokiDirectQuery> loki = readback ? Optional.of(new LokiDirectQuery(new SourceHttpClient(URI.create(url), "sources://TC/logs.search", SourceObservability.noop()))) : Optional.empty();
         new F2JobChecks(clients.gateway(), clients.hooks(), clients.oracle(), loki, F2Runtime::countTokens).run(leaf);
     }
 

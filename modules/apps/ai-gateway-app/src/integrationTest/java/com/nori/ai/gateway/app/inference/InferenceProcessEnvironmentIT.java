@@ -42,7 +42,7 @@ class InferenceProcessEnvironmentIT extends StackContextSupport {
                 p.putAll(Map.of("ai.gateway.capacity.max-running-jobs", "1", "ai.gateway.capacity.generation-concurrency", "1", "ai.gateway.capacity.queued-depth", "4",
                     "ai.gateway.capacity.queue-wait-limit", "60s", "ai.gateway.capacity.job-lifetime-limit", "180s"));
                 p.putAll(Map.of("ai.gateway.inference.mode", "enabled", "ai.gateway.llm.baseUrl", stub.baseUrl() + "/v1"));
-                p.putAll(Map.of("ai.gateway.test-hooks.enabled", "true", "ai.gateway.test-hooks.token-sha256-file", securityDirectory.resolve("hook.sha256").toString(), "ai.gateway.tcmock.state-dir", state.toString()));
+                p.putAll(Map.of("ai.gateway.test-hooks.enabled", "true", "ai.gateway.test-hooks.token-sha256-file", securityDirectory.resolve("hook.sha256").toString()));
                 p.putAll(Map.of("spring.kafka.bootstrap-servers", "127.0.0.1:1", "spring.kafka.listener.auto-startup", "false", "nori.storage.s3.enabled", "true", "nori.storage.s3.endpoint", "http://127.0.0.1:1",
                     "nori.storage.s3.bucket", "p19-fixture", "nori.storage.s3.access-key", "p19-dummy", "nori.storage.s3.secret-key", "p19-dummy", "nori.storage.s3.region", "us-east-1"));
                 harness.launch(state, p, null, Map.of("OPENAI_API_KEY", apiKeySentinel, "OPENAI_BASE_URL", decoy.baseUrl() + "/v1", "OPENAI_LOG", "debug"));

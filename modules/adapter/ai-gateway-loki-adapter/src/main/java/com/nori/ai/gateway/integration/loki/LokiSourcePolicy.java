@@ -1,18 +1,14 @@
 package com.nori.ai.gateway.integration.loki;
 
-import com.nori.ai.gateway.integration.source.TcSourcePolicy;
 import java.util.*;
 
 public final class LokiSourcePolicy {
-    public static final String SOURCE_REF = "sources://TC/logs";
     private LokiSourcePolicy() {}
-    public static String retentionSourceId(String app) {
-        if (!TcSourcePolicy.APPS.contains(app)) throw new IllegalArgumentException("허용되지 않은 로그 앱입니다");
-        return SOURCE_REF + "/" + app;
-    }
-    public static String selector(String app, List<String> terms) {
-        if (!TcSourcePolicy.APPS.contains(app)) throw new IllegalArgumentException("허용되지 않은 로그 앱입니다");
-        StringBuilder query = new StringBuilder("{app=\"").append(app).append("\", namespace=\"tc\"}");
+    public static String retentionSourceId(String system,String namespace,String app){return "sources://"+system+"/logs.search/"+namespace+"/"+app;}
+    private static String escapeLabel(String value){return value.replace("\\","\\\\").replace("\"","\\\"").replace("\n","\\n").replace("\r","\\r");}
+    public static String selector(String app,String namespace, List<String> terms) {
+        if(app==null||app.isBlank()||namespace==null||namespace.isBlank())throw new IllegalArgumentException("검색 위치가 잘못되었습니다");
+        StringBuilder query = new StringBuilder("{app=\"").append(escapeLabel(app)).append("\", namespace=\"").append(escapeLabel(namespace)).append("\"}");
         for (String term : terms) {
             Objects.requireNonNull(term);
             query.append(" |= \"");

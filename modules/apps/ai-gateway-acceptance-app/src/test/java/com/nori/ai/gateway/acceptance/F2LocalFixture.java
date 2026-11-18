@@ -1,7 +1,7 @@
 package com.nori.ai.gateway.acceptance;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import com.sun.net.httpserver.*;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -57,10 +57,10 @@ final class F2LocalFixture implements AutoCloseable {
             String path = exchange.getRequestURI().getPath(), method = exchange.getRequestMethod(); byte[] input = exchange.getRequestBody().readAllBytes();
             JsonNode body = input.length == 0 ? null : CanonicalJson.MAPPER.readTree(input); Object result = Map.of(); int status = 200; var headers = exchange.getResponseHeaders();
             if (path.equals("/__test/clock")) { if (method.equals("POST")) clockOps.add(body.toString()); result = Map.of("now", now.toString()); }
-            else if (path.equals("/__test/reset") || path.equals("/__test/tcmock/delegations")) status = 204;
+            else if (path.equals("/__test/reset") || path.equals("/__fixture/delegations") || path.equals("/__fixture/reset")) status = 204;
             else if (path.equals("/__test/arm")) { armed.put(body.path("requestKey").asText(), body.path("scenario")); status = 204; }
-            else if (path.equals("/__test/tcmock/calls")) result = last == null ? Map.of() : last.calls;
-            else if (path.equals("/__test/tcmock/scenario")) status = scenarios.contains(body.path("id").asText()) ? 204 : 400;
+            else if (path.equals("/__fixture/calls")) result = last == null ? Map.of() : last.calls;
+            else if (path.equals("/__fixture/scenario")) status = scenarios.contains(body.path("id").asText()) ? 204 : 400;
             else if (path.startsWith("/__test/prompt-watch/")) { var job = keyToJob.get(path.substring(path.lastIndexOf('/') + 1)); var rows = job == null ? null : outcomes.get(job).watch; if (rows == null || rows.isEmpty()) status = 404; else result = rows; }
             else if (path.equals("/__test/readiness-stub")) { String kind = body.path("kind").asText(); readiness = kind.equals("OFF") ? restoredState : kind; result = Map.of("state", readiness); }
             else if (path.equals("/__test/egress-probe") && method.equals("GET")) { if (egressTargets == null) status = 404; else result = egressTargets; }

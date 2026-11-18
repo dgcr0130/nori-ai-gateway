@@ -47,8 +47,8 @@ class VerifiedIdentityAndReadScopeTest {
     }
 
     @Test void eventPermissionRemainsUnmappedAndDeniedUntilDetailedContract() {
-        var event = new ManifestLoader().loadClasspath("manifests/tc/index.json").stream()
-            .filter(m -> m.capabilityId().equals("tc.event.getRecent")).findFirst().orElseThrow();
+        var event = new ManifestLoader().loadClasspath("fixtures/tools/index.json").stream()
+            .filter(m -> m.capabilityId().equals("fixture.event.read")).findFirst().orElseThrow();
         assertThat(event.requiredPermission()).isEmpty();
         assertThat(registry(event, new ContractVersionPolicy()).view(scope()).capabilities()).isEmpty();
         assertThat(PlanValidator.authorized(event, new Resolver().authorize(event, step(), scope()), scope())).isFalse();

@@ -6,7 +6,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 class F1SourceChecksTest {
-    private com.fasterxml.jackson.databind.JsonNode capture(String job,String state,List<Map<String,Object>> attempts){return CanonicalJson.MAPPER.valueToTree(Map.of("jobId",job,"status","RECORDED","observations",List.of(Map.of("capabilityId","tc.logs.search","status",state,"count",attempts.size(),"attempts",attempts))));}
+    private com.fasterxml.jackson.databind.JsonNode capture(String job,String state,List<Map<String,Object>> attempts){return CanonicalJson.MAPPER.valueToTree(Map.of("jobId",job,"status","RECORDED","observations",List.of(Map.of("capabilityId","logs.search","status",state,"count",attempts.size(),"attempts",attempts))));}
     @Test void completeZeroIsAcceptedButMissingWrongJobInvalidSelectorAndIncompleteAreNot(){F1SourceChecks.verify(capture("job","COMPLETE",List.of()),"job",Set.of(),true);
         assertThatThrownBy(()->F1SourceChecks.verify(CanonicalJson.MAPPER.valueToTree(Map.of("jobId","job","status","MISSING")),"job",Set.of(),true)).isInstanceOf(org.opentest4j.TestAbortedException.class);
         assertThatThrownBy(()->F1SourceChecks.verify(capture("other","COMPLETE",List.of()),"job",Set.of(),true)).hasMessage("F1_SOURCE_JOB_MISMATCH");

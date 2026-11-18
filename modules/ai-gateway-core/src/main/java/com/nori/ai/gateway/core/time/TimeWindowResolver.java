@@ -23,10 +23,11 @@ public final class TimeWindowResolver {
     private record Selection(Map<String,Object> selected,ZoneId zone,Instant reference,boolean conflict) {}
     public Resolved resolve(Map<String,Object> extraction,Map<String,Object> context,Supplier<Optional<Map<String,Object>>> previousTurnWindow,WorkflowDefinition workflow) {
         boolean required=workflow.defaultWindowLength()!=null && workflow.answerSource()!=WorkflowDefinition.AnswerSource.REGISTRY_VIEW;
-        if (!required) return new Resolved(Optional.empty(),Map.of(),false);
+        if (workflow.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW) return new Resolved(Optional.empty(),Map.of(),false);
         Selection selection=select(extraction,context);
         Map<String,Object> selected=selection.selected();
         // 영속 reader의 결속·손상 예외는 사용자 시간 입력 오류와 구별해 그대로 전파합니다.
+        if(selected.isEmpty()&&!required)return new Resolved(Optional.empty(),Map.of(),false);
         if(selected.isEmpty())selected=previousTurnWindow.get().orElse(Map.of());
         if(selected.isEmpty())throw new Failure(ErrorCode.TIME_WINDOW_REQUIRED);
         return finish(selected,selection);
@@ -35,7 +36,7 @@ public final class TimeWindowResolver {
         try {
             ZoneId zone=context.get("timezone")==null?null:ZoneId.of((String)context.get("timezone"));
             Instant reference=context.get("referenceTime")==null?null:parser.parseTime((String)context.get("referenceTime"),zone);
-            Map<String,Object> supplied=window(extraction);
+            Map<String,Object> supplied=extraction.get("timeWindow") instanceof Map<?,?> map?object(map):window(extraction);
             Map<String,Object> selected=context.get("timeWindow")==null?Map.of():object(context.get("timeWindow"));
             boolean conflict=false;
             if (!supplied.isEmpty()) {

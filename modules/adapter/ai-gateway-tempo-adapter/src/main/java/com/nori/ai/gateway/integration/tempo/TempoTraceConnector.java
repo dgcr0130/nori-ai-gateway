@@ -9,7 +9,6 @@ import java.util.*;
 import java.math.BigInteger;
 
 public final class TempoTraceConnector {
-    public static final String SOURCE_REF = "sources://TC/trace";
     public record Span(String service, String spanId, String name, String startTimeUnixNano, String endTimeUnixNano, String serviceVersion) {
         @Override public String toString() { return "Span[보호됨]"; }
     }
@@ -20,26 +19,26 @@ public final class TempoTraceConnector {
     private final SourceHttpClient http;
     private final SourceReadAccess access;
     public TempoTraceConnector(SourceHttpClient http, SourceReadAccess access) { this.http = Objects.requireNonNull(http); this.access = Objects.requireNonNull(access); }
-    public TraceResult search(SourceReadAccess.Request request,String service,TimeWindow window) {
-        try{return searchGuarded(request,service,window);}
+    public TraceResult search(SourceReadAccess.Request request,String service,String namespace,TimeWindow window) {
+        try{return searchGuarded(request,service,namespace,window);}
         catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
         catch(SourceReadAccess.Rejected rejected){return result(rejected.status(),List.of());}
     }
-    private TraceResult searchGuarded(SourceReadAccess.Request request, String service, TimeWindow window) {
-        if (!TcSourcePolicy.APPS.contains(service)) return result(ResultStatus.DENIED, List.of());
-        ResultStatus authorized = access.check(request, SOURCE_REF);
+    private TraceResult searchGuarded(SourceReadAccess.Request request, String service,String namespace, TimeWindow window) {
+        if (request.locations().traces().stream().noneMatch(value->value.service().equals(service)&&value.namespace().equals(namespace)&&request.scope().perm().containsAll(value.requiredPermissions()))) return result(ResultStatus.DENIED, List.of());
+        ResultStatus authorized = access.check(request, request.sourceAllowlistRef());
         if (authorized != ResultStatus.SUCCESS) return result(authorized, List.of());
         long deadline = http.deadline(Duration.ofSeconds(30));
         try {
-            JsonNode body = http.json(http.uri(List.of("api", "search"), Map.of("q", "{resource.service.name=\"" + service + "\"}",
-                "start", window.startAt().getEpochSecond(), "end", ceilSecond(window.endAt()))), null, deadline,()->access.require(request,SOURCE_REF)).body();
+            JsonNode body = http.json(http.uri(List.of("api", "search"), Map.of("q", "{resource.service.name=\"" + label(service) + "\" && resource.k8s.namespace.name=\""+label(namespace)+"\"}",
+                "start", window.startAt().getEpochSecond(), "end", ceilSecond(window.endAt()))), null, deadline,()->access.require(request,request.sourceAllowlistRef())).body();
             if (!body.path("traces").isArray()) throw new SourceHttpClient.Failure(false, false);
             List<Trace> traces = new ArrayList<>(); Set<String> seen = new HashSet<>();
             for (JsonNode hit : body.path("traces")) {
                 String id = hit.path("traceID").asText();
                 if (!validTraceId(id)) throw new SourceHttpClient.Failure(false, false);
                 if (!seen.add(id)) continue;
-                authorized = access.check(request, SOURCE_REF);
+                authorized = access.check(request, request.sourceAllowlistRef());
                 if (authorized != ResultStatus.SUCCESS) return result(authorized, List.of());
                 Trace trace = load(request,id, deadline, Optional.of(window));
                 if (!trace.spans().isEmpty()) traces.add(trace);
@@ -54,8 +53,8 @@ public final class TempoTraceConnector {
         catch(SourceReadAccess.Rejected rejected){return result(rejected.status(),List.of());}
     }
     private TraceResult getTraceGuarded(SourceReadAccess.Request request, String traceId) {
-        if (!validTraceId(traceId)) return result(ResultStatus.DENIED, List.of());
-        ResultStatus authorized = access.check(request, SOURCE_REF);
+        if (request.locations().traces().isEmpty() || !validTraceId(traceId)) return result(ResultStatus.DENIED, List.of());
+        ResultStatus authorized = access.check(request, request.sourceAllowlistRef());
         if (authorized != ResultStatus.SUCCESS) return result(authorized, List.of());
         try {
             Trace trace = load(request,traceId, http.deadline(Duration.ofSeconds(30)), Optional.empty());
@@ -64,13 +63,14 @@ public final class TempoTraceConnector {
         catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE, List.of()); }
     }
     private Trace load(SourceReadAccess.Request request,String id, long deadline, Optional<TimeWindow> window) {
-        JsonNode body = http.json(http.uri(List.of("api", "traces", id), Map.of()), null, deadline,()->access.require(request,SOURCE_REF)).body();
+        JsonNode body = http.json(http.uri(List.of("api", "traces", id), Map.of()), null, deadline,()->access.require(request,request.sourceAllowlistRef())).body();
         JsonNode batches = body.has("batches") ? body.path("batches") : body.path("resourceSpans");
         if (!batches.isArray()) throw new SourceHttpClient.Failure(false, false);
         List<Span> spans = new ArrayList<>();
         for (JsonNode batch : batches) {
             String service = attribute(batch.path("resource").path("attributes"), "service.name");
-            if (!TcSourcePolicy.APPS.contains(service)) continue;
+            String namespace = attribute(batch.path("resource").path("attributes"), "k8s.namespace.name");
+            if (request.locations().traces().stream().noneMatch(value->value.service().equals(service)&&value.namespace().equals(namespace)&&request.scope().perm().containsAll(value.requiredPermissions()))) continue;
             String version = attribute(batch.path("resource").path("attributes"), "service.version");
             JsonNode scopes = batch.has("scopeSpans") ? batch.path("scopeSpans") : batch.path("instrumentationLibrarySpans");
             if (!scopes.isArray()) throw new SourceHttpClient.Failure(false, false);
@@ -94,6 +94,7 @@ public final class TempoTraceConnector {
         }
         return new Trace(id, spans);
     }
+    private static String label(String value){return value.replace("\\","\\\\").replace("\"","\\\"");}
     private static String attribute(JsonNode attributes, String key) {
         String found = null;
         for (JsonNode attribute : attributes) if (key.equals(attribute.path("key").asText())) {

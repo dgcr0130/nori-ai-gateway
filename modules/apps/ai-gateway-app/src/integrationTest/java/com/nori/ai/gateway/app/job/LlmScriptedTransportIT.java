@@ -75,13 +75,14 @@ class LlmScriptedTransportIT extends LlmStubSupport {
         assertThat(scripts().scriptedCalls(truncated.jobId(), CallType.COMPOSER)).as("잘림 감지는 재시도하지 않는 호출 실패").isOne();
     }
 
-    @Test void anIncidentWithOnlyOptionalStepOmittedTracesAggregatesAsSuccess() throws Exception {
+    @Test void anIncidentExecutesOnlyItsSelectedListAndAggregatesAsSuccess() throws Exception {
         perms = Set.of("EQP_READ", "COMM_LOG_READ", "DLQ_READ", "AI_LOG_READ", "AI_TRACE_READ");
         var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("장애 근거를 확인했다[e1].")), Optional.empty(), null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");
         var trace = new ArrayList<String>();
         payload(job.jobId()).path("trace").forEach(value -> trace.add(value.path("outcome").asString()));
-        assertThat(trace).isNotEmpty().containsOnly("OPTIONAL_STEP_OMITTED");
+        assertThat(trace).isEmpty();
+        assertThat(jdbc().sql("SELECT capability_id FROM gw.tool_execution WHERE job_id=:id").param("id",job.jobId()).query(String.class).list()).containsExactlyInAnyOrder("tc.eqp.getOperationalSnapshot","logs.search","trace.search");
         assertThat(result(job.jobId())).containsEntry("status", "SUCCESS").containsEntry("error_code", null);
     }
 }

@@ -9,6 +9,6 @@ import java.time.Duration;
 public final class SourceRetentionAttributesProvider {
     private final org.springframework.beans.factory.ObjectProvider<SourceRetentionReader> readers;
     public SourceRetentionAttributesProvider(org.springframework.beans.factory.ObjectProvider<SourceRetentionReader> readers){this.readers=readers;}
-    public SourceRetentionAttributes loki(String app){var reader=readers.getIfAvailable();return reader==null?new SourceRetentionAttributes.Unverified():reader.find(LokiSourcePolicy.retentionSourceId(app)).<SourceRetentionAttributes>map(value->new SourceRetentionAttributes.VerifiedOldest(value.verifiedOldestAt())).orElseGet(SourceRetentionAttributes.Unverified::new);}
+    public SourceRetentionAttributes loki(String system,String namespace,String app){var reader=readers.getIfAvailable();return reader==null?new SourceRetentionAttributes.Unverified():reader.find(LokiSourcePolicy.retentionSourceId(system,namespace,app)).<SourceRetentionAttributes>map(value->new SourceRetentionAttributes.VerifiedOldest(value.verifiedOldestAt())).orElseGet(SourceRetentionAttributes.Unverified::new);}
     public SourceRetentionAttributes configured(Duration retention){return new SourceRetentionAttributes.Configured(retention);}
 }

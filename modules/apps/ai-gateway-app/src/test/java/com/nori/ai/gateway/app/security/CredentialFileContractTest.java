@@ -1,6 +1,6 @@
 package com.nori.ai.gateway.app.security;
 
-import com.nori.ai.gateway.tcmock.testing.StubAssertionSigner;
+import com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.jwk.*;
 import com.nimbusds.jose.jwk.gen.*;

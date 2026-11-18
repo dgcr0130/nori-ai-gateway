@@ -1,7 +1,5 @@
 package com.nori.ai.gateway.core.authz;
 
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort;
-import com.nori.ai.gateway.core.port.TcSourceAuthorizationPort.*;
 import com.nori.ai.gateway.core.scope.*;
 import java.util.*;
 
@@ -35,15 +33,10 @@ public final class SourceAuthorizationStep {
         @Override public String toString() { return "StepGrant[보호됨]"; }
     }
     private final SourcePermissionMap permissions;
-    private final TcSourceAuthorizationPort authorization;
     private final ScopedPermissionExclusion exclusion;
-    public SourceAuthorizationStep(SourcePermissionMap permissions, TcSourceAuthorizationPort authorization) {
-        this(permissions, authorization, (source, scope) -> false);
-    }
-    public SourceAuthorizationStep(SourcePermissionMap permissions, TcSourceAuthorizationPort authorization, ScopedPermissionExclusion exclusion) {
-        this.permissions = Objects.requireNonNull(permissions);
-        this.authorization = Objects.requireNonNull(authorization);
-        this.exclusion = Objects.requireNonNull(exclusion);
+    public SourceAuthorizationStep(SourcePermissionMap permissions) { this(permissions,(source,scope)->false); }
+    public SourceAuthorizationStep(SourcePermissionMap permissions,ScopedPermissionExclusion exclusion) {
+        this.permissions=Objects.requireNonNull(permissions);this.exclusion=Objects.requireNonNull(exclusion);
     }
     public Decision authorizeBefore(String stepSource, VerifiedSystemScope scope, DelegatedCall call) {
         Objects.requireNonNull(scope); Objects.requireNonNull(call);
@@ -51,16 +44,8 @@ public final class SourceAuthorizationStep {
         var mapping = permissions.find(stepSource);
         if (mapping.isEmpty()) return new Denied();
         if (exclusion.excludes(stepSource, scope)) return new Denied();
-        Outcome outcome;
-        try { outcome = authorization.authorize(call, mapping.get().requiredPermCodes()); }
-        catch (RuntimeException failure) { return new SourceUnavailable(); }
-        if (outcome == null || outcome instanceof Unavailable) return new SourceUnavailable();
-        if (!(outcome instanceof Allowed allowed)) return new Denied();
-        if (allowed.pdg() == null || !allowed.pdg().matches("[0-9a-f]{64}")) return new SourceUnavailable();
-        if (!mapping.get().requiredPermCodes().containsAll(allowed.allowed())) return new SourceUnavailable();
-        // TC의 기존 URL 인가는 ANY-of입니다. 빈 사전 확인 결과로 Source를 열지 않습니다.
-        if (Collections.disjoint(allowed.allowed(), mapping.get().requiredPermCodes())) return new Denied();
-        return new Granted(allowed.allowed(), allowed.pdg());
+        if (!scope.perm().containsAll(mapping.get().requiredPermCodes())) return new Denied();
+        return new Granted(mapping.get().requiredPermCodes(),scope.pdg());
     }
     public StepDecision authorizeStep(StepAttempt attempt, VerifiedSystemScope scope, DelegatedCall call) {
         Objects.requireNonNull(attempt); Objects.requireNonNull(scope); Objects.requireNonNull(call);
@@ -74,7 +59,7 @@ public final class SourceAuthorizationStep {
         if (mapping.isEmpty() || !mapping.get().requiredPermCodes().containsAll(binding.manifestRequiredPermissions())) { attempt.close(); return new StepDenied(); }
         Decision decision=authorizeBefore(binding.sourceRef(),scope,call);
         if (decision instanceof Granted granted) {
-            if (Collections.disjoint(granted.allowed(),binding.manifestRequiredPermissions())) { attempt.close(); return new StepDenied(); }
+            if (!granted.allowed().containsAll(binding.manifestRequiredPermissions())) { attempt.close(); return new StepDenied(); }
             return new StepGrant(attempt,mapping.get().requiredPermCodes(),granted);
         }
         attempt.close();

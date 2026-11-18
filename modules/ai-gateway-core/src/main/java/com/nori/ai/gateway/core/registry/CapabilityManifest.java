@@ -22,7 +22,7 @@ public record CapabilityManifest(String toolId, String capabilityId, String cont
                 adapterVersion, sourceFreshnessPolicy, outputRefType}) {
             if (value == null || value.isBlank()) throw new IllegalArgumentException("Manifest 필수 필드가 누락되었습니다");
         }
-        if (!toolId.equals(capabilityId) || !capabilityId.matches(ownerSystem.name().toLowerCase(Locale.ROOT) + "\\.[a-z][a-zA-Z0-9]*\\.[a-z][a-zA-Z0-9]*"))
+        if (!toolId.equals(capabilityId) || !capabilityId.matches("[A-Za-z0-9_.-]{1,128}"))
             throw new IllegalArgumentException("Capability 식별자가 잘못되었습니다");
         if (!new OwnedReference(ownerSystem, sourceAllowlistRef).belongsTo(ownerSystem) || !sourceAllowlistRef.startsWith("sources://"))
             throw new IllegalArgumentException("Source 소유 범위가 잘못되었습니다");

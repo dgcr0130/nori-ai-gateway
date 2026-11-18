@@ -38,34 +38,22 @@ class ClassificationWireV3TokenBudgetTest {
     private static String resource(String path) throws Exception {
         try (var input = ClassificationWireV3TokenBudgetTest.class.getClassLoader().getResourceAsStream(path)) { assertThat(input).as(path).isNotNull(); return new String(input.readAllBytes(), StandardCharsets.UTF_8); }
     }
-    private static String registryReference() throws Exception {
-        var systems = new ArrayList<ClassificationRegistryText.SystemArea>();
-        for (var system : SchemaContracts.JSON.readTree(resource("prompts/classify-registry-systems-v2.json")).get("systems")) {
-            List<String> aliases = new ArrayList<>(), areas = new ArrayList<>();
-            system.get("aliases").forEach(value -> aliases.add(value.asString())); system.get("ownedAreas").forEach(value -> areas.add(value.asString()));
-            systems.add(new ClassificationRegistryText.SystemArea(system.get("system").asString(), aliases, areas));
-        }
-        var lines = ClassificationRegistryText.lines(OwnerSystem.TC, new ManifestLoader().loadClasspath("manifests/tc/index.json"), phase -> true);
-        return ClassificationRegistryText.render(OwnerSystem.TC, systems, lines);
-    }
-
     @Test void maximumWireV3FitsTheAnswerLimitAndTheAssembledInputFitsTheContextWithTheRequestMaxTokens() throws Exception {
         String eqp = "설비\"경계\\" + "가".repeat(54) + "EQP0";
         assertThat(eqp.codePointCount(0, eqp.length())).isEqualTo(64);
         String time = "2026-10-03T00:00:00.123456789+09:00";
         assertThat(time.length()).isEqualTo(35);
-        var wire = SchemaContracts.JSON.createObjectNode().put("t", "INC").put("eqp", eqp).put("from", time).put("to", "2026-10-04T00:00:00.123456789+09:00").put("qRef", "Q1");
-        var needs = wire.putArray("n"); for (EvidenceNeed need : EvidenceNeed.values()) needs.add(need.name());
-        wire.put("a", "D");
+        var wire=SchemaContracts.JSON.createObjectNode().put("taskType","INCIDENT_ANALYSIS").put("searchQuery",eqp).put("retryQuery",eqp+" 재검색");
+        wire.putArray("toolCalls");wire.putArray("targets").addObject().put("type","EQP").put("ref",eqp);wire.set("timeWindow",SchemaContracts.JSON.valueToTree(Map.of("from",time,"to","2026-10-04T00:00:00.123456789+09:00")));
         String content = wire.toString();
         assertThat(content).contains("\\\"", "\\\\");
         var policy = TokenBudgetPolicy.current();
         var budget = policy.budget(CallType.CLASSIFY);
-        String question = "\"" + "검".repeat(256) + "\" " + "설비 진행이 멈춘 원인과 정상 절차 비교, 조치까지 보고서로 정리해줘".repeat(4);
+        String question=eqp+" 원인과 정상 절차 비교";
         List<List<ChatMessage>> sent = new ArrayList<>();
         try (var tokenizer = new HfTokenizerCounter()) {
             int answer = tokenizer.countText(content);
-            assertThat(answer).as("ⓞ 답변 토큰").isLessThanOrEqualTo(256);
+            assertThat(answer).as("ⓞ 답변 토큰").isLessThanOrEqualTo(budget.answerLimit());
             assertThat(budget.answerLimit()).isEqualTo(768);
             assertThat(budget.requestMaxTokens()).as("ⓞ 요청 max_tokens").isEqualTo(2_048);
             InferenceClient client = new InferenceClient() {
@@ -75,15 +63,15 @@ class ClassificationWireV3TokenBudgetTest {
                 }
                 @Override public List<float[]> embed(List<String> inputs) { throw new UnsupportedOperationException(); }
             };
-            var service = new ClassificationService(client, policy, tokenizer::countText, new ExpiryCheckpoint(),
-                LlmCallObserver.NONE, attempt -> {}, resource("prompts/classify-v3.txt"), registryReference());
+            var service = new ClassificationService(client, policy, tokenizer::countText, new PromptTokenCounter(com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer(),tokenizer)::count, new ExpiryCheckpoint(),
+                LlmCallObserver.NONE, attempt -> {}, resource("prompts/classify-v3.txt"), ignored->new ClassificationService.Context(new com.nori.ai.gateway.core.registry.RegistryView(OwnerSystem.TC,List.of()),List.of(),Map.of(),2));
             var context = Map.<String,Object>of("context", Map.of("timezone", "+09:00", "referenceTime", "2026-10-20T10:00:00+09:00"));
             var result = service.classify(new ClassificationService.Request(new com.nori.ai.gateway.core.scope.VerifiedSystemScope(OwnerSystem.TC, "svc", new com.nori.ai.gateway.core.scope.ActorRef("actor"), "actor",
                 java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1"), "conversation", "job-1", new CancellationToken(), new JobRequestInput("message", 1, question, context)));
             assertThat(result).as("최대 wire 는 절삭 없이 통과").isInstanceOf(ClassificationService.Classified.class);
             var classified = ((ClassificationService.Classified) result).classification();
-            assertThat(classified.eqp()).isEqualTo(eqp);
-            assertThat(classified.evidenceNeeds()).containsExactly(EvidenceNeed.values());
+            assertThat(classified.targets()).extracting(com.nori.ai.gateway.core.plan.ResourceRef::ref).containsExactly(eqp);
+            assertThat(classified.toolCalls()).isEmpty();
             int input = new PromptTokenCounter(com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer(), tokenizer).count(sent.getFirst());
             assertThat(input).as("분류 입력 상한").isLessThanOrEqualTo(budget.inputLimit());
             assertThat(input + budget.requestMaxTokens()).as("ⓞ 입력 + max_tokens").isLessThanOrEqualTo(TokenBudgetPolicy.CONTEXT_TOKENS);

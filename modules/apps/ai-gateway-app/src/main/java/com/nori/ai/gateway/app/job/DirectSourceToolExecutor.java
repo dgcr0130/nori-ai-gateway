@@ -19,26 +19,30 @@ public final class DirectSourceToolExecutor implements ToolExecutor {
     public record GitExecutionScopes(List<GitLabSourcePolicy.Repository> repositories,List<GitLabSourcePolicy.LineageEntry> deployLineage) {
         public GitExecutionScopes {repositories=List.copyOf(repositories);deployLineage=List.copyOf(deployLineage);}
     }
+    private final com.nori.ai.gateway.app.config.GatewaySystemsProperties systems;
     private final ToolKind kind;private final ObjectProvider<LokiLogConnector> logs;private final ObjectProvider<TempoTraceConnector> traces;
     private final ObjectProvider<GitLabCodeConnector> code;private final ObjectProvider<GitExecutionScopes> scopes;private final Clock clock;private final LokiProperties properties;
     private final DeploymentEvidenceResolver deployments;
     private final Optional<com.nori.ai.gateway.app.hooks.SourceRequestProbe> probe;
     public DirectSourceToolExecutor(ToolKind kind,ObjectProvider<LokiLogConnector> logs,ObjectProvider<TempoTraceConnector> traces,ObjectProvider<GitLabCodeConnector> code,ObjectProvider<GitExecutionScopes> scopes,Clock clock,LokiProperties properties,DeploymentEvidenceResolver deployments) {
-        this(kind,logs,traces,code,scopes,clock,properties,deployments,Optional.empty());
+        this(kind,logs,traces,code,scopes,clock,properties,deployments,Optional.empty(),new com.nori.ai.gateway.app.config.GatewaySystemsProperties(Map.of()));
     }
-    public DirectSourceToolExecutor(ToolKind kind,ObjectProvider<LokiLogConnector> logs,ObjectProvider<TempoTraceConnector> traces,ObjectProvider<GitLabCodeConnector> code,ObjectProvider<GitExecutionScopes> scopes,Clock clock,LokiProperties properties,DeploymentEvidenceResolver deployments,Optional<com.nori.ai.gateway.app.hooks.SourceRequestProbe> probe) {
+    public DirectSourceToolExecutor(ToolKind kind,ObjectProvider<LokiLogConnector> logs,ObjectProvider<TempoTraceConnector> traces,ObjectProvider<GitLabCodeConnector> code,ObjectProvider<GitExecutionScopes> scopes,Clock clock,LokiProperties properties,DeploymentEvidenceResolver deployments,Optional<com.nori.ai.gateway.app.hooks.SourceRequestProbe> probe,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems) {
         if(!Set.of(ToolKind.LOG,ToolKind.TRACE,ToolKind.GIT).contains(kind))throw new IllegalArgumentException("직결 Source 종류가 잘못되었습니다");
         this.kind=kind;this.logs=logs;this.traces=traces;this.code=code;this.scopes=scopes;this.clock=clock;this.properties=properties;
         this.deployments=deployments;
-        this.probe=Objects.requireNonNull(probe);
+        this.probe=Objects.requireNonNull(probe);this.systems=Objects.requireNonNull(systems);
     }
     @Override public ToolKind toolKind(){return kind;}
     @Override public ToolResultEnvelope execute(PlanStep step,CapabilityManifest manifest,VerifiedSystemScope scope,ExecutionContext context) {
-        try(var capture=probe.map(value->value.open(scope.requestId(),manifest.capabilityId())).orElse(()->{})){return executeRead(step,manifest,scope,context);}
+        try(var capture=probe.map(value->value.open(scope.requestId(),manifest.capabilityId(),scope.boundSystem())).orElse(()->{})){return executeRead(step,manifest,scope,context);}
     }
     private ToolResultEnvelope executeRead(PlanStep step,CapabilityManifest manifest,VerifiedSystemScope scope,ExecutionContext context) {
         if(!(context.resolver() instanceof WorkflowResourceResolver resolver))return unavailable(manifest,scope);
-        resolver.beforeRead();var request=new SourceReadAccess.Request(scope,resolver.delegatedCall(),manifest.sourceAllowlistRef(),resolver::beforeRead);
+        resolver.beforeRead();var system=systems.systems().get(scope.boundSystem().name());
+        if(system==null)return unavailable(manifest,scope);
+        var locations=new SystemSourceScope(system.apps().stream().map(value->new SystemSourceScope.App(value.name(),value.namespace(),value.requiredPermissions())).toList(),system.traces().stream().map(value->new SystemSourceScope.Trace(value.service(),value.namespace(),value.requiredPermissions())).toList(),system.repositories().stream().map(value->new SystemSourceScope.Repository(value.projectId(),value.ref(),value.pathPrefix(),value.requiredPermissions())).toList());
+        var request=new SourceReadAccess.Request(scope,resolver.delegatedCall(),manifest.sourceAllowlistRef(),resolver::beforeRead,locations);
         return switch(kind) {
             case LOG -> logs(step,manifest,scope,resolver,request);
             case TRACE -> traces(step,manifest,scope,resolver,request);
@@ -51,15 +55,16 @@ public final class DirectSourceToolExecutor implements ToolExecutor {
     }
     private ToolResultEnvelope logs(PlanStep step,CapabilityManifest manifest,VerifiedSystemScope scope,WorkflowResourceResolver resolver,SourceReadAccess.Request request) {
         var connector=logs.getIfAvailable();if(connector==null)return unavailable(manifest,scope);
-        var args=step.arguments();List<String> terms=new ArrayList<>();terms.add(args.path("eqp").asString());if(args.path("q").isString())terms.add(args.get("q").asString());
+        var args=step.arguments();List<String> terms=new ArrayList<>();if(args.path("targetRef").isString())terms.add(args.path("targetRef").asString());if(args.path("q").isString())terms.add(args.get("q").asString());
         var result=connector.search(request,new LokiLogConnector.LogQuery(window(step,resolver,scope),terms,properties.maxLinesTotal()));
         return ToolResults.result(manifest,scope,result.status(),result.items(),clock.instant(),List.of(),result.warnings(),result.missingRanges().stream().map(value->new ToolResultMetadata.MissingRange(value.startAt(),value.endAt())).toList(),null);
     }
     private ToolResultEnvelope traces(PlanStep step,CapabilityManifest manifest,VerifiedSystemScope scope,WorkflowResourceResolver resolver,SourceReadAccess.Request request) {
         var connector=traces.getIfAvailable();if(connector==null)return unavailable(manifest,scope);
         List<TempoTraceConnector.Trace> values=new ArrayList<>();Set<String> ids=new HashSet<>();List<String> missing=new ArrayList<>();Set<Warning> warnings=new HashSet<>();int observed=0;
-        for(String service:TcSourcePolicy.APPS) {
-            resolver.beforeRead();var result=connector.search(request,service,window(step,resolver,scope));
+        for(var location:request.locations().traces()) {
+            String service=location.service();
+            resolver.beforeRead();var result=connector.search(request,service,location.namespace(),window(step,resolver,scope));
             if(result.status()==ResultStatus.DENIED)return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
             if(result.status()==ResultStatus.SOURCE_UNAVAILABLE){missing.add(service);continue;}
             observed++;warnings.addAll(result.warnings());for(var trace:result.traces())if(ids.add(trace.traceId()))values.add(trace);
@@ -78,11 +83,11 @@ public final class DirectSourceToolExecutor implements ToolExecutor {
             local.forEach(value->provenance.add(Optional.of(value)));
         }
         if(provenance.isEmpty())provenance.add(Optional.empty());
-        String query=step.arguments().path("q").asString();List<Map<String,Object>> items=new ArrayList<>();List<String> missing=new ArrayList<>();List<Evidence> deploymentEvidence=new ArrayList<>();int observed=0;
+        String query=step.arguments().path("q").isString()?step.arguments().path("q").asString():step.arguments().path("targetRef").asString("");List<Map<String,Object>> items=new ArrayList<>();List<String> missing=new ArrayList<>();List<Evidence> deploymentEvidence=new ArrayList<>();int observed=0;
         Map<String,DeploymentEvidenceResolver.Resolution> resolved=new HashMap<>();
         for(var origin:provenance) {
             DeploymentEvidenceResolver.Resolution resolution;
-            if(origin.isPresent()&&origin.get().service()!=null&&TcSourcePolicy.APPS.contains(origin.get().service())) {
+            if(origin.isPresent()&&origin.get().service()!=null&&request.locations().traces().stream().anyMatch(value->value.service().equals(origin.get().service()))) {
                 var value=origin.get();String key=value.service()+"\u0000"+value.serviceVersion();
                 resolver.beforeRead();resolution=resolved.computeIfAbsent(key,ignored->deployments.resolve(request,value.service(),value.serviceVersion(),approved.deployLineage()));
             } else resolution=new DeploymentEvidenceResolver.Resolution(Optional.empty(),"UNKNOWN",List.of("deployed source commit","plugin JAR digest","effectiveConfig"),"CURRENT_APPROVED_REF");
@@ -91,7 +96,11 @@ public final class DirectSourceToolExecutor implements ToolExecutor {
                 if(reason==GitLabPipelineLineageReader.Reason.DENIED)return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
                 if(reason==GitLabPipelineLineageReader.Reason.SOURCE_UNAVAILABLE)return unavailable(manifest,scope);
             }
-            for(var repository:approved.repositories()) {
+            for(var location:request.locations().repositories()) {
+                if(!scope.perm().containsAll(location.requiredPermissions()))return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
+                var approvedRepository=approved.repositories().stream().filter(value->value.projectId().equals(location.projectId())).findFirst();
+                if(approvedRepository.isEmpty())return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
+                var repository=new GitLabSourcePolicy.Repository(location.projectId(),approvedRepository.get().sourceRepo(),Set.of(location.ref()),Set.of(location.pathPrefix()),"SYSTEM_CONFIG");
                 var lineage=resolution.lineage().filter(value->value.status()==GitLabPipelineLineageReader.Status.VERIFIED&&value.sourceRepo().equals(repository.sourceRepo()));
                 List<String> refs=lineage.isPresent()?List.of(lineage.get().commitSha()):repository.refs().stream().sorted().toList();
                 for(String ref:refs)for(String prefix:repository.pathPrefixes().stream().sorted().toList()) {
