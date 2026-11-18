@@ -8,7 +8,8 @@
 | [runbooks/](runbooks/) | 운영 절차: DB 서버 선행조건, 런타임 자격, 검증 자격, 추론 서버 운영 |
 | [deployment-prerequisites.md](deployment-prerequisites.md) | 배포 선행조건 상태: 배포 입력 승인 기록 위치, 관측 수신·경보 전달, Source 선택자 |
 | [stack-compatibility.md](stack-compatibility.md) | 고정 기술 스택 호환 확인 기록 |
-| [rag-document-guide.md](rag-document-guide.md) | TC RAG 지식 문서 준비 가이드(원본 목록·신규 작성 문서·SeaweedFS 반입 기준). 승인 SPEC·PLAN이나 실제 수집 완료를 대신하지 않습니다. |
+| [rag-document-writing-rules.md](rag-document-writing-rules.md) | 모든 시스템의 RAG 원문 Markdown 작성·검사·갱신 규칙 |
+| [tc-rag-document-list.md](tc-rag-document-list.md) | 2026-11-18 사용자가 확정한 TC RAG 문서 53개의 경로·구획·유형·필요 이유·원천·미확인 부분 |
 
 ## SDD 문서 (중앙 저장소)
 
