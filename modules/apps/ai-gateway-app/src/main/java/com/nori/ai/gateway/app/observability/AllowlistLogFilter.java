@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  * MDC 값이 모두 닫힌 값인 이벤트만 통과시키고 나머지는 전송하지 않는다. 형식만 맞는 대문자 문자열은 허용하지 않는다.
  */
 public final class AllowlistLogFilter extends Filter<ILoggingEvent> {
-    static final Set<String> PRODUCT_CODES = Set.of("RESTORE_PATH_REQUIRED", "RETENTION_PROBE_FAILED", "RETENTION_PURGE_FAILED",
+    static final Set<String> PRODUCT_CODES = Set.of("RESTORE_PATH_REQUIRED", "DOCUMENT_SYNC_FAILED", "RETENTION_PROBE_FAILED", "RETENTION_PURGE_FAILED",
         "AUDIT_WRITE_FAILED", "INFERENCE_ALERT_RAISED_MODEL_LOADING", "INFERENCE_ALERT_RAISED_INFERENCE_UNAVAILABLE",
         "INFERENCE_ALERT_CLEARED");
     static final String PRODUCT_LOGGER_PREFIX = "com.nori.ai.gateway.";

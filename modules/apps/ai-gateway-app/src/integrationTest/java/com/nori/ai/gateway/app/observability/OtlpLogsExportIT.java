@@ -24,14 +24,15 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * logs=true일 때만 만들어지는 전용 OTel appender → 명시 SDK → OTLP/HTTP `/v1/logs` 경로와 stdout encoder를 인프로세스 수신기·출력 캡처로 확인한다.
- * 제품 logger의 고정 제품 코드 4개만 나가고, 형식만 맞는 대문자 sentinel·비제품 logger·닫힌 값 밖 MDC·인자·예외는 나가지 않는다.
+ * 이 fixture의 고정 제품 코드 5개만 나가고, 형식만 맞는 대문자 sentinel·비제품 logger·닫힌 값 밖 MDC·인자·예외는 나가지 않는다.
  */
 @Tag("stage-F1") @Tag("label-MOCK_API")
 @ExtendWith(OutputCaptureExtension.class)
 class OtlpLogsExportIT extends StackContextSupport {
-    private static final Set<String> CODES = Set.of("RESTORE_PATH_REQUIRED", "RETENTION_PROBE_FAILED", "RETENTION_PURGE_FAILED", "AUDIT_WRITE_FAILED");
+    private static final Set<String> CODES = Set.of("RESTORE_PATH_REQUIRED", "DOCUMENT_SYNC_FAILED", "RETENTION_PROBE_FAILED", "RETENTION_PURGE_FAILED", "AUDIT_WRITE_FAILED");
     private static final Set<String> MDC_KEYS = Set.of("requestId", "conversationId", "jobId", "traceId", "ownerSystem", "status", "errorCode", "decision");
     private static final Map<String,String> PRODUCT_LOGGERS = Map.of("RESTORE_PATH_REQUIRED", "com.nori.ai.gateway.app.job.recovery.ReadinessGate",
+        "DOCUMENT_SYNC_FAILED", "com.nori.ai.gateway.app.job.recovery.ReadinessGate",
         "RETENTION_PROBE_FAILED", "com.nori.ai.gateway.app.ops.SourceRetentionProbeScheduler", "RETENTION_PURGE_FAILED", "com.nori.ai.gateway.app.ops.RetentionPurgeJob");
     private OtlpCaptureServer receiver;
     private boolean logsEnabled;
@@ -48,7 +49,7 @@ class OtlpLogsExportIT extends StackContextSupport {
         root.iteratorForAppenders().forEachRemaining(appender -> { if (appender instanceof OpenTelemetryAppender otel) found.add(otel); });
         return found;
     }
-    /** 제품 3개 코드는 실제 제품 코드와 같은 System.Logger 경로·logger 이름으로, AUDIT_WRITE_FAILED는 실제 AuditRecorder 실패로 남긴다. */
+    /** 제품 4개 코드는 실제 제품 코드와 같은 System.Logger 경로·logger 이름으로, AUDIT_WRITE_FAILED는 실제 AuditRecorder 실패로 남긴다. */
     private void emitProductCodes(String jobId) {
         MDC.put("jobId", jobId); MDC.put("status", "SUCCEEDED"); MDC.put("decision", "CANCELLED");
         try {
@@ -84,7 +85,7 @@ class OtlpLogsExportIT extends StackContextSupport {
     }
     private static String body(Map<String,Object> record) { return String.valueOf(OtlpCaptureServer.child(record, "body").getOrDefault("string_value", "")); }
 
-    @Test void onlyTheFourProductCodesReachStdoutAndOtlpAndNothingIsSentBeforeInstallOrAfterClose(CapturedOutput output) throws Exception {
+    @Test void onlyTheFiveProductCodesReachStdoutAndOtlpAndNothingIsSentBeforeInstallOrAfterClose(CapturedOutput output) throws Exception {
         receiver = new OtlpCaptureServer(); logsEnabled = true;
         String beforeInstall = UUID.randomUUID().toString(), installed = UUID.randomUUID().toString(), afterClose = UUID.randomUUID().toString();
         MDC.put("jobId", beforeInstall); LoggerFactory.getLogger("com.nori.ai.gateway.app.ops.RetentionPurgeJob").warn("RETENTION_PURGE_FAILED"); MDC.clear();

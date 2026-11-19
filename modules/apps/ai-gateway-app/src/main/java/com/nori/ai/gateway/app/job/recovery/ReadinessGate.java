@@ -19,6 +19,7 @@ public final class ReadinessGate implements ApplicationRunner,Ordered {
         ready=false;
         try{for(var condition:preconditions)condition.run();}
         catch(RecoveryModeRouter.RestorePathRequired pending){System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"RESTORE_PATH_REQUIRED");return;}
+        catch(ReadinessPrecondition.PreparationFailed failed){System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"DOCUMENT_SYNC_FAILED");return;}
         ready=true;publisher.publishEvent(new RecoveryCompleted());
     }
     public boolean ready(){return ready;}

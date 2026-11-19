@@ -11,12 +11,12 @@ import static org.assertj.core.api.Assertions.*;
 
 @Tag("stage-F1") @Tag("label-MOCK_API")
 class RepositorySignatureArchTest {
-    @Test void nineRepositoriesRequireScopeAndMaintenanceCallersAreRestricted() throws Exception {
+    @Test void tenRepositoriesRequireScopeAndMaintenanceCallersAreRestricted() throws Exception {
         var root = Path.of(System.getProperty("aigw.rootDir"));
         var classes = new ClassFileImporter().importPath(root.resolve("modules/adapter/ai-gateway-db-adapter/build/classes/java/main"));
         var allRepositories = classes.stream().filter(type -> type.getSimpleName().endsWith("Repository")).toList();
         var expected = new HashSet<String>();
-        for (String name : List.of("Conversation", "Message", "Job", "JobEvent", "Result", "Evidence", "ToolExecution", "Cache", "Audit"))
+        for (String name : List.of("Conversation", "Message", "Job", "JobEvent", "Result", "Evidence", "ToolExecution", "Cache", "Audit", "DocumentIndex"))
             expected.add("com.nori.ai.gateway.persistence.repository." + name + "Repository");
         for (String name : List.of("Queue", "Retention", "Recovery"))
             expected.add("com.nori.ai.gateway.persistence.maintenance." + name + "MaintenanceRepository");
@@ -26,7 +26,7 @@ class RepositorySignatureArchTest {
         expected.add("com.nori.ai.gateway.persistence.retention.SourceRetentionProbeRepository");
         assertThat(allRepositories.stream().map(type -> type.getName())).containsExactlyInAnyOrderElementsOf(expected);
         var repositories = allRepositories.stream().filter(type -> type.getPackageName().endsWith(".repository")).toList();
-        assertThat(repositories).hasSize(9);
+        assertThat(repositories).hasSize(10);
         for (var type : repositories) for (var method : type.reflect().getDeclaredMethods()) {
             if (Modifier.isPublic(method.getModifiers()) && !method.isSynthetic()) {
                 assertThat(method.getParameterCount()).as(method.toString()).isGreaterThan(0);
@@ -35,7 +35,7 @@ class RepositorySignatureArchTest {
         }
         // 실제 제품 클래스 전체에서 유지보수 저장소의 실행 호출만 검사합니다. 빈 등록 의존은 호출이 아닙니다.
         var paths = new ArrayList<Path>();
-        for (String module : List.of("modules/adapter/ai-gateway-db-adapter", "modules/apps/ai-gateway-app", "modules/ai-gateway-core", "modules/adapter/ai-gateway-inference-adapter", "modules/adapter/ai-gateway-source-support", "modules/adapter/ai-gateway-loki-adapter", "modules/adapter/ai-gateway-tempo-adapter", "modules/adapter/ai-gateway-gitlab-adapter", "modules/adapter/ai-gateway-system-adapter")) {
+        for (String module : List.of("modules/adapter/ai-gateway-db-adapter", "modules/adapter/ai-gateway-object-storage-adapter", "modules/apps/ai-gateway-app", "modules/ai-gateway-core", "modules/adapter/ai-gateway-inference-adapter", "modules/adapter/ai-gateway-source-support", "modules/adapter/ai-gateway-loki-adapter", "modules/adapter/ai-gateway-tempo-adapter", "modules/adapter/ai-gateway-gitlab-adapter", "modules/adapter/ai-gateway-system-adapter")) {
             var path = root.resolve(module + "/build/classes/java/main"); if (Files.isDirectory(path)) paths.add(path);
         }
         var probeCallers = new HashMap<String,Set<String>>();

@@ -30,6 +30,14 @@ class AllowlistLogFilterTest {
             assertThat(encoded(event)).as(code).contains("\"message\":\"" + code + "\"");
         }
     }
+    @Test void documentSynchronizationFailureExportsOnlyItsFixedCode() {
+        var logger="com.nori.ai.gateway.app.job.recovery.ReadinessGate";
+        var failure=event(logger,"DOCUMENT_SYNC_FAILED");
+        assertThat(filter.decide(failure)).isEqualTo(FilterReply.NEUTRAL);
+        assertThat(encoded(failure)).contains("\"message\":\"DOCUMENT_SYNC_FAILED\"");
+        assertThat(filter.decide(event(logger,"DOCUMENT_SYNC_FAILED","private-error"))).isEqualTo(FilterReply.DENY);
+        assertThat(filter.decide(event("org.thirdparty.Client","DOCUMENT_SYNC_FAILED"))).isEqualTo(FilterReply.DENY);
+    }
 
     @Test void unlistedOrArgumentCarryingMessagesStayMasked() {
         for (var event : List.of(event(READINESS_LOGGER, "INFERENCE_READINESS_MODEL_LOADING"), event(READINESS_LOGGER, "INFERENCE_ALERT_RAISED_READY"),

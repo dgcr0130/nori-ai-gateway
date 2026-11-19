@@ -16,4 +16,6 @@ import org.springframework.transaction.support.TransactionTemplate;
     QueueMaintenanceRepository.class, RetentionMaintenanceRepository.class, RecoveryMaintenanceRepository.class, com.nori.ai.gateway.persistence.audit.AuditWriter.class})
 public class PersistenceModuleConfiguration {
     @Bean TransactionTemplate persistenceTransactions(PlatformTransactionManager manager) { return new TransactionTemplate(manager); }
+    @Bean DocumentIndexRepository documentIndexRepository(org.springframework.jdbc.core.simple.JdbcClient jdbc,TransactionTemplate tx,java.time.Clock clock) { return new DocumentIndexRepository(jdbc,tx,clock); }
+    @Bean com.nori.ai.gateway.persistence.knowledge.MemoryDocumentKeywordIndex memoryDocumentKeywordIndex() { return new com.nori.ai.gateway.persistence.knowledge.MemoryDocumentKeywordIndex(); }
 }

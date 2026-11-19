@@ -6,7 +6,7 @@ RAG는 질문과 관련된 문서를 찾아 답변의 근거로 주는 방식이
 
 이 문서는 작성자를 위한 안내이며 검색 원문이 아니다. [TC 문서 목록](tc-rag-document-list.md)도 검색 원문에 넣지 않는다. 예시를 감싼 바깥 코드 울타리, 긴 설명과 비교표는 안내 문서의 표현이다. 실제 반입 파일에는 아래의 크기·문법 규칙을 적용한다.
 
-Markdown 읽기·색인 계약은 006 구현 계획의 phase 5에서 구현할 예정이다. 2026-11-18 확인한 `config/ai-gateway.yaml`은 아직 TC 문서 원천을 `00.rag/` 하나로 둔다. `CoreBeansConfiguration.knowledgeDocumentStateReader`는 `FailClosedKnowledgeDocumentStateReader`를 등록하고 이 구현은 문서 상태를 `UNKNOWN`으로 반환한다. 현재 재기동만 하면 아래 계약대로 읽는다고 판단하지 않는다. 이 구분은 준비한 문서와 구현 완료를 혼동하지 않기 위해 둔다.
+006 구현 계획의 phase 5에서 Markdown 추출·마스킹·기동 동기화·색인 활성화 경로를 작성했고, `config/ai-gateway.yaml`의 TC 문서 원천은 `00.rag/user/`·`00.rag/admin/` 두 개다. 로컬 단위 시험과 DB 통합 시험 결과는 중앙 PLAN의 phase 5 기록으로 구분해 확인한다. 검색 실행 연결은 phase 6 범위이며 `CoreBeansConfiguration.knowledgeDocumentStateReader`는 아직 문서 상태를 `UNKNOWN`으로 반환하는 `FailClosedKnowledgeDocumentStateReader`를 등록한다. 작성한 문서의 실제 반입·검색 성공은 별도 확인이 필요하다.
 
 ## 2026-11-18 TC 문서 목록 분석에서 확인한 결함
 

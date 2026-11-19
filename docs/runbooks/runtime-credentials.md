@@ -14,10 +14,12 @@ Status: NOT_RUN
 | `AI_GATEWAY_DB_USER` | 단일 계정 이름 | 앱 env, 수용 Job env, 격리 시험 인스턴스 bootstrap |
 | `AI_GATEWAY_DB_PASSWORD` | 단일 계정 비밀번호 | 앱 env, 수용 Job 비밀번호 파일, 격리 시험 인스턴스(superuser·계정) |
 | `token` | GitLab 읽기 토큰 | 앱 |
-| `access-key`·`secret-key` | SeaweedFS 읽기 자격(F3·F4 행) | 앱 |
+| `access-key`·`secret-key` | SeaweedFS 읽기 자격(F3·F4 행) | 앱의 문서 S3 읽기(`ai.gateway.documents.accessKeyFile`·`secretKeyFile`) |
 | `service-tokens.json`·`jwks.json`·`hook-token-sha256` | Gateway 쪽 서비스 토큰 해시·actor JWKS·hook 토큰 해시 | 앱(검증 수용 자격 도구가 키 단위로 갱신 — `verify-credentials.md`) |
 
 계정 값은 `AI_GATEWAY_DB_USER`·`AI_GATEWAY_DB_PASSWORD` 두 키에만 둡니다. `ai-gateway-db.properties` 키에는 계정 값을 쓰지 않고 레포 파일과 같은 placeholder 를 두어, 앱(파일)·수용(env·파일)이 같은 두 키에서 값을 받게 합니다.
+
+문서 S3 자격 파일의 기본 경로는 `/app/config/access-key`·`/app/config/secret-key`입니다. 다른 파일 경로는 `AI_GATEWAY_S3_ACCESS_KEY_FILE`·`AI_GATEWAY_S3_SECRET_KEY_FILE`로 주입합니다. 파일 내용은 각각 UTF-8 자격 값 하나이며 로그에 출력하지 않습니다. S3 SDK의 환경 자격·기본 provider chain은 쓰지 않습니다. 문서 원천이 없는 시스템에는 S3 자격을 요구하지 않으며, 문서 원천이 있으면 기동 조립에서 자격을 검사하고 기존 Job 복구 뒤 열거·추출·재임베딩·색인 준비와 활성화가 끝나야 새 접수를 엽니다. 동기화 실패는 readiness를 닫습니다.
 
 DB 역할 Secret 의 provision·회전 명령은 없습니다. 운영 DB 는 빌려 쓰는 공유 서버의 단일 계정이고 계정·비밀번호 관리는 서버 담당자 소관입니다(`db-server-prerequisites.md`). 비밀번호가 바뀌면 운영자가 두 키를 갱신한 뒤 앱 Deployment 를 재시작합니다(수용 Job 은 실행마다 읽습니다).
 

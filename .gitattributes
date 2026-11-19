@@ -1,3 +1,6 @@
 * text=auto eol=lf
 *.bat eol=crlf
 acceptance/results/** text eol=lf
+acceptance/fixtures/markdown/cr.md -text
+acceptance/fixtures/markdown/invalid-utf8.md -text
+acceptance/fixtures/markdown/nul-byte.md -text

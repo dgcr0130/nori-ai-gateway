@@ -16,8 +16,11 @@ ai:
           - {"id":"tc.commLogs.search","description":"설비별 Gateway·Business 통신 로그와 Source별 보존 완전성 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64},"from":{"type":"string","minLength":1,"maxLength":35},"to":{"type":"string","minLength":1,"maxLength":35}},"required":["eqp","from","to"],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["COMM_LOG_READ"],"timeoutMs":10000}
         documents:
           - bucket: nori-tc
-            prefix: 00.rag/
+            prefix: 00.rag/user/
             requiredPermissions: [AI_DOC_READ]
+          - bucket: nori-tc
+            prefix: 00.rag/admin/
+            requiredPermissions: [AI_DOC_READ, AI_ADMIN_DOC_READ]
         apps:
           - {name: tc-gateway, namespace: tc, requiredPermissions: [AI_LOG_READ]}
           - {name: tc-business, namespace: tc, requiredPermissions: [AI_LOG_READ]}
@@ -29,6 +32,14 @@ ai:
           - {service: tc-ui-backend, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
         repositories: []
         glossary: {}
+    documents:
+      s3Endpoint: http://192.168.0.203:8333
+      accessKeyFile: ${AI_GATEWAY_S3_ACCESS_KEY_FILE:/app/config/access-key}
+      secretKeyFile: ${AI_GATEWAY_S3_SECRET_KEY_FILE:/app/config/secret-key}
+      maxFileBytes: 1048576
+      childMaxChars: 200
+      parentMaxChars: 450
+      headingMaxChars: 60
     classification:
       historyPairs: 2
     llm:

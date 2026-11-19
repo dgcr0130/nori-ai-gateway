@@ -2,6 +2,8 @@ import java.security.MessageDigest
 
 plugins { `java-library`; `java-test-fixtures` }
 dependencies {
+    implementation(libs.lucene.core)
+    implementation(libs.lucene.nori)
     implementation(project(":ai-gateway-core"))
     api("org.springframework.boot:spring-boot-starter-jdbc")
     // SchemaVersionGuard 의 MigrationVersion 비교만 쓴다. 앱 안 마이그레이션(Spring Flyway 자동 설정)은 없다.

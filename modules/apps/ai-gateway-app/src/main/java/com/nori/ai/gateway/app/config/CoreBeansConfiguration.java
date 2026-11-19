@@ -13,6 +13,10 @@ import java.util.*;
 /** Spring에 의존하지 않는 Core의 빈 등록 책임을 이 설정에 모읍니다. */
 @Configuration(proxyBeanMethods = false)
 public class CoreBeansConfiguration {
+    @Bean @org.springframework.context.annotation.Lazy
+    com.nori.ai.gateway.core.knowledge.DocumentSynchronization documentSynchronization(com.nori.ai.gateway.core.knowledge.DocumentObjectStore objects,com.nori.ai.gateway.core.knowledge.DocumentExtractor extractor,com.nori.ai.gateway.core.knowledge.DocumentIndexStore store,com.nori.ai.gateway.core.knowledge.DocumentKeywordIndex keywords,com.nori.ai.gateway.core.port.InferenceClient inference) {
+        return new com.nori.ai.gateway.core.knowledge.DocumentSynchronization(objects,extractor,store,keywords,inference);
+    }
     @Bean com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder workflowPlanBuilder(CapabilityRegistry registry){return new com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder(registry);}
     @Bean com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator evidenceCoverageEvaluator(){return new com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator();}
     @Bean com.nori.ai.gateway.core.time.TimeWindowResolver timeWindowResolver(){return new com.nori.ai.gateway.core.time.TimeWindowResolver();}

@@ -95,6 +95,8 @@ project(":ai-gateway-core").projectDir = file("modules/ai-gateway-core")
  * =================================================== */
 
 include(":adapter:ai-gateway-db-adapter")
+include(":adapter:ai-gateway-object-storage-adapter")
+project(":adapter:ai-gateway-object-storage-adapter").projectDir = file("modules/adapter/ai-gateway-object-storage-adapter")
 project(":adapter").projectDir = file("modules/adapter")
 project(":adapter:ai-gateway-db-adapter").projectDir = file("modules/adapter/ai-gateway-db-adapter")
 include(":adapter:ai-gateway-inference-adapter")

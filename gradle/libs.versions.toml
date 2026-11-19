@@ -10,6 +10,8 @@ protobuf = "4.33.2"
 protobufPlugin = "0.10.0"
 nimbusJoseJwt = "10.5"
 awsSdk = "2.46.17"
+commonmark = "0.32.0"
+lucene = "9.12.3"
 otelLogback = "2.33.1-alpha"
 openaiJava = "4.80.0"
 # java-module-conventions 가 compileOnly 로 붙이는 slf4j-api 는 BOM 밖에서 버전이 필요하다. Spring Boot 4.0.7 BOM 의 slf4j.version 과 같다.
@@ -22,6 +24,10 @@ postgresql = "42.7.11"
 noriObjectStorage = "0.0.1"
 
 [libraries]
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+commonmark-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
+lucene-core = { module = "org.apache.lucene:lucene-core", version.ref = "lucene" }
+lucene-nori = { module = "org.apache.lucene:lucene-analysis-nori", version.ref = "lucene" }
 json-canonicalization = { module = "io.github.erdtman:java-json-canonicalization", version.ref = "jsonCanonicalization" }
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "springBoot" }
 spring-ai-bom = { module = "org.springframework.ai:spring-ai-bom", version.ref = "springAi" }

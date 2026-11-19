@@ -8,6 +8,7 @@ plugins {
 }
 application { mainClass = "com.nori.ai.gateway.app.AiGatewayApplication" }
 dependencies {
+    implementation(project(":adapter:ai-gateway-object-storage-adapter"))
     implementation(project(":ai-gateway-core"))
     implementation(project(":adapter:ai-gateway-db-adapter"))
     implementation(project(":adapter:ai-gateway-inference-adapter"))

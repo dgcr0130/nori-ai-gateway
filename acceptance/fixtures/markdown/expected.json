@@ -1,0 +1,758 @@
+[
+  {
+    "file": "paragraph.md",
+    "key": "paragraph.md",
+    "revision": "f37d25b83f463aeb4a51878811210383b837c81c286dd8e3d21513030d51122e",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 7,
+        "body": "일반 강조 굵게 code 표시 이어짐\n강제",
+        "chars": 23,
+        "children": [
+          {
+            "body": "일반 강조 굵게 code 표시 이어짐\n강제",
+            "from": 5,
+            "to": 7,
+            "chars": 23
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "metadata.md",
+    "key": "metadata.md",
+    "revision": "587d8f27701f27e6b231ddc3b223f0b258826604c5a12c9895f8ea6f4b67f4a9",
+    "parents": [
+      {
+        "section": "절",
+        "from": 6,
+        "to": 11,
+        "body": "본문",
+        "chars": 2,
+        "children": [
+          {
+            "body": "본문",
+            "from": 11,
+            "to": 11,
+            "chars": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "lists.md",
+    "key": "lists.md",
+    "revision": "618a79e9d1fc5beaab3e99995999ca7eb91ac852ae16575d493ed5663b4ed6e9",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 10,
+        "body": "3. 첫째\n- 하위\n8. 둘째\n이어 문단",
+        "chars": 22,
+        "children": [
+          {
+            "body": "3. 첫째\n- 하위",
+            "from": 5,
+            "to": 6,
+            "chars": 10
+          },
+          {
+            "body": "8. 둘째\n이어 문단",
+            "from": 8,
+            "to": 10,
+            "chars": 11
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "table-code.md",
+    "key": "table-code.md",
+    "revision": "bd423730fb44ce8ff6c1c4a39175ae8c7c4302c41f0449e97c7b5eb8eb3201c8",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 13,
+        "body": "항목=A | 값=1\n항목=B | 값=2\n첫 줄\n  둘째",
+        "chars": 30,
+        "children": [
+          {
+            "body": "항목=A | 값=1",
+            "from": 7,
+            "to": 7,
+            "chars": 10
+          },
+          {
+            "body": "항목=B | 값=2",
+            "from": 8,
+            "to": 8,
+            "chars": 10
+          },
+          {
+            "body": "첫 줄\n  둘째",
+            "from": 10,
+            "to": 13,
+            "chars": 8
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "escaped-table.md",
+    "key": "escaped-table.md",
+    "revision": "6438cb3fd75b885008b4e81591c32b1936343de8a46ae5e1218a292606906593",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 7,
+        "body": "항목=A|B | 값=C",
+        "chars": 12,
+        "children": [
+          {
+            "body": "항목=A|B | 값=C",
+            "from": 7,
+            "to": 7,
+            "chars": 12
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "unclosed-fence.md",
+    "key": "unclosed-fence.md",
+    "revision": "49f0f7e4c133e36e930e86f578f895bc5f919e043759ca551c401a39d78fabe9",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 6,
+        "body": "닫히지 않은 코드",
+        "chars": 9,
+        "children": [
+          {
+            "body": "닫히지 않은 코드",
+            "from": 5,
+            "to": 6,
+            "chars": 9
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "two-sections.md",
+    "key": "two-sections.md",
+    "revision": "6c9a4f001fe300edf507aca28e03d9e59e3f0ae433f0a4f15ca5469c1899a646",
+    "parents": [
+      {
+        "section": "첫절",
+        "from": 3,
+        "to": 5,
+        "body": "하나",
+        "chars": 2,
+        "children": [
+          {
+            "body": "하나",
+            "from": 5,
+            "to": 5,
+            "chars": 2
+          }
+        ]
+      },
+      {
+        "section": "둘째절",
+        "from": 7,
+        "to": 9,
+        "body": "둘",
+        "chars": 1,
+        "children": [
+          {
+            "body": "둘",
+            "from": 9,
+            "to": 9,
+            "chars": 1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "child-199.md",
+    "key": "child-199.md",
+    "revision": "be974c35e77afa7a20cf7d3cbf16bd46389751bd06e4fc59e6264b11e7011ff3",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+        "chars": 199,
+        "children": [
+          {
+            "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+            "from": 5,
+            "to": 5,
+            "chars": 199
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "child-200.md",
+    "key": "child-200.md",
+    "revision": "f440b62c0050de3335438264e766fa10b7e3a06b396dfec600b7cf53894a37cf",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+        "chars": 200,
+        "children": [
+          {
+            "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+            "from": 5,
+            "to": 5,
+            "chars": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "child-201.md",
+    "key": "child-201.md",
+    "revision": "d9aa750f9a1ede5a8034978eb9ea9eb8b2af8937cd07132646a82620001af252",
+    "reason": "CHILD_LENGTH",
+    "line": 5
+  },
+  {
+    "file": "codepoints.md",
+    "key": "codepoints.md",
+    "revision": "585cd3976e12c05a6d35773ac9ffe159a8a174a1aabb160a8c7e1605e04797a4",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "chars": 200,
+        "children": [
+          {
+            "body": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+            "from": 5,
+            "to": 5,
+            "chars": 200
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "parent-449.md",
+    "key": "parent-449.md",
+    "revision": "1640655a0947fc0a302000f0afd44598f6882d4d9cb12d88f759df40858b16b0",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 9,
+        "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가\n나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나\n다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다",
+        "chars": 449,
+        "children": [
+          {
+            "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+            "from": 5,
+            "to": 5,
+            "chars": 150
+          },
+          {
+            "body": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나",
+            "from": 7,
+            "to": 7,
+            "chars": 149
+          },
+          {
+            "body": "다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다",
+            "from": 9,
+            "to": 9,
+            "chars": 148
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "parent-450.md",
+    "key": "parent-450.md",
+    "revision": "af8522e4f5f0810aa809560d0bd9bb5b226192e5602953d5aa39f6b41b2ccb75",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 9,
+        "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가\n나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나\n다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다",
+        "chars": 450,
+        "children": [
+          {
+            "body": "가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가가",
+            "from": 5,
+            "to": 5,
+            "chars": 150
+          },
+          {
+            "body": "나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나나",
+            "from": 7,
+            "to": 7,
+            "chars": 149
+          },
+          {
+            "body": "다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다다",
+            "from": 9,
+            "to": 9,
+            "chars": 149
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "parent-451.md",
+    "key": "parent-451.md",
+    "revision": "f8b753e2050a1c790969602e19925f0dd581c6aaccf714cde774b1345c67d799",
+    "reason": "PARENT_LENGTH",
+    "line": 3
+  },
+  {
+    "file": "heading-59.md",
+    "key": "heading-59.md",
+    "revision": "d2cd994f79ec158500468a34e266121719dd7ece972733299fd2b62d6a4ea3b5",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "본문",
+        "chars": 2,
+        "children": [
+          {
+            "body": "본문",
+            "from": 5,
+            "to": 5,
+            "chars": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "heading-60.md",
+    "key": "heading-60.md",
+    "revision": "0c71b6a9a74c7105fd066e120ec5a204954fc20c96050a0c31ba13a9aa296ace",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "본문",
+        "chars": 2,
+        "children": [
+          {
+            "body": "본문",
+            "from": 5,
+            "to": 5,
+            "chars": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "heading-61.md",
+    "key": "heading-61.md",
+    "revision": "3ccba16a63b6db5fc7df45979a2af12ad47968a363b070bd01c8acf5d2dd1f8f",
+    "reason": "HEADING_LENGTH",
+    "line": 1
+  },
+  {
+    "file": "h3.md",
+    "key": "h3.md",
+    "revision": "2c4e95c2553e69c5cf8518f41da0405ebd83d02640171ae18e7f35ef3de46169",
+    "reason": "FORBIDDEN_HEADING",
+    "line": 5
+  },
+  {
+    "file": "html-block.md",
+    "key": "html-block.md",
+    "revision": "0fbafdea88384e3f46ed47742d6a85e63508b4a84c36ba5588547ab1f953f61f",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "html-inline.md",
+    "key": "html-inline.md",
+    "revision": "c386c0e35815aa9617b359b82a1ff512283631bdcd1d4505fe29baa7c934faba",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "image.md",
+    "key": "image.md",
+    "revision": "c272a08820cdf4cc96276f619d95713f00638a898791d26ae3c5453df23c8811",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "quote.md",
+    "key": "quote.md",
+    "revision": "eb3f5ce8904563096b8fca87b4258d1c5fc98c81b040ac75f884190c16c75638",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "indented-code.md",
+    "key": "indented-code.md",
+    "revision": "9bc00116c0a031a3c332a103f311e76b31564d07f2ee19bd898cbdc5bf723c37",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "thematic.md",
+    "key": "thematic.md",
+    "revision": "8be8e29c8aff2ed5a8a0352d0b065ae4db4b92265cb86ffeb29fa9a137f3eda8",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "reference.md",
+    "key": "reference.md",
+    "revision": "e622bb5c33f611c8ea9f61b47ca67205992fc414f792785d42bc665783981e0f",
+    "reason": "FORBIDDEN_NODE",
+    "line": 5
+  },
+  {
+    "file": "no-h1.md",
+    "key": "no-h1.md",
+    "revision": "d0bb9a4b74de533001ce57dc13db6183b9ca93244d7e025413f6739f89265a2f",
+    "reason": "FIRST_H_ONE",
+    "line": 1
+  },
+  {
+    "file": "multiple-h1.md",
+    "key": "multiple-h1.md",
+    "revision": "dd48bafa1aacaf757ffb0df3f7ff6c36aabaa292abdac5c123f8f89874f3f8d1",
+    "reason": "MULTIPLE_H_ONE",
+    "line": 3
+  },
+  {
+    "file": "no-section.md",
+    "key": "no-section.md",
+    "revision": "8367a9a3bbf4bace829f4cb21de57ec0701be93334b72c1ccdef0d001f7c6a22",
+    "reason": "NO_SECTION",
+    "line": 1
+  },
+  {
+    "file": "empty-section.md",
+    "key": "empty-section.md",
+    "revision": "95786acee77f4acb93ce8c88e3ab85c904c764020188ae7dc510aafde0a3ee3c",
+    "reason": "PARENT_LENGTH",
+    "line": 3
+  },
+  {
+    "file": "before-section.md",
+    "key": "before-section.md",
+    "revision": "36264e96d9ef8ef13d642ed65acde399a15588775d6593f7d0f034a93c14baf4",
+    "reason": "SECTION_STRUCTURE",
+    "line": 3
+  },
+  {
+    "file": "duplicate-section.md",
+    "key": "duplicate-section.md",
+    "revision": "1267faa306064cc275088923d7d642e03d87b512ef06b51e06aaf74a18622df3",
+    "reason": "DUPLICATE_SECTION",
+    "line": 6
+  },
+  {
+    "file": "late-meta.md",
+    "key": "late-meta.md",
+    "revision": "0c3b1a84793ad0d378a06fc161042a88ee44f7be2212b6d79fe59acc249fb1da",
+    "reason": "META_POSITION",
+    "line": 6
+  },
+  {
+    "file": "double-meta.md",
+    "key": "double-meta.md",
+    "revision": "76093f991d8dbd634ced8a77233f33c2c1d9de18d551c47fbf7562b60511b193",
+    "reason": "SECTION_STRUCTURE",
+    "line": 5
+  },
+  {
+    "file": "nested-meta.md",
+    "key": "nested-meta.md",
+    "revision": "18d894b2df57a5b09c2f6c8db70e51599ffb691a1781eb99301c3c326ec7b368",
+    "reason": "META_POSITION",
+    "line": 5
+  },
+  {
+    "file": "duplicate-header.md",
+    "key": "duplicate-header.md",
+    "revision": "a89b88b1eecc93188ff0ebc28a8361686c2e06e4837a581cee7673084888a802",
+    "reason": "TABLE_HEADER",
+    "line": 5
+  },
+  {
+    "file": "empty-header.md",
+    "key": "empty-header.md",
+    "revision": "6ad757e82bb59a9a8213016e76f471657c18405be436ae27953c7bcc2197009e",
+    "reason": "TABLE_HEADER",
+    "line": 5
+  },
+  {
+    "file": "empty-cell.md",
+    "key": "empty-cell.md",
+    "revision": "a6a1203ea39f143fa780381efba7cf64815aac7ca6fbe625f898dc3e361a4483",
+    "reason": "TABLE_EMPTY_CELL",
+    "line": 7
+  },
+  {
+    "file": "extra-cell.md",
+    "key": "extra-cell.md",
+    "revision": "bcd73ee08052c17835cc8766cb768f9970a67081b5be497ad631134b0bad1ab9",
+    "reason": "TABLE_COLUMNS",
+    "line": 7
+  },
+  {
+    "file": "missing-cell.md",
+    "key": "missing-cell.md",
+    "revision": "2cebd84a1f2efa05eda5c5f9361911d42dc9d1d59c59eca21842afc776b1f75a",
+    "reason": "TABLE_COLUMNS",
+    "line": 7
+  },
+  {
+    "file": "table-no-data.md",
+    "key": "table-no-data.md",
+    "revision": "a2a3fb4b622b61f3d819634aff82d4a48ca548a47ccddec1868b66128265f2a8",
+    "reason": "TABLE_ROWS",
+    "line": 4
+  },
+  {
+    "file": "bom.md",
+    "key": "bom.md",
+    "revision": "3a1baa4cd229632cef062ff79a85f8f6f602afba15708afd260f67ebd81283ed",
+    "reason": "BOM",
+    "line": 1
+  },
+  {
+    "file": "cr.md",
+    "key": "cr.md",
+    "revision": "e6c95e850354efce90ae2c6558ccc6b090207c1fc3f1aca9fd774ccaec32c8a0",
+    "reason": "CR",
+    "line": 1
+  },
+  {
+    "file": "nul-byte.md",
+    "key": "nul-byte.md",
+    "revision": "edd0d7fa1302af46efc8af4f9fb896884fba3a4248d1a1e57e96033f2f4c8545",
+    "reason": "NUL",
+    "line": 6
+  },
+  {
+    "file": "nfc.md",
+    "key": "nfc.md",
+    "revision": "2b109b8cf2e665917bc03ec7a32b1b89611589ebb85dd65ee02eff2290395f19",
+    "reason": "NON_NFC",
+    "line": 6
+  },
+  {
+    "file": "invalid-utf8.md",
+    "key": "invalid-utf8.md",
+    "revision": "e73ef180719745a47763be3525ac8b70614b08f892fdbd84b7dc2080a4013d8b",
+    "reason": "INVALID_UTF_EIGHT",
+    "line": 1
+  },
+  {
+    "file": "unsupported.md",
+    "key": "file.pdf",
+    "revision": "dc03740cb4f07070e76b846141b4400dcb4b49769f9113e5c47db3d4d75da5b0",
+    "reason": "UNSUPPORTED_FORMAT",
+    "line": 1
+  },
+  {
+    "file": "mask.md",
+    "key": "mask.md",
+    "revision": "e2d374e64d15d0f3324843553e546a03f2ddf360209fe899931c2ca6241e7263",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "[마스킹]",
+        "chars": 5,
+        "children": [
+          {
+            "body": "[마스킹]",
+            "from": 5,
+            "to": 5,
+            "chars": 5
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "section-59.md",
+    "key": "section-59.md",
+    "revision": "78524a0a88245e0d99bd8c67c7722eb612ec355ba6333f8d7cf00b317cc11aad",
+    "parents": [
+      {
+        "section": "절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절",
+        "from": 3,
+        "to": 5,
+        "body": "본문",
+        "chars": 2,
+        "children": [
+          {
+            "body": "본문",
+            "from": 5,
+            "to": 5,
+            "chars": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "section-60.md",
+    "key": "section-60.md",
+    "revision": "2254797f3e56f915fe52e6c1b2e2f9f668bf90e45be30f24fb9edf9365feddd7",
+    "parents": [
+      {
+        "section": "절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절절",
+        "from": 3,
+        "to": 5,
+        "body": "본문",
+        "chars": 2,
+        "children": [
+          {
+            "body": "본문",
+            "from": 5,
+            "to": 5,
+            "chars": 2
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "section-61.md",
+    "key": "section-61.md",
+    "revision": "20d23ad6ed4c15388ece312d88362aa460da99d0a81ea4256b4050b0894a2cbc",
+    "reason": "HEADING_LENGTH",
+    "line": 3
+  },
+  {
+    "file": "ordered-under-bullet.md",
+    "key": "ordered-under-bullet.md",
+    "revision": "a6ff7de226af1e5ab5d16b110b699a76b8b98e93d3be7d0ac45470f6de3a0730",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 6,
+        "body": "- 1. 하위 번호\n- 둘째",
+        "chars": 15,
+        "children": [
+          {
+            "body": "- 1. 하위 번호",
+            "from": 5,
+            "to": 5,
+            "chars": 10
+          },
+          {
+            "body": "- 둘째",
+            "from": 6,
+            "to": 6,
+            "chars": 4
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "ordered-same-line-nested.md",
+    "key": "ordered-same-line-nested.md",
+    "revision": "a25bc85834112d6e2b65e3d3a7a9fc4f7ec980f045b945f176087970b667e1f3",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "1. 2. 이중 번호",
+        "chars": 11,
+        "children": [
+          {
+            "body": "1. 2. 이중 번호",
+            "from": 5,
+            "to": 5,
+            "chars": 11
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "ordered-marker-only.md",
+    "key": "ordered-marker-only.md",
+    "revision": "a892cec4e2a6dea41d644b4d16594fddfa4ec9995444349105c263f82091bfdd",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 6,
+        "body": "7. 다음 줄 내용",
+        "chars": 10,
+        "children": [
+          {
+            "body": "7. 다음 줄 내용",
+            "from": 5,
+            "to": 6,
+            "chars": 10
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "ordered-indented-top-level.md",
+    "key": "ordered-indented-top-level.md",
+    "revision": "64c9a0631c1e266bef28eb19cd10f2034a525d7375405a8f1f00fc9903e59f37",
+    "parents": [
+      {
+        "section": "절",
+        "from": 3,
+        "to": 5,
+        "body": "9. 들여쓴 최상위",
+        "chars": 10,
+        "children": [
+          {
+            "body": "9. 들여쓴 최상위",
+            "from": 5,
+            "to": 5,
+            "chars": 10
+          }
+        ]
+      }
+    ]
+  }
+]

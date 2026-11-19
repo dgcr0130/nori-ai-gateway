@@ -106,7 +106,7 @@ class ArchitectureRulesTest {
     static JavaClasses mainClasses() throws Exception {
         Set<Path> locations = new HashSet<>();
         // 참조된 타입의 자동 해석에 기대지 않고 모든 제품 main 산출물을 직접 수집합니다.
-        for (String module : List.of("modules/apps/ai-gateway-app","modules/adapter/ai-gateway-db-adapter","modules/ai-gateway-core","modules/adapter/ai-gateway-inference-adapter","modules/adapter/ai-gateway-source-support","modules/adapter/ai-gateway-system-adapter","modules/adapter/ai-gateway-loki-adapter","modules/adapter/ai-gateway-tempo-adapter","modules/adapter/ai-gateway-gitlab-adapter","modules/apps/ai-gateway-acceptance-cli")) {
+        for (String module : List.of("modules/apps/ai-gateway-app","modules/adapter/ai-gateway-db-adapter","modules/adapter/ai-gateway-object-storage-adapter","modules/ai-gateway-core","modules/adapter/ai-gateway-inference-adapter","modules/adapter/ai-gateway-source-support","modules/adapter/ai-gateway-system-adapter","modules/adapter/ai-gateway-loki-adapter","modules/adapter/ai-gateway-tempo-adapter","modules/adapter/ai-gateway-gitlab-adapter","modules/apps/ai-gateway-acceptance-cli")) {
             Path output = Path.of(System.getProperty("aigw.rootDir"),module,"build/classes/java/main");
             assertThat(output).isDirectory(); locations.add(output);
         }
@@ -123,6 +123,8 @@ class ArchitectureRulesTest {
                 boolean invalid = name.startsWith("com.nori.ai.gateway.core.") &&
                     (target.startsWith("org.springframework.") || target.startsWith("java.sql.") || target.startsWith("javax.sql.") ||
                      target.startsWith("java.net.http.") || target.startsWith("com.nori.ai.gateway.") && !target.startsWith("com.nori.ai.gateway.core."));
+                invalid |= name.startsWith("com.nori.ai.gateway.integration.storage.") && target.startsWith("com.nori.ai.gateway.integration.") && !target.startsWith("com.nori.ai.gateway.integration.storage.");
+                invalid |= name.startsWith("com.nori.ai.gateway.integration.") && !name.startsWith("com.nori.ai.gateway.integration.storage.") && target.startsWith("com.nori.ai.gateway.integration.storage.");
                 invalid |= name.startsWith("com.nori.ai.gateway.persistence.") && target.startsWith("com.nori.ai.gateway.integration.");
                 invalid |= name.startsWith("com.nori.ai.gateway.integration.") && target.startsWith("com.nori.ai.gateway.persistence.");
 
