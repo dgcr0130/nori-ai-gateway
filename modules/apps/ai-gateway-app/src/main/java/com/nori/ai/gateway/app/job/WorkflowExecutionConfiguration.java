@@ -19,6 +19,8 @@ import java.time.Clock;
 @Configuration(proxyBeanMethods=false)
 @EnableConfigurationProperties(LokiProperties.class)
 public class WorkflowExecutionConfiguration {
+    @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
+    GroundingInputs groundingInputs(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer){return new GroundingInputs(systems,registry,sanitizer);}
     @Bean WorkflowResourceResolverFactory workflowResourceResolverFactory(SourcePermissionMap permissions,CapabilityRegistry registry,ExpiryCheckpoint expiry){return new WorkflowResourceResolverFactory(permissions,registry,expiry);}
     @Bean WorkflowCacheStore workflowCacheStore(CacheRepository cache,ContentSanitizer sanitizer,CapabilityRegistry registry){return new WorkflowCacheStore(cache,sanitizer,registry);}
     @Bean WorkflowExecutionRecords workflowExecutionRecords(ToolExecutionRepository executions,ContentSanitizer sanitizer,ExpiryCheckpoint expiry,CapabilityRegistry registry,com.nori.ai.gateway.app.observability.AuditRecorder audit){return new WorkflowExecutionRecords(executions,sanitizer,expiry,registry,audit);}
@@ -29,7 +31,7 @@ public class WorkflowExecutionConfiguration {
     @Bean DeploymentEvidenceResolver deploymentEvidenceResolver(ObjectProvider<GitLabPipelineLineageReader> reader){return new DeploymentEvidenceResolver(reader);}
     @Bean SourceRetentionAttributesProvider sourceRetentionAttributesProvider(ObjectProvider<SourceRetentionReader> reader){return new SourceRetentionAttributesProvider(reader);}
     @Bean WorkflowExecutionAdapter workflowExecutionAdapter(CapabilityRegistry registry,WorkflowPlanBuilder builder,WorkflowExecutor executor,WorkflowResourceResolverFactory resolvers,TimeWindowResolver windows,MessageRepository messages,ExpiryCheckpoint expiry,ContentSanitizer sanitizer,TerminalOutcomeAssembler assembler,ConversationSummaryBuilder summaries,com.nori.ai.gateway.core.evidence.EvidenceAssembler evidence,com.nori.ai.gateway.app.observability.AuditRecorder audit,
-            java.util.Optional<com.nori.ai.gateway.core.llm.ComposerService> composer,LogSummarizer logSummarizer,java.util.Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses){return new WorkflowExecutionAdapter(registry,builder,executor,resolvers,windows,messages,expiry,sanitizer,assembler,summaries,evidence,audit,composer,logSummarizer,pauses);}
+            java.util.Optional<com.nori.ai.gateway.core.llm.ComposerService> composer,LogSummarizer logSummarizer,java.util.Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses,java.util.Optional<WorkflowGrounding> grounding){return new WorkflowExecutionAdapter(registry,builder,executor,resolvers,windows,messages,expiry,sanitizer,assembler,summaries,evidence,audit,composer,logSummarizer,pauses,grounding);}
     /**
      * Response Composer(Plan P20). 추론 비활성에서는 빈 자체가 없다(N7). 프롬프트는 compose-v1 이고 답변 토큰은 pin tokenizer 로 센다.
      * 추론 활성 조건과 프롬프트 자원을 이 Job 실행 설정이 함께 가진다(Plan §16.4 WorkflowExecutionConfiguration 의 Composer 배선).

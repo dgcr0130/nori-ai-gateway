@@ -42,6 +42,17 @@ ai:
       headingMaxChars: 60
     classification:
       historyPairs: 2
+    search:
+      semanticCandidates: 20
+      keywordCandidates: 20
+      identifierCandidates: 20
+      rrfK: 60
+      evidenceLimit: 6
+      verifiedCandidates: 3
+      verifiedMinCosine: 0.90
+      minSemanticCosine: 0.35
+      coreTermLimit: 4
+      retryCount: 1
     llm:
       baseUrl: http://192.168.0.160:11434/v1
       generationModel: qwen3:4b

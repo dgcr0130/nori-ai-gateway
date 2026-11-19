@@ -22,6 +22,10 @@ import tools.jackson.databind.node.ObjectNode;
  */
 final class ComposerInputs {
     private ComposerInputs() {}
+    static ComposerService.Input selected(JobContext job,com.nori.ai.gateway.core.workflow.EvidenceSelection.Selected selected) {
+        var evidence=selected.units().stream().map(u->new ComposerService.EvidenceDigest(u.sourceType(),null,u.observedAt())).toList();
+        return new ComposerService.Input(evidence,List.of(),"",List.of(),job.requestInput().maskedQuestion(),List.of(),java.util.Optional.of(selected.json()));
+    }
 
     static ComposerService.Input build(JobContext job, WorkflowOutcome outcome, boolean registryView, CapabilityRegistry registry, ContentSanitizer sanitizer, LogSummarizer summarizer) {
         List<ComposerService.EvidenceDigest> evidence = new ArrayList<>();

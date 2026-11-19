@@ -54,12 +54,15 @@ class LlmScriptedTransportIT extends LlmStubSupport {
         assertThat(hook("/__test/prompt-watch/live-unbound", "GET", null, hookToken).statusCode()).as("무장 없는 Job").isEqualTo(404);
     }
 
-    @Test void composerInputOverTheInputLimitIsRejectedBeforeTheScriptedTransport() throws Exception {
+    @Test void oversizedUnitsAreSkippedBeforeTheScriptedComposerTransport() throws Exception {
         var server = context.getBean(WorkflowSourceFixture.Server.class);
         server.traceVersions = List.of("image-tag"); server.spanName = "설비추적구간이름".repeat(700);
+        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).select("composer-oversize");
         var job = admitScripted("scripted-budget", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("서술")), Optional.empty(), null);
-        assertThat(terminal(job)).isEqualTo("FAILED");
-        assertThat(result(job.jobId())).containsEntry("error_code", "INPUT_BUDGET_EXCEEDED");
+        assertThat(terminal(job)).isEqualTo("PARTIAL");
+        assertThat(result(job.jobId())).containsEntry("status", "PARTIAL").containsEntry("error_code", null);
+        assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
+        assertThat(payload(job.jobId()).path("missingFields").toString()).contains("truncatedItems");
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isZero();
         assertThat(stub.count("/v1/chat/completions")).isZero();
     }

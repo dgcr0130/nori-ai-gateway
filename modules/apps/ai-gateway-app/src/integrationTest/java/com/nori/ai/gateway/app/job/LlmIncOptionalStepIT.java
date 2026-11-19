@@ -9,7 +9,7 @@ class LlmIncOptionalStepIT extends LlmStubSupport {
  @Override protected Class<?>[] extraSources(){return new Class<?>[]{HarnessObservationsEndpoint.class,WorkflowSourceFixture.class,WorkflowSourceFixture.GitConfiguration.class};}
  @Override protected Map<String,Object> extraApplicationProperties(){var values=new HashMap<>(super.extraApplicationProperties());values.put("test.git-enabled",true);return values;}
  @Test void incidentExecutesOnlySelectedToolsAndUsesClassifiedLiteralCodeQuery()throws Exception {
-  var server=context.getBean(WorkflowSourceFixture.Server.class);server.logText="EQP-001 EQUIPMENT_ERROR";
+  var server=context.getBean(WorkflowSourceFixture.Server.class);server.logText="EQP-001 장애 원인 EQUIPMENT_ERROR";
   var wire=(tools.jackson.databind.node.ObjectNode)SchemaContracts.parse(wire("INC","EQP-001",null,null,null));var calls=wire.putArray("toolCalls");
   calls.addObject().put("toolId","logs.search").set("arguments",SchemaContracts.JSON.valueToTree(Map.of("targetRef","EQP-001")));
   calls.addObject().put("toolId","git.searchCode").set("arguments",SchemaContracts.JSON.valueToTree(Map.of("q","QUOTEDLITERAL")));

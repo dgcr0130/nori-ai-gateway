@@ -34,6 +34,10 @@ public final class WorkflowExecutor {
         this.summarizer=summarizer;this.help=help;this.coverage=Objects.requireNonNull(coverage);
     }
     public WorkflowOutcome run(JobContext job,WorkflowExecutionPlan plan,WorkflowResourceResolver resolver) {
+        return run(job,plan,resolver,budgets.get());
+    }
+    /** 규칙 문서 검색도 실제 도구 실행과 같은 Job 호출 예산을 소비합니다. */
+    public WorkflowOutcome run(JobContext job,WorkflowExecutionPlan plan,WorkflowResourceResolver resolver,ToolCallBudget callBudget) {
         expiry.assertLive(job.cancellation());
         List<WorkflowOutcome.Trace> traces=new ArrayList<>();
         Set<String> selected=new HashSet<>();plan.steps().forEach(step->selected.add(step.definition().stepId()));
@@ -45,7 +49,7 @@ public final class WorkflowExecutor {
             return new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("resource",denied,false,0)),List.of(),List.of(),emptyDeps(),traces,List.of(),Optional.empty());
         }
         var prepared=(PlanValidator.Prepared)preparation;
-        var state=new RunState(new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new HashSet<>(),new ResultSourceDepsRecorder(),new HashMap<>(),budgets.get(),traces);
+        var state=new RunState(new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new ArrayList<>(),new HashSet<>(),new ResultSourceDepsRecorder(),new HashMap<>(),callBudget,traces);
         var rejected=runSteps(job,plan,prepared,plan.steps(),resolver,state);
         if(rejected.isPresent())return rejected.get();
         var ui=new ArrayList<>(state.ui());

@@ -27,6 +27,26 @@ class DocumentIndexIT extends PgIntegrationSupport {
         catch(java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
     }
     private Bundle bundle(List<Document> documents) { return new Bundle(UUID.randomUUID(),"old-model",3,"a".repeat(64),documents,List.of()); }
+    @Test void questionSearchReadsOnlyActiveSystemAndMatchingAnswerConfigurationBeforeTopK() {
+        try(var database=rawDatabase()) {
+            database.bootstrap();database.migrate();
+            try(var context=application(database)) {
+                var store=context.getBean(DocumentIndexRepository.class);var index=context.getBean(MemoryDocumentKeywordIndex.class);var jdbc=context.getBean(JdbcClient.class);
+                var original=scope("Doc");var scope=new VerifiedSystemScope(original.boundSystem(),original.authenticatedServiceRef(),original.actorRef(),original.sub(),Set.of("READ"),original.pdg(),original.issuedAt(),original.expiresAt(),original.requestId());
+                var first=bundle(List.of(document("A","b".repeat(64))));store.saveBuilding(scope,first);assertThat(store.searchState(scope)).isEmpty();
+                try(var prepared=index.prepare(scope,store.load(scope,first.id()))){store.activate(scope,first);index.install(scope,prepared);}
+                seedPermanent(jdbc,first.documents().getFirst().parents().getFirst().children().getFirst().location());
+                var current=store.searchState(scope).orElseThrow();assertThat(current.id()).isEqualTo(first.id());assertThat(current.answers()).hasSize(1);assertThat(store.searchState(scope("Other"))).isEmpty();
+                assertThat(index.search(scope,"검증 질문",List.of(),new float[]{1,2,3},SearchSettings.defaults(),current).verified()).hasSize(1);
+                jdbc.sql("UPDATE kn.verified_answer SET config_sha256=repeat('c',64) WHERE system_id='Doc'").update();assertThat(store.searchState(scope).orElseThrow().answers()).isEmpty();
+                jdbc.sql("UPDATE kn.verified_answer SET config_sha256=repeat('a',64),active=false WHERE system_id='Doc'").update();assertThat(store.searchState(scope).orElseThrow().answers()).isEmpty();
+                var second=bundle(List.of(document("A","d".repeat(64))));store.saveBuilding(scope,second);store.activate(scope,second);
+                assertThatThrownBy(()->index.search(scope,"마스킹 본문",List.of(),new float[]{1,2,3},SearchSettings.defaults(),store.searchState(scope).orElseThrow())).isInstanceOf(IllegalStateException.class);
+                try(var prepared=index.prepare(scope,store.load(scope,second.id()))){index.install(scope,prepared);}
+                assertThat(index.search(scope,"마스킹 본문",List.of(),new float[]{1,2,3},SearchSettings.defaults(),store.searchState(scope).orElseThrow()).semantic()).singleElement().satisfies(h->assertThat(h.child().location().revision()).isEqualTo("d".repeat(64)));
+            }
+        }
+    }
     @Test void v8StoresSameKeyAndRevisionInDifferentBucketsAndActivationReembedsThenDropsStaleAnswersAndDocumentCases() {
         try(var database=rawDatabase()) {
             database.bootstrap();database.migrate();

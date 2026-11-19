@@ -14,7 +14,8 @@ public final class LokiLogConnector {
         public LogQuery { Objects.requireNonNull(window); terms = List.copyOf(terms); if (limit <= 0) throw new IllegalArgumentException("조회 건수가 잘못되었습니다"); }
         @Override public String toString() { return "LogQuery[보호됨]"; }
     }
-    public record LogLine(String app, Instant occurredAt, String text) {
+    public record LogLine(String app, Instant occurredAt, String text, String namespace) {
+        public LogLine(String app,Instant occurredAt,String text){this(app,occurredAt,text,"");}
         @Override public String toString() { return "LogLine[보호됨]"; }
     }
     public record LogResult(ResultStatus status, List<LogLine> items, List<TimeWindow> missingRanges,
@@ -137,7 +138,7 @@ public final class LokiLogConnector {
                 Instant at = instant(row.get(0).asText());
                 if (at.isBefore(window.startAt()) || !at.isBefore(window.endAt())) throw new SourceHttpClient.Failure(false, false);
                 count++; if (oldest == null || at.isBefore(oldest)) oldest = at;
-                if (allowed) items.add(new LogLine(app, at, row.get(1).asText())); else rejected++;
+                if (allowed) items.add(new LogLine(app, at, row.get(1).asText(),namespace)); else rejected++;
             }
         }
         if (count > limit) throw new SourceHttpClient.Failure(false, false);

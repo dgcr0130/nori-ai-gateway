@@ -92,4 +92,10 @@ class ScriptedChatTransportTest {
         assertThatThrownBy(() -> new TestHookRegistry.LlmReply(CallType.CLASSIFY, "x", "stop", -1, 0)).isInstanceOf(IllegalArgumentException.class);
         assertThat(new TestHookRegistry.LlmReply(CallType.CLASSIFY, "원문-SENTINEL", "stop", null, 0).toString()).doesNotContain("원문-SENTINEL");
     }
+    @Test void fourOccurrencesInMultipleMessagesCountAsOneContainingComposerCall() {
+        bind("four-units",List.of(),Optional.of(new TestHookRegistry.PromptWatch(List.of("SENTINEL-A","SENTINEL-B"))));
+        var messages=List.of(new ChatMessage(ChatMessage.Role.SYSTEM,"지시"),new ChatMessage(ChatMessage.Role.USER,"SENTINEL-A\nSENTINEL-A"),new ChatMessage(ChatMessage.Role.USER,"SENTINEL-A\nSENTINEL-A"));
+        try(var observed=scripts.open("four-units",CallType.COMPOSER,messages)){transport.send(CallType.COMPOSER,messages,5120);}
+        assertThat(scripts.promptWatch("four-units").orElseThrow()).containsExactly(new LlmScriptRegistry.WatchRow(CallType.COMPOSER,0,1),new LlmScriptRegistry.WatchRow(CallType.COMPOSER,1,0));
+    }
 }

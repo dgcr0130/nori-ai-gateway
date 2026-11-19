@@ -19,13 +19,15 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
     private final WorkflowResourceResolverFactory resolvers;private final TimeWindowResolver windows;private final MessageRepository messages;
     private final ExpiryCheckpoint expiry;private final ContentSanitizer sanitizer;private final TerminalOutcomeAssembler assembler;private final ConversationSummaryBuilder summaries;
     private final EvidenceAssembler evidenceAssembler;private final AuditRecorder audit;
+    private final Optional<WorkflowGrounding> grounding;
     private final Optional<com.nori.ai.gateway.core.llm.ComposerService> composer;private final LogSummarizer logSummarizer;private final Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses;
     public WorkflowExecutionAdapter(CapabilityRegistry registry,WorkflowPlanBuilder builder,com.nori.ai.gateway.core.workflow.WorkflowExecutor executor,WorkflowResourceResolverFactory resolvers,
             TimeWindowResolver windows,MessageRepository messages,ExpiryCheckpoint expiry,ContentSanitizer sanitizer,TerminalOutcomeAssembler assembler,ConversationSummaryBuilder summaries,EvidenceAssembler evidenceAssembler,AuditRecorder audit,
-            Optional<com.nori.ai.gateway.core.llm.ComposerService> composer,LogSummarizer logSummarizer,Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses) {
+            Optional<com.nori.ai.gateway.core.llm.ComposerService> composer,LogSummarizer logSummarizer,Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses,Optional<WorkflowGrounding> grounding) {
         this.registry=registry;this.builder=builder;this.executor=executor;this.resolvers=resolvers;this.windows=windows;this.messages=messages;this.expiry=expiry;this.sanitizer=sanitizer;this.assembler=assembler;this.summaries=summaries;
         this.evidenceAssembler=evidenceAssembler;this.audit=Objects.requireNonNull(audit);
         this.composer=Objects.requireNonNull(composer);this.logSummarizer=Objects.requireNonNull(logSummarizer);this.pauses=Objects.requireNonNull(pauses);
+        this.grounding=Objects.requireNonNull(grounding);
     }
     @Override public TerminalSpec execute(JobContext job) throws InterruptedException {
         expiry.assertLive(job.cancellation());
@@ -52,19 +54,25 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         final WorkflowExecutionPlan plan;
         try{plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());}catch(WorkflowPlanBuilder.Invalid invalid){return finishClarification(job,ErrorCode.PLAN_INVALID,invalid.fields());}
         ZoneId zone=context.get("timezone") instanceof String value?ZoneId.of(value):null;
-        var outcome=executor.run(job,plan,resolvers.forJob(job,zone));
-        var spec=composeAndAssemble(job,definition,outcome);
-        return complete(job,spec,outcome,resolved.values(),context);
+        var calls=new ToolCallBudget();var outcome=executor.run(job,plan,resolvers.forJob(job,zone),calls);
+        WorkflowGrounding.Prepared prepared=null;
+        if(grounding.isPresent()&&task!=TaskType.GENERAL_QUERY&&outcome.rejection().isEmpty()) {
+            prepared=grounding.get().prepare(job,plan,outcome,calls);outcome=prepared.outcome();
+        }
+        var spec=composeAndAssemble(job,definition,outcome,prepared);
+        if(prepared!=null)spec=groundedStatus(job,spec,prepared);
+        return complete(job,spec,outcome,resolved.values(),context,prepared==null?List.of():prepared.selected().units());
     }
     /**
-     * 추론 활성 단계에서 거부되지 않은 실행 결과에만 Composer 를 호출한다(자료 0 결과 포함, SPEC §5.4 ③). 결과는 core ComposerOutcome 으로만
-     * TerminalOutcomeAssembler 에 들어가며 대체 문장을 만들지 않는다. 추론 비활성(F1)은 서술을 연결하지 않는다(④).
+     * 추론 활성 사실 질의는 실제 선택 본문의 충분성을 통과한 때에만 작성합니다. 일반 도움말은 기존 경로를 유지합니다.
+     * 결과는 core ComposerOutcome으로 집계하며 추론 비활성 모드는 서술을 연결하지 않습니다.
      */
-    private TerminalSpec composeAndAssemble(JobContext job,WorkflowDefinition definition,WorkflowOutcome outcome) throws InterruptedException {
+    private TerminalSpec composeAndAssemble(JobContext job,WorkflowDefinition definition,WorkflowOutcome outcome,WorkflowGrounding.Prepared prepared) throws InterruptedException {
         if(job.inferenceMode()!=InferenceMode.ENABLED||outcome.rejection().isPresent())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
+        if(prepared!=null&&!prepared.sufficient())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
         var service=composer.orElseThrow(()->new IllegalStateException("서술 구현이 없습니다"));
         if(pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
-        var input=ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer);
+        var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected());
         var composed=service.compose(job,input);
         return assembler.assemble(outcome,composed.outcome(),composed.narrative(),job.inferenceMode());
     }
@@ -72,7 +80,31 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         var spec=TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,code,Map.of("clarification",new Clarification(code,fields)));
         return complete(job,spec,null,Map.of(),object(job.requestInput().requestFields().get("context")));
     }
+    private TerminalSpec groundedStatus(JobContext job,TerminalSpec spec,WorkflowGrounding.Prepared prepared) {
+        var payload=new LinkedHashMap<>(spec.resultPayload());var status=spec.resultStatus();
+        var missing=new LinkedHashSet<String>();Object old=payload.get("missingFields");if(old instanceof List<?> values)for(Object value:values)missing.add((String)value);
+        if(prepared.selected().truncatedItems()) {
+            missing.add("truncatedItems");if(status==ResultStatus.SUCCESS)status=ResultStatus.PARTIAL;
+        }
+        if(!missing.isEmpty())payload.put("missingFields",List.copyOf(missing));
+        if(!prepared.sufficient()) {
+            payload.put("answer",Map.of("kind","NO_EVIDENCE","text","근거 없음","citations",List.of(),"sentences",List.of()));
+            if(!prepared.selected().truncatedItems()&&Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY).contains(status))status=ResultStatus.EMPTY;
+        }
+        var summary=new ArrayList<Map<String,Object>>();
+        for(Object value:(List<?>)payload.getOrDefault("toolSummary",List.of())) {
+            var row=new LinkedHashMap<>(object(value));var stage=prepared.outcome().stages().stream().filter(s->s.stepId().equals(row.get("stepId"))).findFirst().orElseThrow();var r=stage.result();
+            var manifest=registry.find(job.scope(),r.capabilityId()).orElse(null);row.put("permissions",manifest==null?List.of():manifest.requiredPermission());row.put("warnings",r.warnings());
+            row.put("retentionMeta",Map.of("missingRanges",r.metadata()==null?List.of():r.metadata().missingRanges(),"unverifiedRanges",r.metadata()==null?List.of():r.metadata().unverifiedRanges()));summary.add(row);
+        }
+        payload.put("toolSummary",summary);payload.put("status",status.name());
+        var jobStatus=status==ResultStatus.PARTIAL?JobStatus.PARTIAL:Set.of(ResultStatus.FAILED,ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE).contains(status)?JobStatus.FAILED:JobStatus.SUCCEEDED;
+        return new TerminalSpec(jobStatus,status,spec.errorCode(),jobStatus==JobStatus.PARTIAL?"job.partial":jobStatus==JobStatus.FAILED?"job.failed":"job.completed",spec.externalSuppressed(),payload,spec.resultSourceDeps(),spec.terminalCause());
+    }
     private TerminalSpec complete(JobContext job,TerminalSpec initial,WorkflowOutcome outcome,Map<String,Object> window,Map<String,Object> inputContext) {
+        return complete(job,initial,outcome,window,inputContext,List.of());
+    }
+    private TerminalSpec complete(JobContext job,TerminalSpec initial,WorkflowOutcome outcome,Map<String,Object> window,Map<String,Object> inputContext,List<EvidenceUnit> selected) {
         expiry.assertLive(job.cancellation());
         boolean clarification=initial.resultPayload().containsKey("clarification");
         var pairs=new ArrayList<TerminalSpec.StoredEvidence>();
@@ -84,6 +116,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
                 for(var hit:EvidenceAssembler.projectKnowledge(manifest,stage.result(),job.scope()))documents.add(hit.document());
                 EvidenceAssembler.knowledgeEvidence(manifest,stage.result(),job.scope()).forEach(value->pairs.add(new TerminalSpec.StoredEvidence(value.value(),Optional.of(value.source()))));
             }
+            for(var unit:selected)if(unit.sourceType().equals("DOCUMENT"))documents.add(com.nori.ai.gateway.core.knowledge.DocumentReferences.key(job.scope().boundSystem(),SchemaContracts.JSON.treeToValue(unit.location(),com.nori.ai.gateway.core.knowledge.DocumentLocation.class)));
             if(!documents.equals(new LinkedHashSet<>(outcome.sourceDeps().knowledgeDocuments())))throw new IllegalArgumentException("문서 의존성 연결이 다릅니다");
         }
         var finalEvidence=finalEvidence(job,initial.resultPayload(),pairs);
@@ -103,7 +136,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         Map<String,Object> summary=summaries.build(job,window,new ConversationSummaryBuilder.TerminalSpecView(spec.resultStatus(),finalBlocks,deps));
         if(payload.containsKey("blocks"))summary.put("blocks",payload.get("blocks"));
         // 대화 저장 서술은 마스킹을 마친 결과 answer 와 같은 값이다(없으면 빈 문자열).
-        String answer=payload.get("answer") instanceof String text?text:"";
+        String answer=payload.get("answer") instanceof String text?text:payload.get("answer") instanceof Map<?,?> value&&value.get("text") instanceof String text?text:"";
         var assistant=new TerminalSpec.AssistantMessage(UUID.randomUUID().toString(),answer,job.requestInput().selectedResourceRefs(),executions,job.jobId());
         return spec.withCommitData(new TerminalSpec.CommitData(job.scope(),job.jobId(),job.conversationId(),job.requestInput().messageId(),job.requestInput().jobSeq(),stored,Optional.of(assistant),
             Optional.of(serverMap(context)),Optional.of(serverMap(summary)),deps));

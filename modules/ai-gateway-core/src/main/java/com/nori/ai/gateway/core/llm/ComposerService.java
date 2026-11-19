@@ -48,12 +48,15 @@ public final class ComposerService {
      * @param toolResults 단계 결과(축소 4단계의 필수 필드 투영 포함)
      * @param logSummary 결정론 Log Summarizer 요약(없으면 빈 문자열)
      */
-    public record Input(List<EvidenceDigest> evidence, List<PromptDraft.ToolResult> toolResults, String logSummary, List<String> rawLogLines, String question, List<CoverageDigest> coverage) {
+    public record Input(List<EvidenceDigest> evidence, List<PromptDraft.ToolResult> toolResults, String logSummary, List<String> rawLogLines, String question, List<CoverageDigest> coverage, Optional<String> selectedData) {
+        public Input(List<EvidenceDigest> evidence,List<PromptDraft.ToolResult> tools,String summary,List<String> lines,String question,List<CoverageDigest> coverage) {
+            this(evidence,tools,summary,lines,question,coverage,Optional.empty());
+        }
         public Input(List<EvidenceDigest> evidence, List<PromptDraft.ToolResult> toolResults, String logSummary, List<String> rawLogLines, String question) {
             this(evidence, toolResults, logSummary, rawLogLines, question, List.of());
         }
         public Input {
-            evidence = List.copyOf(evidence); toolResults = List.copyOf(toolResults); rawLogLines = List.copyOf(rawLogLines); coverage = List.copyOf(coverage);
+            evidence = List.copyOf(evidence); toolResults = List.copyOf(toolResults); rawLogLines = List.copyOf(rawLogLines); coverage = List.copyOf(coverage);Objects.requireNonNull(selectedData);
             Objects.requireNonNull(logSummary, "logSummary"); Objects.requireNonNull(question, "question");
         }
         @Override public String toString() { return "ComposerInput[보호됨]"; }
@@ -100,7 +103,11 @@ public final class ComposerService {
         expiry.assertLive(job.cancellation());
         var draft = new PromptDraft(systemPrompt, "boundSystem: " + job.scope().boundSystem().name(), List.of(), List.of(), input.logSummary(),
             input.rawLogLines(), input.toolResults(), input.question());
-        var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> messages(value, input.evidence(), input.coverage()));
+        var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> {
+            if(input.selectedData().isEmpty())return messages(value,input.evidence(),input.coverage());
+            var user=SchemaContracts.JSON.createObjectNode().put("question",value.currentQuestion());user.set("data",SchemaContracts.JSON.readTree(input.selectedData().get()));
+            return List.of(new ChatMessage(ChatMessage.Role.SYSTEM,value.systemPrompt()+"\n"+value.boundSystemConstraint()),new ChatMessage(ChatMessage.Role.USER,ClassificationService.canonical(user)));
+        });
         if (!reduction.withinBudget()) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         String data = reduction.messages().getLast().content();
         // 이후 검색 단계가 선택한 근거도 설정한 상한을 넘겨 전송할 수 없습니다. 질문은 줄이지 않습니다.

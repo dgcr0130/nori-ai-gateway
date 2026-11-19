@@ -67,14 +67,16 @@ class LlmCallAuditIT extends LlmStubSupport {
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.CLASSIFY)).isZero();
     }
 
-    @Test void theComposerOversizeScenarioStillExceedsTheComposerLimitAfterReductionWhileClassificationIsSentWithinItsLimit() throws Exception {
+    @Test void oversizedSystemUnitIsSkippedWholeAndOnlyTheClassificationIsAudited() throws Exception {
         var store = context.getBean(StandardSystemStub.class);
         store.select("composer-oversize");
         try {
             var job = admitScripted("llm-audit-oversize", "EQP-001 상태와 적용 모델 정의 알려줘", windowOnly(),
                 List.of(classify(wire("LQ", "EQP-001", null, null, null, List.of("S", "N"), "B")), compose("대체 서술 FALLBACKQZ")), Optional.empty(), null);
-            assertThat(terminal(job)).isEqualTo("FAILED");
-            assertThat(result(job.jobId()).get("error_code")).isEqualTo("INPUT_BUDGET_EXCEEDED");
+            assertThat(terminal(job)).isEqualTo("PARTIAL");
+            assertThat(result(job.jobId())).containsEntry("status","PARTIAL").containsEntry("error_code",null);
+            assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
+            assertThat(payload(job.jobId()).path("missingFields").toString()).contains("truncatedItems");
             assertThat(scripts().scriptedCalls(job.jobId(), CallType.CLASSIFY)).isEqualTo(1);
             assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isZero();
             assertThat(payload(job.jobId()).toString()).doesNotContain("FALLBACKQZ");

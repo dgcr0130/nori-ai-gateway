@@ -9,7 +9,8 @@ import java.util.*;
 import java.math.BigInteger;
 
 public final class TempoTraceConnector {
-    public record Span(String service, String spanId, String name, String startTimeUnixNano, String endTimeUnixNano, String serviceVersion) {
+    public record Span(String service, String spanId, String name, String startTimeUnixNano, String endTimeUnixNano, String serviceVersion, String namespace) {
+        public Span(String service,String spanId,String name,String startTimeUnixNano,String endTimeUnixNano,String serviceVersion){this(service,spanId,name,startTimeUnixNano,endTimeUnixNano,serviceVersion,"");}
         @Override public String toString() { return "Span[보호됨]"; }
     }
     public record Trace(String traceId, List<Span> spans) { public Trace { spans = List.copyOf(spans); } }
@@ -88,7 +89,7 @@ public final class TempoTraceConnector {
                         boolean overlaps = spanFrom.compareTo(to) < 0 && (spanTo.compareTo(from) > 0 || (spanFrom.equals(spanTo) && spanFrom.compareTo(from) >= 0));
                         if (!overlaps) continue;
                     }
-                    spans.add(new Span(service, span.path("spanId").asText(), span.path("name").asText(), start, end, version));
+                    spans.add(new Span(service, span.path("spanId").asText(), span.path("name").asText(), start, end, version,namespace));
                 }
             }
         }

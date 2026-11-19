@@ -36,7 +36,11 @@ abstract class LlmStubSupport extends P09QueueSupport {
             original.pdg(), original.issuedAt(), original.expiresAt(), original.requestId());
     }
     @Override protected Map<String,Object> claims(String actor, String delegation) { var values = new HashMap<>(super.claims(actor, delegation)); values.put("perm", perms.stream().sorted().toList()); return values; }
-    @BeforeEach void inferenceReady() throws Exception { await(() -> context.getBean(InferenceReadinessService.class).ready()); context.getBean(InferenceReadinessService.class).stop(); stub.clear(); }
+    @BeforeEach void inferenceReady() throws Exception {
+        await(() -> context.getBean(InferenceReadinessService.class).ready());context.getBean(InferenceReadinessService.class).stop();stub.clear();
+        // 작성 시험은 실제 HTTP 본문이 충분한 고정 자료를 사용합니다. 위치(ref)를 본문으로 대신하지 않습니다.
+        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).evidenceText="EQP-001 설비 상태 장애 원인 로그 모델 공정 적용 조건 정의 관측 자료";
+    }
     @AfterEach void closeStub() { stub.close(); }
 
     protected LlmScriptRegistry scripts() { return context.getBean(LlmScriptRegistry.class); }

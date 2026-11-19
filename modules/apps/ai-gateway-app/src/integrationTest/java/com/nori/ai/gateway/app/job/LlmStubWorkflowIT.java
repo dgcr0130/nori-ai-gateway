@@ -98,19 +98,21 @@ class LlmStubWorkflowIT extends LlmStubSupport {
         assertNoToolAndNoComposer(job);
     }
 
-    @Test @Tag("AC-43-COMP") void composerInputThatStaysOverBudgetAfterReductionSendsNoComposerCallAndNoFallbackSentence() throws Exception {
+    @Test @Tag("AC-43-COMP") void oversizedSourceUnitsLeaveNoComposerCallAndNoFallbackSentence() throws Exception {
         var server = context.getBean(WorkflowSourceFixture.Server.class);
         // 추적 결과의 span 이름은 축소 4단계(outputSchema 필수 필드)에도 남는 Tool 결과다.
         server.traceVersions = List.of("image-tag"); server.spanName = "설비추적구간이름".repeat(700);
+        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).select("composer-oversize");
         var job = admitScripted("comp-budget", "EQP-001 장애 원인 찾아줘", workflowFields(),
             List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("대체 서술 FALLBACKMARK")), Optional.empty(), null);
-        assertThat(terminal(job)).isEqualTo("FAILED");
-        assertThat(result(job.jobId())).containsEntry("status", "FAILED").containsEntry("error_code", "INPUT_BUDGET_EXCEEDED");
+        assertThat(terminal(job)).isEqualTo("PARTIAL");
+        assertThat(result(job.jobId())).containsEntry("status", "PARTIAL").containsEntry("error_code", null);
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.CLASSIFY)).isOne();
         assertThat(scripts().observedCalls(job.jobId(), CallType.COMPOSER)).isZero();
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isZero();
         var value = payload(job.jobId());
-        assertThat(value.has("answer")).isFalse();
+        assertThat(value.path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
+        assertThat(value.path("missingFields").toString()).contains("truncatedItems");
         assertThat(value.toString()).doesNotContain("FALLBACKMARK");
         assertThat(value.path("blocks")).isNotEmpty();
     }

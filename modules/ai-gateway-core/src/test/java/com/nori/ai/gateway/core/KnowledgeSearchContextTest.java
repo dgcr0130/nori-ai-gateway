@@ -12,6 +12,11 @@ import static org.assertj.core.api.Assertions.*;
 
 /** Knowledge 서버 입력의 정확 q/의미 입력 분리·Job 결속·값 보호(SPEC §28.4, Plan §16.3 R1·R2)와 ExecutionContext 호환 생성자. */
 class KnowledgeSearchContextTest {
+    @Test void searchNormalizationKeepsNumericAndProtocolIdentifiersAndWholeTargetReferences() {
+        assertThat(com.nori.ai.gateway.core.knowledge.SearchText.normalize(" T3\tS1F2  EQP-001 linger.ms ")).isEqualTo("t3 s1f2 eqp-001 linger.ms");
+        assertThat(com.nori.ai.gateway.core.knowledge.SearchText.identifiers("T3 S1F2 EQP-001 42 linger.ms",List.of("linger.ms"))).containsExactly("t3","s1f2","eqp-001","42","linger.ms");
+        assertThat(com.nori.ai.gateway.core.knowledge.SearchText.containsExact("EQP-001 T3 42", "EQP-00")).isFalse();
+    }
     private static final String EXACT = "C:\\log\\\"TIMEOUT\" ";
     private final KnowledgeSearchContext context = new KnowledgeSearchContext("job-1", "knowledge", OwnerSystem.TC, "EQP_001 이 왜 시작을 안 해?", Optional.of(EXACT),
         List.of(new ResourceRef("EQP", "EQP_001")), List.of(H, N));

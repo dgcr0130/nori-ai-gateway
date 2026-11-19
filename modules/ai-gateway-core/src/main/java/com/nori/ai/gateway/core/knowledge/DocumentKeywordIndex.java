@@ -2,7 +2,7 @@ package com.nori.ai.gateway.core.knowledge;
 
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
 
-/** phase 6이 활성 자료에 대한 조회를 연결할 메모리 색인 수명 계약입니다. */
+/** 활성 문서 메모리 색인의 준비·교체 수명 계약입니다. 조회는 DocumentSearch가 담당합니다. */
 public interface DocumentKeywordIndex {
     interface Prepared extends AutoCloseable { @Override void close(); }
     Prepared prepare(VerifiedSystemScope scope, DocumentCorpus.Bundle bundle);

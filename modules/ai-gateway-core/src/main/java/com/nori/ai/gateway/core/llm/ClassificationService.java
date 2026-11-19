@@ -60,7 +60,8 @@ public final class ClassificationService {
         Map<String,String> window=Map.of();if(!node.get("timeWindow").isNull()){keys(node.get("timeWindow"),Set.of("from","to"));String from=string(node.get("timeWindow").get("from"),35),to=string(node.get("timeWindow").get("to"),35);if(!new InputValidator().parseTime(from,zone).isBefore(new InputValidator().parseTime(to,zone)))throw invalid();window=Map.of("from",from,"to",to);}
         String search=string(node.get("searchQuery"),512),retry=string(node.get("retryQuery"),512);
         for(var target:targets)if(!search.contains(target.ref()))throw invalid();
-        var identifiers=java.util.regex.Pattern.compile("[A-Za-z][A-Za-z0-9_.:-]*[0-9_][A-Za-z0-9_.:-]*").matcher(request.input().maskedQuestion());while(identifiers.find())if(!search.contains(identifiers.group()))throw invalid();
+        for(String identifier:com.nori.ai.gateway.core.knowledge.SearchText.identifiers(request.input().maskedQuestion(),targets.stream().map(com.nori.ai.gateway.core.plan.ResourceRef::ref).toList()))
+            if(!com.nori.ai.gateway.core.knowledge.SearchText.containsExact(search,identifier))throw invalid();
         if(search.equals(retry)){retry=context.glossary().isEmpty()?request.input().maskedQuestion():search+" "+String.join(" ",context.glossary().values());if(retry.codePointCount(0,retry.length())>512)throw invalid();}
         var calls=new ArrayList<Classification.ToolCall>();var missing=new LinkedHashSet<String>();
         for(var call:callsNode){keys(call,Set.of("toolId","arguments"));String id=string(call.get("toolId"),128);var tool=context.tools().find(id).orElseThrow(ClassificationService::invalid);JsonNode args=call.get("arguments");if(!args.isObject())throw invalid();

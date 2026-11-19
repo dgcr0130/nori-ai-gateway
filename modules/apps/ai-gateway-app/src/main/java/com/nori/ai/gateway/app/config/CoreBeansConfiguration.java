@@ -13,6 +13,38 @@ import java.util.*;
 /** Spring에 의존하지 않는 Core의 빈 등록 책임을 이 설정에 모읍니다. */
 @Configuration(proxyBeanMethods = false)
 public class CoreBeansConfiguration {
+    @Bean com.nori.ai.gateway.core.knowledge.SearchSettings searchSettings(org.springframework.core.env.Environment env) {
+        return new com.nori.ai.gateway.core.knowledge.SearchSettings(env.getProperty("ai.gateway.search.semanticCandidates",Integer.class,20),env.getProperty("ai.gateway.search.keywordCandidates",Integer.class,20),
+            env.getProperty("ai.gateway.search.identifierCandidates",Integer.class,20),env.getProperty("ai.gateway.search.rrfK",Integer.class,60),env.getProperty("ai.gateway.search.evidenceLimit",Integer.class,6),
+            env.getProperty("ai.gateway.search.verifiedCandidates",Integer.class,3),env.getProperty("ai.gateway.search.verifiedMinCosine",Double.class,.90),env.getProperty("ai.gateway.search.minSemanticCosine",Double.class,.35),
+            env.getProperty("ai.gateway.search.coreTermLimit",Integer.class,4),env.getProperty("ai.gateway.search.retryCount",Integer.class,1));
+    }
+    @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
+    com.nori.ai.gateway.core.workflow.EvidenceSelection evidenceSelection(com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter tokenizer,com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy) {
+        return new com.nori.ai.gateway.core.workflow.EvidenceSelection(tokenizer::countText,policy.evidenceTokens());
+    }
+    @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
+    com.nori.ai.gateway.core.workflow.WorkflowGrounding workflowGrounding(com.nori.ai.gateway.core.knowledge.DocumentSearch search,com.nori.ai.gateway.core.knowledge.SearchLanguage language,
+            com.nori.ai.gateway.core.knowledge.SearchSettings settings,com.nori.ai.gateway.core.workflow.EvidenceSelection selection,com.nori.ai.gateway.app.job.GroundingInputs inputs,Clock clock,com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiry) {
+        return new com.nori.ai.gateway.core.workflow.WorkflowGrounding(search,language,settings,selection,inputs,clock,expiry);
+    }
+    @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
+    com.nori.ai.gateway.core.knowledge.DocumentSearch documentSearch(com.nori.ai.gateway.persistence.repository.DocumentIndexRepository store,
+            com.nori.ai.gateway.persistence.knowledge.MemoryDocumentKeywordIndex index,com.nori.ai.gateway.core.port.InferenceClient inference) {
+        return new com.nori.ai.gateway.core.knowledge.DocumentSearch() {
+          public Round search(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope,String query,List<String> targets,com.nori.ai.gateway.core.knowledge.SearchSettings settings){return search(scope,query,query,targets,settings);}
+          @Override public Round search(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope,String query,String question,List<String> targets,com.nori.ai.gateway.core.knowledge.SearchSettings settings) {
+            var state=store.searchState(scope);
+            if(state.isEmpty())return new com.nori.ai.gateway.core.knowledge.DocumentSearch.Round(List.of(),List.of(),List.of(),List.of());
+            var inputs=query.equals(question)?List.of(query):List.of(query,question);
+            var vectors=inference.embed(inputs);
+            if(vectors==null||vectors.size()!=inputs.size()||vectors.stream().anyMatch(vector->vector==null||vector.length!=state.get().dimension()))
+                throw new com.nori.ai.gateway.core.port.InferenceClient.EmbeddingFailed(com.nori.ai.gateway.core.port.InferenceClient.FailureReason.EMPTY_RESPONSE,null);
+            for(var vector:vectors)for(float value:vector)if(!Float.isFinite(value))throw new com.nori.ai.gateway.core.port.InferenceClient.EmbeddingFailed(com.nori.ai.gateway.core.port.InferenceClient.FailureReason.EMPTY_RESPONSE,null);
+            return index.search(scope,query,question,targets,vectors.getFirst(),vectors.getLast(),settings,state.get());
+          }
+        };
+    }
     @Bean @org.springframework.context.annotation.Lazy
     com.nori.ai.gateway.core.knowledge.DocumentSynchronization documentSynchronization(com.nori.ai.gateway.core.knowledge.DocumentObjectStore objects,com.nori.ai.gateway.core.knowledge.DocumentExtractor extractor,com.nori.ai.gateway.core.knowledge.DocumentIndexStore store,com.nori.ai.gateway.core.knowledge.DocumentKeywordIndex keywords,com.nori.ai.gateway.core.port.InferenceClient inference) {
         return new com.nori.ai.gateway.core.knowledge.DocumentSynchronization(objects,extractor,store,keywords,inference);
@@ -41,7 +73,9 @@ public class CoreBeansConfiguration {
     @Bean com.nori.ai.gateway.core.retention.TrimCompletenessEvaluator trimCompletenessEvaluator() { return new com.nori.ai.gateway.core.retention.TrimCompletenessEvaluator(); }
     @Bean com.nori.ai.gateway.core.retention.DlqCompletenessEvaluator dlqCompletenessEvaluator() { return new com.nori.ai.gateway.core.retention.DlqCompletenessEvaluator(); }
     @Bean com.nori.ai.gateway.core.result.ResultAccessEvaluator resultAccessEvaluator() { return new com.nori.ai.gateway.core.result.ResultAccessEvaluator(); }
-    @Bean com.nori.ai.gateway.core.result.KnowledgeDocumentStateReader knowledgeDocumentStateReader() { return new com.nori.ai.gateway.core.result.FailClosedKnowledgeDocumentStateReader(); }
+    @Bean com.nori.ai.gateway.core.result.KnowledgeDocumentStateReader knowledgeDocumentStateReader(org.springframework.beans.factory.ObjectProvider<com.nori.ai.gateway.persistence.knowledge.MemoryDocumentKeywordIndex> index,org.springframework.core.env.Environment env) {
+        return "enabled".equals(env.getProperty("ai.gateway.inference.mode"))?(permissions,keys)->index.getObject().states(permissions,keys):new com.nori.ai.gateway.core.result.FailClosedKnowledgeDocumentStateReader();
+    }
     @Bean com.nori.ai.gateway.core.result.EvidenceSourceReader evidenceSourceReader() { return new com.nori.ai.gateway.core.result.FailClosedEvidenceSourceReader(); }
     @Bean com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiryCheckpoint() { return new com.nori.ai.gateway.core.expiry.ExpiryCheckpoint(); }
     @Bean com.nori.ai.gateway.core.sanitize.ContentSanitizer contentSanitizer() { return new com.nori.ai.gateway.core.sanitize.ContentSanitizer(); }

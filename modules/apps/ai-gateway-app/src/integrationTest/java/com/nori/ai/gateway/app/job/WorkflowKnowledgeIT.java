@@ -16,6 +16,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.*;
 
+/** 기존 여섯 저장·열람 회귀의 시험 전용 도구는 유지하고, 운영 규칙 검색 조립은 HybridSearchIT가 별도로 확인합니다. */
 class WorkflowKnowledgeIT extends P09QueueSupport {
     static final String SOURCE="knowledge://TC/docs/a";
     static final class Documents {

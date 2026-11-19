@@ -17,6 +17,17 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
     public DocumentIndexRepository(JdbcClient jdbc, TransactionTemplate tx, Clock clock) { this.jdbc=jdbc;this.tx=tx;this.clock=clock; }
     private JdbcClient.StatementSpec sql(VerifiedSystemScope scope,String sql) { return jdbc.sql(sql).param("system",Objects.requireNonNull(scope).boundSystem().name()); }
     @Override public boolean hasActiveIndex(VerifiedSystemScope scope) { return sql(scope,"SELECT EXISTS(SELECT 1 FROM kn.index_set WHERE system_id=:system AND state='ACTIVE')").query(Boolean.class).single(); }
+    /** 현재 활성 여부와 설정 지문을 매 질문에 확인하여 검토 취소·구 설정 답변을 배제합니다. */
+    public Optional<Bundle> searchState(VerifiedSystemScope scope) {
+        var current=sql(scope,"SELECT id,embedding_model,embedding_dimension,config_sha256 FROM kn.index_set WHERE system_id=:system AND state='ACTIVE'")
+            .query((rs,n)->new Bundle(rs.getObject(1,UUID.class),rs.getString(2),rs.getInt(3),rs.getString(4),List.of(),List.of())).optional();
+        return current.map(bundle->{
+            var answers=sql(scope,"SELECT id,question_masked,locations::text,permissions::text,embedding::text FROM kn.verified_answer WHERE system_id=:system AND active AND embedding_model=:model AND embedding_dimension=:dimension AND config_sha256=:sha ORDER BY id")
+                .param("model",bundle.embeddingModel()).param("dimension",bundle.dimension()).param("sha",bundle.configSha256())
+                .query((rs,n)->new Answer(rs.getObject(1,UUID.class),rs.getString(2),locations(rs.getString(3)),strings(rs.getString(4)),vector(rs.getString(5)))).list();
+            return new Bundle(bundle.id(),bundle.embeddingModel(),bundle.dimension(),bundle.configSha256(),List.of(),answers);
+        });
+    }
     @Override public void cleanNonActive(VerifiedSystemScope scope) { sql(scope,"DELETE FROM kn.index_set WHERE system_id=:system AND state IN ('INACTIVE','BUILDING')").update(); }
     @Override public List<Answer> activeAnswers(VerifiedSystemScope scope) {
         return sql(scope,"SELECT id,question_masked,locations::text,permissions::text,embedding::text FROM kn.verified_answer WHERE system_id=:system AND active ORDER BY id")

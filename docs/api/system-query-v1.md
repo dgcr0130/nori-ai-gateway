@@ -6,4 +6,4 @@
 
 요청 UTF-8 64KiB, 응답 1MiB 한도, 연결 최대 2초와 도구 deadline을 적용하며 재시도하지 않습니다. 전송 전 만료·취소는 송신하지 않습니다. 상태·JSON·필드·크기 오류를 성공 0건으로 바꾸지 않습니다. 관측 자료는 마스킹 후 공통 결과·블록·감사로 전달하며 업무 응답을 합치거나 해석하지 않습니다.
 
-도구는 시스템 config tools와 apps·traces·repositories가 활성화하는 logs.search·trace.search·git.searchCode로 구성합니다. 한 번 분류한 실행 목록 0~4개를 실행하며 공통 호출 예산 12회·동일 도구 3회, 문서 회차 2회·보완 1회를 유지합니다. 규칙 문서 검색 실행은 phase 6 범위입니다.
+도구는 시스템 config tools와 apps·traces·repositories가 활성화하는 logs.search·trace.search·git.searchCode로 구성합니다. 한 번 분류한 실행 목록 0~4개를 실행하며 공통 호출 예산 12회·동일 도구 3회, 문서 회차 2회·보완 1회를 유지합니다. 추론 활성 모드에서 KNOWLEDGE_QUERY·INCIDENT_ANALYSIS는 같은 예산으로 규칙 문서 검색을 실행하고 LIVE_QUERY는 선택한 비문서 조회만 사용합니다. 예산 안에 선택한 전체 근거 단위가 충분하지 않으면 작성 호출 없이 answer.kind=NO_EVIDENCE로 반환하며 원천 장애·부분 상태를 보존합니다.

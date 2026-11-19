@@ -37,7 +37,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         assertThat(chats).as("분류 1 + Composer 1(전송 실패 재시도 0)").hasValue(2);
     }
 
-    @Test void noVerifiedBlockOrEvidenceWithAComposerFailureIsFailedLlmUnavailable() throws Exception {
+    @Test void noVerifiedBlockOrEvidencePreservesDeniedAndNeverCallsTheQueuedComposerFailure() throws Exception {
         // 이 Job 의 유일한 Source 단계(snapshot)를 Dispatcher 중앙 Source 검사에서 DENIED 로 만들어 검증된 블록·Evidence 가 0개다.
         // (catalog-down 은 JobWorker 시작 gate 에서 START_GATE_UNAVAILABLE 로 끝나 분류·Composer 에 닿지 않는다 — R0-3b 실패 원인.)
         var empty = new TestHookRegistry.LlmReply(CallType.COMPOSER, null, "stop", null, 0);
@@ -46,21 +46,24 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         hooks().arm("actor", "composer-no-data", new TestHookRegistry.Scenario(com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY,java.util.Set.of(),null,false,Optional.of(denied),List.of(classify(wire("LQ", "EQP-001", null, null, null)), empty),Optional.empty(),com.nori.ai.gateway.app.job.StandardSystemConfiguration.calls(com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY)));
         var job = admitUnarmed("composer-no-data", "EQP-001 상태 알려줘", windowOnly(), null);
         assertThat(terminal(job)).isEqualTo("FAILED");
-        assertThat(result(job.jobId())).containsEntry("status", "FAILED").containsEntry("error_code", "LLM_UNAVAILABLE");
+        assertThat(result(job.jobId())).containsEntry("status", "DENIED").containsEntry("error_code", null);
         var value = payload(job.jobId());
         assertThat(value.path("blocks")).isEmpty();
         assertThat(value.path("evidence")).isEmpty();
-        assertThat(value.has("answer")).isFalse();
-        assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isOne();
+        assertThat(value.path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
+        assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isZero();
         assertThat(value.path("toolSummary").get(0).path("status").asString()).isEqualTo("DENIED");
     }
 
-    @Test void overBudgetComposerInputIsFailedInputBudgetExceededWithBlocksAndNoComposerCall() throws Exception {
+    @Test void overBudgetSourceUnitsAreSkippedWholeAndInsufficientSelectionNeverCallsComposer() throws Exception {
         var server = context.getBean(WorkflowSourceFixture.Server.class);
         server.traceVersions = List.of("image-tag"); server.spanName = "설비추적구간이름".repeat(700);
+        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).select("composer-oversize");
         var job = admitScripted("composer-budget", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("FALLBACKMARK")), Optional.empty(), null);
-        assertThat(terminal(job)).isEqualTo("FAILED");
-        assertThat(result(job.jobId())).containsEntry("error_code", "INPUT_BUDGET_EXCEEDED");
+        assertThat(terminal(job)).isEqualTo("PARTIAL");
+        assertThat(result(job.jobId())).containsEntry("status", "PARTIAL").containsEntry("error_code", null);
+        assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
+        assertThat(payload(job.jobId()).path("missingFields").toString()).contains("truncatedItems");
         assertThat(payload(job.jobId()).path("blocks")).isNotEmpty();
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isZero();
         assertThat(allStored(job.jobId())).doesNotContain("FALLBACKMARK");
@@ -89,6 +92,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         var job = admitScripted("source-mask", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("장애 로그가 확인되었다[e1].")), watch, null);
         assertThat(terminal(job)).isIn("SUCCEEDED", "PARTIAL");
         var rows = scripts().promptWatch(job.jobId()).orElseThrow();
+        // matchCount는 sentinel을 담은 호출 수입니다. 여러 로그 단위가 있어도 작성 호출 한 번은 1로 셉니다.
         assertThat(rows).contains(new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 0, 0), new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 1, 1), new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 2, 1));
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).isOne();
     }
