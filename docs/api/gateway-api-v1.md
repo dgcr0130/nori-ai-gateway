@@ -30,7 +30,7 @@
 {"jobId":"...","jobStatus":"SUCCEEDED","createdAt":"...","terminalAt":"...","resultAccess":"DENIED"}
 ```
 
-같은 평가를 결과 GET·각 결과 메시지의 대화 이력·Evidence 원문·블록 export·감사 조회에 적용합니다. 거부 시 Source·권한 코드·문서·개수·사유·답변 일부를 노출하지 않고 Tool·LLM 재호출이나 재생성을 하지 않습니다. 원문 참조의 owner·sourceRef·chunkId·expectedRevision은 저장 Evidence에서 읽으며 URL·query에서 revision을 받지 않습니다. `EvidenceSourceReader`가 비가용이면 미존재 Evidence와 같은 빈 404입니다. P10의 Knowledge 상태/원문 리더는 P23 합류 전 fail-closed 구현 하나씩이며, Knowledge 참조에 UNKNOWN/Unavailable을 반환합니다. 과거 revision을 별도 보관하거나 새 revision 본문으로 옛 근거를 대체하지 않습니다.
+같은 평가를 결과 GET·각 결과 메시지의 대화 이력·Evidence 원문·블록 export·감사 조회에 적용합니다. 거부 시 Source·권한 코드·문서·개수·사유·답변 일부를 노출하지 않고 Tool·LLM 재호출이나 재생성을 하지 않습니다. 원문 참조의 owner·sourceRef·chunkId·expectedRevision은 저장 Evidence에서 읽으며 URL·query에서 revision을 받지 않습니다. `EvidenceSourceReader`가 비가용이면 미존재 Evidence와 같은 빈 404입니다. 현재 문서 상태는 활성 메모리 색인에서 revision·권한으로 검사합니다. 선택한 답변 근거는 같은 종결 트랜잭션의 영구 스냅샷에서 마스킹 본문을 읽고, 기존 근거는 `EvidenceSourceReader` 경로를 유지합니다. 과거 revision의 원본 파일을 별도로 보관하거나 새 revision 본문으로 옛 근거를 대체하지 않습니다.
 
 타 owner·타 actor·부재 접근은 모두 HTTP 404, 빈 body입니다. 대화는 자동 만료·자동 삭제하지 않습니다. 목록은 현재 시스템·사용자로 제한하고 updatedAt/id 내림차순이며 limit은 1~100입니다. title은 가장 이른 user 메시지의 마스킹 본문 앞 100 Unicode 코드포인트이고 질문이 없으면 null입니다. 서버 커서는 시스템·사용자에 서명 결속하며 형식·범위 불일치·위조는 400입니다. 재기동 후 커서는 첫 쪽에서 다시 발급합니다. 질문 저장과 updatedAt 갱신은 같은 트랜잭션입니다. 삭제는 대화 행 잠금 후 QUEUED/RUNNING 부재를 확인하고 대화 묶음을 CASCADE 삭제합니다. 삭제 후 단건·메시지·결과·SSE·근거·내보내기·감사 경로는 404입니다. 영구 지식·스냅샷·피드백 계열은 대화 삭제와 분리합니다. 취소·180초 Job 수명·대기 제한·캐시 자체 만료·감사 90일 보존은 유지합니다.
 
@@ -46,4 +46,12 @@ terminal 상태·이벤트 집계의 정본은 승인 Spec §5.4의 표입니다
 
 `options.allowTools/allowKnowledge`는 정확히 `false`인 경우에만 차단합니다. 필수 조회를 차단하면 자원·Tool·캐시 조회 전에 `PLAN_INVALID` 확인 요청으로 종결하며, 선택 Knowledge만 차단하면 해당 단계를 제외합니다. GQ 도움말은 두 값이 false여도 업무 조회 없이 생성합니다. 시간창을 이전 요청에서 이어받는 경우 같은 대화에서 바로 앞에 접수된 요청 한 건의 확정 창만 사용하고, 그 요청에 창이 없으면 더 오래된 창을 건너뛰어 고르지 않고 구간을 확인합니다.
 
-실제 workflow의 최종 블록 배열을 확정한 후 `ResultBlockIds.assign`을 한 번 적용합니다. Evidence의 최종 저장 식별자와 모든 최종 참조는 현재 Job에 결속하고, 캐시 envelope의 원 ToolExecution 식별자·이전 Job 저장 결과는 바꾸지 않습니다. 결과·Evidence·assistant 메시지·Context·요약·Source 의존성과 terminal 상태·이벤트·감사는 같은 마지막 트랜잭션에서 저장합니다. 실행 중 이미 확정한 Tool 호출 이력은 마지막 저장의 실패로 지우지 않습니다.
+실제 workflow의 최종 블록 배열을 확정한 후 `ResultBlockIds.assign`을 한 번 적용합니다. Evidence의 최종 저장 식별자와 모든 최종 참조는 현재 Job에 결속하고, 캐시 envelope의 원 ToolExecution 식별자·이전 Job 저장 결과는 바꾸지 않습니다. 결과·Evidence·사실 답변 스냅샷·assistant 메시지·Context·요약·Source 의존성과 terminal 상태·이벤트·감사는 같은 마지막 트랜잭션에서 저장합니다. 실행 중 이미 확정한 Tool 호출 이력은 마지막 저장의 실패로 지우지 않습니다.
+
+## 사실 답변과 영구 스냅샷
+
+사실 답변의 `result.payload.answer`는 `{kind,text,citations,sentences}`입니다. `kind`는 `ANSWER`, `PARTIAL`, `NO_EVIDENCE`이고 `sentences`는 대조를 통과한 `{text,citations:[번호]}`만 보존합니다. 인용 목록은 `{number,evidenceId,sourceType,location}`이며 문서 위치는 bucket·objectKey·revision·section·lineFrom·lineTo, 비문서 위치는 해당 조회 항목의 위치입니다. 화면용 text에는 문장 뒤 `[1]` 형식 인용을 붙입니다. 일반 도움말은 기존 평문입니다.
+
+문장은 1~20개, 문장 text는 1~1000 코드포인트·줄바꿈 금지, 문장별 인용은 1~6개입니다. 잘못된 인용·수치·식별자·이름을 포함한 문장은 제거합니다. 일부 제거 또는 통과 문장이 PARTIAL·STALE·CONFLICT 근거를 인용하면 kind는 PARTIAL입니다. 고정 문구는 그 순서로 각각 한 번 공개 text 끝에만 붙이고 sentences에는 넣지 않습니다. 통과 문장 0개나 불충분은 `{kind:"NO_EVIDENCE",text:"근거 없음",citations:[],sentences:[]}`입니다. 정상 자료 부족은 EMPTY·SUCCEEDED이며 장애·부분·절삭은 실제 집계를 보존합니다. 생성 장애는 블록·근거가 모두 없으면 FAILED, 하나라도 있으면 PARTIAL이며 errorCode는 LLM_UNAVAILABLE입니다. 미검증 답변·스냅샷은 저장하지 않습니다.
+
+공개 answerId로 사용하는 식별자는 기존 Job ID입니다. 내부 스냅샷 ID를 API·SSE·내보내기·감사에 노출하지 않습니다. 마스킹 질문·답변·근거 본문과 SHA-256·위치·권한·설정 지문을 영구 보존하고 같은 Job 재종결은 같은 내용 해시만 재사용합니다. 다른 해시는 무결성 오류입니다. 스냅샷 저장 실패는 결과·근거·종결 감사·이벤트를 함께 롤백하며 commit 뒤에만 완료 이벤트를 발행합니다. 대화 삭제 후 스냅샷은 남지만 일반 열람 경로는 모두 404입니다. 시험 결과는 중앙 006 PLAN의 해당 phase 기록에서 확인합니다.

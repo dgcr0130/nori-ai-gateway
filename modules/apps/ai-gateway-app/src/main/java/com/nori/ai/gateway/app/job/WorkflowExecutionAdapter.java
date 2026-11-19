@@ -74,7 +74,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         if(pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
         var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected());
         var composed=service.compose(job,input);
-        return assembler.assemble(outcome,composed.outcome(),composed.narrative(),job.inferenceMode());
+        return assembler.assembleAnswer(outcome,composed,job.inferenceMode());
     }
     private TerminalSpec finishClarification(JobContext job,ErrorCode code,List<String> fields) {
         var spec=TerminalSpec.outcome(JobStatus.FAILED,ResultStatus.FAILED,code,Map.of("clarification",new Clarification(code,fields)));
@@ -87,14 +87,15 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
             missing.add("truncatedItems");if(status==ResultStatus.SUCCESS)status=ResultStatus.PARTIAL;
         }
         if(!missing.isEmpty())payload.put("missingFields",List.copyOf(missing));
-        if(!prepared.sufficient()) {
+        boolean noEvidence=!prepared.sufficient()||SchemaContracts.JSON.valueToTree(payload.get("answer")).path("kind").asString("").equals("NO_EVIDENCE");
+        if(noEvidence) {
             payload.put("answer",Map.of("kind","NO_EVIDENCE","text","근거 없음","citations",List.of(),"sentences",List.of()));
             if(!prepared.selected().truncatedItems()&&Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY).contains(status))status=ResultStatus.EMPTY;
         }
         var summary=new ArrayList<Map<String,Object>>();
         for(Object value:(List<?>)payload.getOrDefault("toolSummary",List.of())) {
             var row=new LinkedHashMap<>(object(value));var stage=prepared.outcome().stages().stream().filter(s->s.stepId().equals(row.get("stepId"))).findFirst().orElseThrow();var r=stage.result();
-            var manifest=registry.find(job.scope(),r.capabilityId()).orElse(null);row.put("permissions",manifest==null?List.of():manifest.requiredPermission());row.put("warnings",r.warnings());
+            var manifest=registry.find(job.scope(),r.capabilityId()).orElse(null);row.put("permissions",grounding.map(g->g.permissions(job,r.capabilityId())).orElseGet(()->manifest==null?List.of():manifest.requiredPermission()));row.put("warnings",r.warnings());
             row.put("retentionMeta",Map.of("missingRanges",r.metadata()==null?List.of():r.metadata().missingRanges(),"unverifiedRanges",r.metadata()==null?List.of():r.metadata().unverifiedRanges()));summary.add(row);
         }
         payload.put("toolSummary",summary);payload.put("status",status.name());
@@ -119,7 +120,21 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
             for(var unit:selected)if(unit.sourceType().equals("DOCUMENT"))documents.add(com.nori.ai.gateway.core.knowledge.DocumentReferences.key(job.scope().boundSystem(),SchemaContracts.JSON.treeToValue(unit.location(),com.nori.ai.gateway.core.knowledge.DocumentLocation.class)));
             if(!documents.equals(new LinkedHashSet<>(outcome.sourceDeps().knowledgeDocuments())))throw new IllegalArgumentException("문서 의존성 연결이 다릅니다");
         }
-        var finalEvidence=finalEvidence(job,initial.resultPayload(),pairs);
+        var selectedIds=new ArrayList<String>();
+        boolean hasAnswer=SchemaContracts.JSON.valueToTree(initial.resultPayload().get("answer")).isObject();
+        if(hasAnswer)for(int i=0;i<selected.size();i++) {
+            var unit=selected.get(i);String id=UUID.nameUUIDFromBytes((job.jobId()+":selected:"+(i+1)).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();selectedIds.add(id);
+            var ref=new com.nori.ai.gateway.core.scope.OwnedReference(job.scope().boundSystem(),"system://"+job.scope().boundSystem().name()+"/answer/"+(i+1));
+            var at=unit.observedAt()==null?job.scope().issuedAt():java.time.Instant.parse(unit.observedAt());
+            pairs.add(new TerminalSpec.StoredEvidence(new Evidence(id,job.scope().boundSystem(),unit.sourceType(),ref,null,at,null,null,"OBSERVED",job.scope().actorRef()),Optional.empty()));
+        }
+        var finalEvidence=finalEvidence(job,initial.resultPayload(),pairs,Set.copyOf(selectedIds));
+        var answer=finalEvidence.payload().get("answer");
+        if(answer!=null&&answer.isObject()&&answer.path("citations").isArray())for(var citation:answer.get("citations")) {
+            int number=citation.path("number").asInt();
+            if(number<1||number>selectedIds.size())throw new IllegalArgumentException("답변 인용 결속이 다릅니다");
+            ((tools.jackson.databind.node.ObjectNode)citation).put("evidenceId",selectedIds.get(number-1));
+        }
         var canonical=maskPayload(job,finalEvidence.payload(),outcome);
         var assigned=ResultBlockIds.assign(canonical);
         Map<String,Object> payload=SchemaContracts.JSON.convertValue(assigned,new tools.jackson.core.type.TypeReference<Map<String,Object>>(){});
@@ -136,13 +151,14 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         Map<String,Object> summary=summaries.build(job,window,new ConversationSummaryBuilder.TerminalSpecView(spec.resultStatus(),finalBlocks,deps));
         if(payload.containsKey("blocks"))summary.put("blocks",payload.get("blocks"));
         // 대화 저장 서술은 마스킹을 마친 결과 answer 와 같은 값이다(없으면 빈 문자열).
-        String answer=payload.get("answer") instanceof String text?text:payload.get("answer") instanceof Map<?,?> value&&value.get("text") instanceof String text?text:"";
-        var assistant=new TerminalSpec.AssistantMessage(UUID.randomUUID().toString(),answer,job.requestInput().selectedResourceRefs(),executions,job.jobId());
+        String answerText=payload.get("answer") instanceof String text?text:payload.get("answer") instanceof Map<?,?> value&&value.get("text") instanceof String text?text:"";
+        var assistant=new TerminalSpec.AssistantMessage(UUID.randomUUID().toString(),answerText,job.requestInput().selectedResourceRefs(),executions,job.jobId());
         return spec.withCommitData(new TerminalSpec.CommitData(job.scope(),job.jobId(),job.conversationId(),job.requestInput().messageId(),job.requestInput().jobSeq(),stored,Optional.of(assistant),
-            Optional.of(serverMap(context)),Optional.of(serverMap(summary)),deps));
+            Optional.of(serverMap(context)),Optional.of(serverMap(summary)),deps,
+            hasAnswer?Optional.of(AnswerSnapshot.create(WorkflowContent.text(job.requestInput().maskedQuestion(),sanitizer),SchemaContracts.JSON.valueToTree(payload.get("answer")),selected,composer.orElseThrow().configurationSha256())):Optional.empty()));
     }
     private record FinalEvidence(tools.jackson.databind.node.ObjectNode payload,List<TerminalSpec.StoredEvidence> values) {}
-    private FinalEvidence finalEvidence(JobContext job,Map<String,Object> payload,List<TerminalSpec.StoredEvidence> source) {
+    private FinalEvidence finalEvidence(JobContext job,Map<String,Object> payload,List<TerminalSpec.StoredEvidence> source,Set<String> stableIds) {
         var originals=new LinkedHashMap<String,TerminalSpec.StoredEvidence>();
         for(var pair:source) {
             var previous=originals.putIfAbsent(pair.value().evidenceId(),pair);
@@ -152,7 +168,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         var ids=new LinkedHashMap<String,String>();var values=new ArrayList<TerminalSpec.StoredEvidence>();
         for(var pair:originals.values()) {
             var value=pair.value();
-            String id=UUID.randomUUID().toString();ids.put(value.evidenceId(),id);
+            String id=stableIds.contains(value.evidenceId())?value.evidenceId():UUID.randomUUID().toString();ids.put(value.evidenceId(),id);
             values.add(new TerminalSpec.StoredEvidence(new Evidence(id,value.ownerSystem(),value.sourceType(),value.sourceRef(),value.eventTime(),value.observedAt(),value.traceId(),value.deploymentRef(),value.verificationStatus(),value.actorAccessScope()),pair.source()));
         }
         var copy=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.valueToTree(payload);
@@ -188,6 +204,13 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
     private tools.jackson.databind.JsonNode maskPayload(JobContext job,tools.jackson.databind.node.ObjectNode original,WorkflowOutcome outcome) {
         var copy=(tools.jackson.databind.node.ObjectNode)WorkflowContent.mask(original,sanitizer);
         if(original.has("evidence"))copy.set("evidence",original.get("evidence").deepCopy());
+        if(original.path("answer").isObject()) {
+            var answer=original.get("answer").deepCopy();
+            // 위치·인용 번호는 검증된 구조이며 자유 답변 문자열만 마스킹합니다.
+            ((tools.jackson.databind.node.ObjectNode)answer).put("text",WorkflowContent.text(answer.path("text").asString(),sanitizer));
+            for(var sentence:answer.path("sentences"))((tools.jackson.databind.node.ObjectNode)sentence).put("text",WorkflowContent.text(sentence.path("text").asString(),sanitizer));
+            copy.set("answer",answer);
+        }
         if(original.has("claims")) {
             var claims=copy.putArray("claims");for(var value:original.get("claims")){var claim=SchemaContracts.JSON.convertValue(value,Claim.class);claims.add(SchemaContracts.JSON.valueToTree(new Claim(claim.claimId(),claim.verdict(),WorkflowContent.text(claim.text(),sanitizer),claim.evidenceRefs())));}
         }

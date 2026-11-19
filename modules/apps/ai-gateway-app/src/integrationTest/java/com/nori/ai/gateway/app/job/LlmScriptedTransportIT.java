@@ -70,7 +70,7 @@ class LlmScriptedTransportIT extends LlmStubSupport {
     @Test @Tag("AC-31") void stubUsageEqualsTheGatewayCountAndAShorterUsageIsDetectedAsTruncationBehindTheScript() throws Exception {
         var counted = admitScripted("usage-count", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("상태를 확인했다[e1].")), Optional.empty(), null);
         assertThat(terminal(counted)).isEqualTo("SUCCEEDED");
-        assertThat(payload(counted.jobId()).path("answer").asString()).isEqualTo("상태를 확인했다[e1].");
+        assertThat(payload(counted.jobId()).path("answer").path("text").asString()).isEqualTo("상태를 확인했다.[1]");
         var truncated = admitScripted("usage-short", "EQP-001 상태 알려줘", windowOnly(),
             List.of(classify(wire("LQ", "EQP-001", null, null, null)), new TestHookRegistry.LlmReply(CallType.COMPOSER, "상태를 확인했다[e1].", "stop", 1, 10)), Optional.empty(), null);
         assertThat(terminal(truncated)).isEqualTo("PARTIAL");

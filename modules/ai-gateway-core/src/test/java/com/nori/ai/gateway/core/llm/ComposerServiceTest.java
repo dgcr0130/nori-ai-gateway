@@ -79,7 +79,7 @@ class ComposerServiceTest {
         assertThat(ok.outcome()).isEqualTo(ComposerOutcome.COMPOSED);
         assertThat(ok.calls()).isEqualTo(2);
         assertThat(ok.narrative().orElseThrow()).doesNotContain("SENTINEL-THINK");
-        assertThat(recovered.sent.get(1).messages().getLast().content()).isEqualTo("직전 출력이 무효다(오류: USAGE_EXCEEDS_LIMIT). 2~4문장 평문과 [eN] 인용 표기로만 다시 답한다.");
+        assertThat(recovered.sent.get(1).messages().getLast().content()).isEqualTo("직전 출력이 무효다(오류: USAGE_EXCEEDS_LIMIT). 지정된 출력 형식과 토큰 상한을 지켜 다시 답한다.");
         assertThat(recovered.sent.get(1).messages().toString()).doesNotContain("SENTINEL-THINK");
         for (var bad : List.of(reply("응답 SENTINEL-THINK </think>"), reply("가".repeat(129)), reply("잘린 서술", "length"))) {
             var client = new ScriptedClient(bad, bad);

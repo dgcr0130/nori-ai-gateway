@@ -20,11 +20,12 @@ public record TerminalSpec(JobStatus jobStatus, ResultStatus resultStatus, Error
     }
     public record CommitData(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope,String jobId,String conversationId,String requestMessageId,long jobSeq,
             List<StoredEvidence> evidence,Optional<AssistantMessage> assistantMessage,Optional<Map<String,Object>> context,
-            Optional<Map<String,Object>> summary,ResultSourceDeps sourceDeps) {
+            Optional<Map<String,Object>> summary,ResultSourceDeps sourceDeps,Optional<AnswerSnapshot> snapshot) {
+        public CommitData(com.nori.ai.gateway.core.scope.VerifiedSystemScope scope,String jobId,String conversationId,String requestMessageId,long jobSeq,List<StoredEvidence> evidence,Optional<AssistantMessage> assistant,Optional<Map<String,Object>> context,Optional<Map<String,Object>> summary,ResultSourceDeps deps){this(scope,jobId,conversationId,requestMessageId,jobSeq,evidence,assistant,context,summary,deps,Optional.empty());}
         public CommitData {
             Objects.requireNonNull(scope);Objects.requireNonNull(jobId);Objects.requireNonNull(conversationId);Objects.requireNonNull(requestMessageId);Objects.requireNonNull(sourceDeps);
             if(jobSeq<=0)throw new IllegalArgumentException("요청 순번이 잘못되었습니다");
-            evidence=List.copyOf(evidence);Objects.requireNonNull(assistantMessage);
+            evidence=List.copyOf(evidence);Objects.requireNonNull(assistantMessage);Objects.requireNonNull(snapshot);
             context=Objects.requireNonNull(context).map(JobRequestInput::immutableFields);summary=Objects.requireNonNull(summary).map(JobRequestInput::immutableFields);
         }
         @Override public String toString(){return "CommitData[보호됨]";}

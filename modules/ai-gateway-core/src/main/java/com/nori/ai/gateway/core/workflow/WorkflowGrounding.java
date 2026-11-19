@@ -18,6 +18,7 @@ public final class WorkflowGrounding {
     public interface Inputs {
         SourceUnits collect(JobContext job,WorkflowOutcome outcome);
         Map<String,String> glossary(JobContext job);
+        default List<String> permissions(JobContext job,String capabilityId){return List.of();}
     }
     public record Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient) {}
     private final DocumentSearch search;private final SearchLanguage language;private final SearchSettings settings;
@@ -26,6 +27,7 @@ public final class WorkflowGrounding {
     public WorkflowGrounding(DocumentSearch search,SearchLanguage language,SearchSettings settings,EvidenceSelection selection,Inputs inputs,Clock clock,ExpiryCheckpoint expiry) {
         this.search=search;this.language=language;this.settings=settings;this.selection=selection;this.inputs=inputs;this.clock=clock;this.expiry=expiry;
     }
+    public List<String> permissions(JobContext job,String capabilityId){return inputs.permissions(job,capabilityId);}
     public Prepared prepare(JobContext job,WorkflowExecutionPlan plan,WorkflowOutcome outcome,ToolCallBudget calls) {
         var source=inputs.collect(job,outcome);var stages=new ArrayList<>(outcome.stages());
         for(int i=0;i<stages.size();i++)if(source.invalidSteps().contains(stages.get(i).stepId()))stages.set(i,failure(stages.get(i),job));
@@ -63,7 +65,11 @@ public final class WorkflowGrounding {
         sufficient=coverage.sufficient(job.requestInput().maskedQuestion(),targets,selected.units(),language,settings.coreTermLimit(),inputs.glossary(job));
         var docs=new LinkedHashSet<>(outcome.sourceDeps().knowledgeDocuments());
         for(var unit:selected.units())if(unit.sourceType().equals("DOCUMENT"))docs.add(DocumentReferences.key(job.scope().boundSystem(),SchemaContracts.JSON.treeToValue(unit.location(),DocumentLocation.class)));
-        var deps=new ResultSourceDeps(outcome.sourceDeps().sources(),List.copyOf(docs));
+        var sources=new ArrayList<>(outcome.sourceDeps().sources());
+        // 기존 Source 안의 ANY 계약을 바꾸지 않고 각 선택 항목의 필수 권한을 모두 요구합니다.
+        for(int i=0;i<selected.units().size();i++)for(String permission:selected.units().get(i).permissions())
+            sources.add(new ResultSourceDeps.Source("answer:"+(i+1)+":"+permission,Set.of(permission)));
+        var deps=new ResultSourceDeps(sources,List.copyOf(docs));
         var invalidRefs=new HashSet<com.nori.ai.gateway.core.scope.OwnedReference>();var invalidEvidence=new HashSet<String>();
         for(var stage:outcome.stages())if(source.invalidSteps().contains(stage.stepId())) {
             for(var block:stage.result().blocks())invalidRefs.add(block.dataRef());for(var value:stage.result().evidence())invalidEvidence.add(value.evidenceId());

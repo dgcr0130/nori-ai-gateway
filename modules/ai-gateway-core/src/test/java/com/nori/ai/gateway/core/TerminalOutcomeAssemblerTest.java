@@ -62,7 +62,7 @@ class TerminalOutcomeAssemblerTest {
     @Test void composerFailureAndBudgetAndMissingRangeDoNotInventAnswerOrChangeSourceStatuses() {
         var empty=outcome(List.of());assertThat(assembler.assemble(empty,ComposerOutcome.LLM_UNAVAILABLE,InferenceMode.ENABLED).jobStatus()).isEqualTo(JobStatus.FAILED);
         var base=outcome(List.of(stage(ResultStatus.SUCCESS,true)));var data=new WorkflowOutcome(base.stages(),result(manifest()).blocks(),result(manifest()).evidence(),base.sourceDeps(),List.of(),List.of(),Optional.empty());
-        var partial=assembler.assemble(data,ComposerOutcome.LLM_UNAVAILABLE,InferenceMode.ENABLED);assertThat(partial.resultStatus()).isEqualTo(ResultStatus.PARTIAL);assertThat(partial.errorCode()).isEqualTo(ErrorCode.LLM_UNAVAILABLE);assertThat(partial.resultPayload()).containsEntry("missingFields",List.of("answer"));
+        var partial=assembler.assemble(data,ComposerOutcome.LLM_UNAVAILABLE,InferenceMode.ENABLED);assertThat(partial.resultStatus()).isEqualTo(ResultStatus.PARTIAL);assertThat(partial.jobStatus()).isEqualTo(JobStatus.PARTIAL);assertThat(partial.eventType()).isEqualTo("job.partial");assertThat(partial.resultPayload()).doesNotContainKey("answer");assertThat(partial.errorCode()).isEqualTo(ErrorCode.LLM_UNAVAILABLE);assertThat(partial.resultPayload()).containsEntry("missingFields",List.of("answer"));
         var budget=assembler.assemble(data,ComposerOutcome.INPUT_BUDGET_EXCEEDED,InferenceMode.ENABLED);assertThat(budget.jobStatus()).isEqualTo(JobStatus.FAILED);assertThat(budget.errorCode()).isEqualTo(ErrorCode.INPUT_BUDGET_EXCEEDED);
         var outside=stage(ResultStatus.OUT_OF_RETENTION,false);var metadata=new ToolResultMetadata(result(manifest()).metadata().sourceRef(),"LIVE",false,List.of(new ToolResultMetadata.MissingRange(NOW.minusSeconds(60),NOW)));
         outside=new WorkflowOutcome.Stage("outside",changeResult(outside.result(),"metadata",metadata),false,0);var spec=assembler.assemble(outcome(List.of(stage(ResultStatus.SUCCESS,true),outside)),ComposerOutcome.NOT_INVOKED,InferenceMode.DISABLED);
@@ -74,6 +74,18 @@ class TerminalOutcomeAssemblerTest {
         var spec=assembler.assemble(outcome(List.of(new WorkflowOutcome.Stage("call-1",result,true,1))),ComposerOutcome.NOT_INVOKED,InferenceMode.DISABLED);
         var row=com.nori.ai.gateway.core.registry.SchemaContracts.JSON.valueToTree(spec.resultPayload()).path("toolSummary").get(0);
         assertThat(row.path("warnings").toString()).isEqualTo("[\"RETENTION_UNVERIFIED\"]");assertThat(row.path("unverifiedRanges").get(0).path("from").asString()).isEqualTo(ranges.getFirst().from().toString());assertThat(row.path("unverifiedRanges").get(0).path("to").asString()).isEqualTo(ranges.getFirst().to().toString());
+    }
+    @Test void structuredAnswerKindsNeverOverrideSourceAggregation() {
+        var unit=new EvidenceUnit("LOG",null,com.nori.ai.gateway.core.registry.SchemaContracts.JSON.createObjectNode().put("app","fixture").put("namespace","local").put("occurredAt","2026-11-19T00:00:00Z"),"","10",List.of("READ"),"STALE","2026-11-19T00:00:00Z",List.of(),com.nori.ai.gateway.core.registry.SchemaContracts.JSON.createObjectNode(),List.of(),List.of());
+        var raw=com.nori.ai.gateway.core.registry.SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(Map.of("text","10","citations",List.of(1)))));
+        var checked=new com.nori.ai.gateway.core.llm.SentenceEvidenceCheck(text->List.of()).check(raw,List.of(unit));
+        assertThat(checked.kind()).isEqualTo("PARTIAL");assertThat(checked.text()).isEqualTo("10[1]\n최신 자료가 아닐 수 있습니다.");assertThat(checked.citations()).singleElement().satisfies(citation->assertThat(citation.sourceType()).isEqualTo("LOG"));
+        for(var status:List.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.STALE,ResultStatus.CONFLICT,ResultStatus.PARTIAL))for(var answer:List.of(checked,GroundedAnswer.noEvidence())) {
+            var composed=new com.nori.ai.gateway.core.llm.ComposerService.Result(ComposerOutcome.COMPOSED,Optional.of(answer.text()),1,0,0,List.of(),Optional.of(answer));
+            var terminal=assembler.assembleAnswer(outcome(List.of(stage(status,true))),composed,InferenceMode.ENABLED);
+            assertThat(terminal.resultStatus()).as(status+"/"+answer.kind()).isEqualTo(status);assertThat(terminal.resultPayload()).containsEntry("status",status.name()).containsEntry("answer",answer);
+            assertThat(terminal.jobStatus()).isEqualTo(status==ResultStatus.PARTIAL?JobStatus.PARTIAL:JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo(status==ResultStatus.PARTIAL?"job.partial":"job.completed");assertThat(terminal.errorCode()).isNull();
+        }
     }
     private final TerminalOutcomeAssembler assembler=new TerminalOutcomeAssembler();
     private WorkflowOutcome outcome(List<WorkflowOutcome.Stage> stages){return new WorkflowOutcome(stages,List.of(),List.of(),new ResultSourceDeps(List.of(),List.of()),List.of(),List.of(),Optional.empty());}

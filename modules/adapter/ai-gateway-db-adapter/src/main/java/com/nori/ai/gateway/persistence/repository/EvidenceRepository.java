@@ -23,4 +23,15 @@ public final class EvidenceRepository extends ScopedJdbc {
             .param("job", jobId).param("id", id).query((rs, row) -> new Entry(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), rs.getString(5))).optional());
     }
 
+    /** 일반 열람은 살아 있는 소유 Job 및 현재 권한 검사를 거친 controller에서만 접근합니다. */
+    public Optional<String> findAnswerBody(VerifiedSystemScope scope,String jobId,String evidenceId) {
+        return transaction(()->scoped(scope,"""
+            SELECT unit->>'bodyMasked' FROM kn.answer_snapshot s,
+            LATERAL jsonb_array_elements(s.answer->'citations') citation,
+            LATERAL jsonb_array_elements(s.evidence) unit
+            WHERE s.system_id=:bound AND s.job_id=:job AND s.actor_ref=:actor
+            AND citation->>'evidenceId'=:id AND citation->>'number'=unit->>'number'
+            AND EXISTS ("""+JOB+")").param("job",jobId).param("id",evidenceId).query(String.class).optional());
+    }
+
 }

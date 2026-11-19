@@ -7,6 +7,13 @@ import java.util.*;
 
 /** Spec §5.4의 명시 실패와 자료 관측 집합을 분리해 집계합니다. */
 public final class TerminalOutcomeAssembler {
+    public TerminalSpec assembleAnswer(WorkflowOutcome outcome,com.nori.ai.gateway.core.llm.ComposerService.Result composed,InferenceMode inference) {
+        var spec=assemble(outcome,composed.outcome(),composed.narrative(),inference);
+        if(composed.answer().isEmpty())return spec;
+        var answer=composed.answer().orElseThrow();var payload=new LinkedHashMap<>(spec.resultPayload());payload.put("answer",answer);
+        // kind는 문장 대조 결과이며 원천 집계와 별개입니다. 정상 자료 부족·절삭은 grounding에서 한 번만 반영합니다.
+        return new TerminalSpec(spec.jobStatus(),spec.resultStatus(),spec.errorCode(),spec.eventType(),spec.externalSuppressed(),payload,spec.resultSourceDeps(),spec.terminalCause());
+    }
     private static final Set<ResultStatus> DATA=Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.STALE,ResultStatus.CONFLICT);
     private static final Set<ResultStatus> ALLOWED=Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.OUT_OF_RETENTION,ResultStatus.STALE,ResultStatus.CONFLICT,ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE,ResultStatus.FAILED,ResultStatus.TIMEOUT,ResultStatus.UNSUPPORTED);
     public TerminalSpec assemble(WorkflowOutcome outcome,ComposerOutcome composer,InferenceMode inference) {

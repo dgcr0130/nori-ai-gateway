@@ -11,12 +11,12 @@ import static org.assertj.core.api.Assertions.*;
 
 @Tag("stage-F1") @Tag("label-MOCK_API")
 class RepositorySignatureArchTest {
-    @Test void tenRepositoriesRequireScopeAndMaintenanceCallersAreRestricted() throws Exception {
+    @Test void elevenRepositoriesRequireScopeAndMaintenanceCallersAreRestricted() throws Exception {
         var root = Path.of(System.getProperty("aigw.rootDir"));
         var classes = new ClassFileImporter().importPath(root.resolve("modules/adapter/ai-gateway-db-adapter/build/classes/java/main"));
         var allRepositories = classes.stream().filter(type -> type.getSimpleName().endsWith("Repository")).toList();
         var expected = new HashSet<String>();
-        for (String name : List.of("Conversation", "Message", "Job", "JobEvent", "Result", "Evidence", "ToolExecution", "Cache", "Audit", "DocumentIndex"))
+        for (String name : List.of("Conversation", "Message", "Job", "JobEvent", "Result", "Evidence", "ToolExecution", "Cache", "Audit", "DocumentIndex", "AnswerSnapshot"))
             expected.add("com.nori.ai.gateway.persistence.repository." + name + "Repository");
         for (String name : List.of("Queue", "Retention", "Recovery"))
             expected.add("com.nori.ai.gateway.persistence.maintenance." + name + "MaintenanceRepository");
@@ -26,7 +26,7 @@ class RepositorySignatureArchTest {
         expected.add("com.nori.ai.gateway.persistence.retention.SourceRetentionProbeRepository");
         assertThat(allRepositories.stream().map(type -> type.getName())).containsExactlyInAnyOrderElementsOf(expected);
         var repositories = allRepositories.stream().filter(type -> type.getPackageName().endsWith(".repository")).toList();
-        assertThat(repositories).hasSize(10);
+        assertThat(repositories).hasSize(11);
         for (var type : repositories) for (var method : type.reflect().getDeclaredMethods()) {
             if (Modifier.isPublic(method.getModifiers()) && !method.isSynthetic()) {
                 assertThat(method.getParameterCount()).as(method.toString()).isGreaterThan(0);

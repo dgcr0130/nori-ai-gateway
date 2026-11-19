@@ -6,7 +6,7 @@ import tools.jackson.databind.JsonNode;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** 선택·충분성·작성 소비자가 공유하는 전체 단위입니다. 영구 저장은 후속 phase가 담당합니다. */
+/** 선택·충분성·작성 소비자가 공유하는 전체 단위입니다. 같은 단위를 문장 대조와 영구 스냅샷에도 사용합니다. */
 public record EvidenceUnit(String sourceType,String parentKey,JsonNode location,String header,String body,
         List<String> permissions,String status,String observedAt,List<String> missingFields,JsonNode retentionMeta,
         List<String> warnings,List<DocumentLocation> childLocations,JsonNode values) {

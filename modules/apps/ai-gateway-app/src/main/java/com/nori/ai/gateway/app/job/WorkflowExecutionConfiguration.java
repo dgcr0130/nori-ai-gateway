@@ -20,7 +20,10 @@ import java.time.Clock;
 @EnableConfigurationProperties(LokiProperties.class)
 public class WorkflowExecutionConfiguration {
     @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
-    GroundingInputs groundingInputs(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer){return new GroundingInputs(systems,registry,sanitizer);}
+    GroundingInputs groundingInputs(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,ObjectProvider<DirectSourceToolExecutor.GitExecutionScopes> scopes){
+        var projects=new java.util.HashMap<String,String>();var configured=scopes.getIfAvailable();if(configured!=null)for(var repo:configured.repositories())projects.put(repo.sourceRepo(),repo.projectId());
+        return new GroundingInputs(systems,registry,sanitizer,projects);
+    }
     @Bean WorkflowResourceResolverFactory workflowResourceResolverFactory(SourcePermissionMap permissions,CapabilityRegistry registry,ExpiryCheckpoint expiry){return new WorkflowResourceResolverFactory(permissions,registry,expiry);}
     @Bean WorkflowCacheStore workflowCacheStore(CacheRepository cache,ContentSanitizer sanitizer,CapabilityRegistry registry){return new WorkflowCacheStore(cache,sanitizer,registry);}
     @Bean WorkflowExecutionRecords workflowExecutionRecords(ToolExecutionRepository executions,ContentSanitizer sanitizer,ExpiryCheckpoint expiry,CapabilityRegistry registry,com.nori.ai.gateway.app.observability.AuditRecorder audit){return new WorkflowExecutionRecords(executions,sanitizer,expiry,registry,audit);}
@@ -39,8 +42,17 @@ public class WorkflowExecutionConfiguration {
     @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
     com.nori.ai.gateway.core.llm.ComposerService composerService(InferenceClient inference,com.nori.ai.gateway.core.budget.PromptReducer reducer,com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy,
             com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter tokenizer,ExpiryCheckpoint expiry,java.util.Optional<com.nori.ai.gateway.core.llm.LlmCallObserver> observer,
-            com.nori.ai.gateway.core.llm.LlmCallAudit audit){
-        return new com.nori.ai.gateway.core.llm.ComposerService(inference,reducer,policy,tokenizer::countText,expiry,observer.orElse(com.nori.ai.gateway.core.llm.LlmCallObserver.NONE),audit,prompt(COMPOSE_PROMPT));
+            com.nori.ai.gateway.core.llm.LlmCallAudit audit,com.nori.ai.gateway.core.knowledge.SearchLanguage language,org.springframework.core.env.Environment environment,com.nori.ai.gateway.core.knowledge.SearchSettings search,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems){
+        return new com.nori.ai.gateway.core.llm.ComposerService(inference,reducer,policy,tokenizer::countText,expiry,observer.orElse(com.nori.ai.gateway.core.llm.LlmCallObserver.NONE),audit,prompt(COMPOSE_PROMPT),language,configurationFingerprint(environment,search,systems));
+    }
+    private static String configurationFingerprint(org.springframework.core.env.Environment environment,com.nori.ai.gateway.core.knowledge.SearchSettings search,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems) {
+        var settings=com.nori.ai.gateway.integration.inference.LlmSettings.load(environment);
+        // 자격 값과 자격 파일 내용은 영구 지문의 입력에 포함하지 않습니다.
+        var values=new java.util.TreeMap<String,Object>();values.put("baseUrl",settings.baseUrl());values.put("generationModel",settings.generationModel());values.put("embeddingModel",settings.embeddingModel());
+        values.put("temperature",settings.temperature());values.put("contextTokens",settings.contextTokens());values.put("tokenCounting",settings.tokenCounting());values.put("budgets",settings.budgets());
+        values.put("evidenceTokens",settings.evidenceTokens());values.put("requestTimeout",settings.requestTimeout().toString());values.put("prompt",prompt(COMPOSE_PROMPT));values.put("mask","mask-v1");
+        values.put("search",search);var sources=new java.util.TreeMap<String,Object>();systems.systems().forEach((id,system)->sources.put(id,java.util.Map.of("tools",system.tools(),"documents",system.documents(),"apps",system.apps(),"traces",system.traces(),"repositories",system.repositories(),"glossary",system.glossary())));values.put("systems",sources);
+        return com.nori.ai.gateway.core.result.AnswerSnapshot.sha(SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(values)));
     }
     public static final String COMPOSE_PROMPT="prompts/compose-v1.txt";
     private static String prompt(String path){

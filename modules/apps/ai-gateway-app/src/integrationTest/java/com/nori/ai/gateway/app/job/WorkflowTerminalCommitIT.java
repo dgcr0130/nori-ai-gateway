@@ -47,12 +47,36 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
         var prepared=prepare(key);var spec=context.getBean(com.nori.ai.gateway.core.job.WorkflowExecutor.class).execute(prepared.job());
         assertThat(spec.commitData()).isPresent();assertThat(spec.commitData().orElseThrow().evidence()).isNotEmpty();return new Produced(prepared.accepted(),spec);
     }
+    private Produced withSnapshot(Produced produced) {
+        var original=produced.spec();var payload=new LinkedHashMap<String,Object>(original.resultPayload());
+        var answer=Map.of("kind","NO_EVIDENCE","text","근거 없음","citations",List.of(),"sentences",List.of());payload.put("answer",answer);payload.put("status","EMPTY");
+        var data=original.commitData().orElseThrow();var snapshot=com.nori.ai.gateway.core.result.AnswerSnapshot.create("실제 저장 자료",com.nori.ai.gateway.core.registry.SchemaContracts.JSON.valueToTree(answer),List.of(),"a".repeat(64));
+        var assistant=data.assistantMessage().map(message->new TerminalSpec.AssistantMessage(message.messageId(),"근거 없음",message.resourceRefs(),message.toolExecutionRefs(),message.responseRef()));
+        var saved=new TerminalSpec.CommitData(data.scope(),data.jobId(),data.conversationId(),data.requestMessageId(),data.jobSeq(),data.evidence(),assistant,data.context(),data.summary(),data.sourceDeps(),Optional.of(snapshot));
+        return new Produced(produced.accepted(),new TerminalSpec(original.jobStatus(),com.nori.ai.gateway.core.result.ResultStatus.EMPTY,original.errorCode(),original.eventType(),false,payload,original.resultSourceDeps(),original.terminalCause()).withCommitData(saved));
+    }
+    @Test void snapshotInsertFailureRollsBackEverythingAndSameHashRetryReusesWhileDifferentHashFails() throws Exception {
+        var value=withSnapshot(produce("snapshot-failure"));String job=value.accepted().jobId();
+        var events=new ArrayList<JobEventPublisher.Published>();context.addApplicationListener(event->{if(event instanceof org.springframework.context.PayloadApplicationEvent<?> e&&e.getPayload() instanceof JobEventPublisher.Published published)events.add(published);});
+        jdbc().sql("ALTER TABLE kn.answer_snapshot ADD CONSTRAINT reject_phase7_fixture CHECK (job_id <> '"+job+"')").update();
+        var committer=context.getBean(JobTerminalCommitter.class);
+        assertThatThrownBy(()->committer.commit(job,value.spec())).isInstanceOf(org.springframework.dao.DataAccessException.class);noFinalData(value);assertThat(events).isEmpty();assertThat(state(job)).isEqualTo("RUNNING");
+        jdbc().sql("ALTER TABLE kn.answer_snapshot DROP CONSTRAINT reject_phase7_fixture").update();
+        assertThat(committer.commit(job,value.spec())).isTrue();String id=jdbc().sql("SELECT id::text FROM kn.answer_snapshot WHERE job_id=:job").param("job",job).query(String.class).single();
+        assertThat(committer.commit(job,value.spec())).isFalse();assertThat(jdbc().sql("SELECT id::text FROM kn.answer_snapshot WHERE job_id=:job").param("job",job).query(String.class).single()).isEqualTo(id);assertThat(events).hasSize(1);
+        var data=value.spec().commitData().orElseThrow();var old=data.snapshot().orElseThrow();var changed=new com.nori.ai.gateway.core.result.AnswerSnapshot("다른 질문",old.answer(),old.evidence(),old.configSha256());
+        var mismatch=new TerminalSpec.CommitData(data.scope(),data.jobId(),data.conversationId(),data.requestMessageId(),data.jobSeq(),data.evidence(),data.assistantMessage(),data.context(),data.summary(),data.sourceDeps(),Optional.of(changed));
+        assertThatThrownBy(()->committer.commit(job,value.spec().withCommitData(mismatch))).isInstanceOf(IllegalStateException.class).hasMessage("스냅샷 본문 해시가 다릅니다");assertThat(events).hasSize(1);
+        assertThat(context.getBean(ConversationRepository.class).delete(data.scope(),data.conversationId())).isEqualTo(ConversationRepository.DeleteResult.DELETED);
+        assertThat(jdbc().sql("SELECT id::text FROM kn.answer_snapshot WHERE job_id=:job").param("job",job).query(String.class).single()).isEqualTo(id);
+    }
     private JobTerminalCommitter committer(List<TerminalCommitObserver> observers) {
         return new JobTerminalCommitter(jdbc(),context.getBean(PlatformTransactionManager.class),clock(),context.getBean(JobEventPublisher.class),observers,Duration.ofSeconds(180),context.getBean(SlotLedger.class)::terminated,
             context.getBean(ConversationRepository.class),context.getBean(MessageRepository.class),context.getBean(EvidenceRepository.class),context.getBean(ToolExecutionRepository.class));
     }
     private void noFinalData(Produced value) {
         String job=value.accepted().jobId(),conversation=value.accepted().conversationId();
+        assertThat(jdbc().sql("SELECT count(*) FROM kn.answer_snapshot WHERE job_id=:job").param("job",job).query(Integer.class).single()).isZero();
         for(String table:List.of("result","evidence"))assertThat(jdbc().sql("SELECT count(*) FROM gw."+table+" WHERE job_id=:job").param("job",job).query(Integer.class).single()).as(table).isZero();
         // 실행 중 감사(접수·분류·Tool)는 남고 종결 감사는 없습니다.
         assertThat(assertJobAuditLineage(job,false)).doesNotContain("JOB_TERMINAL");
@@ -63,7 +87,7 @@ class WorkflowTerminalCommitIT extends P09QueueSupport {
     private TerminalSpec changed(Produced value,TerminalSpec.CommitData data){return value.spec().withCommitData(data);}
     private TerminalSpec.CommitData copy(TerminalSpec.CommitData data,String message,long seq,List<TerminalSpec.StoredEvidence> evidence,Optional<TerminalSpec.AssistantMessage> assistant){return new TerminalSpec.CommitData(data.scope(),data.jobId(),data.conversationId(),message,seq,evidence,assistant,data.context(),data.summary(),data.sourceDeps());}
     @Test void actualFinalBatchRollsBackOnTheExistingFaultInjectorAndAWinningRetryStoresItOnce() throws Exception {
-        var value=produce("final-rollback");var fault=spy(context.getBean(FaultInjector.class));var original=new IllegalStateException("시험 종결 실패");
+        var value=withSnapshot(produce("final-rollback"));var fault=spy(context.getBean(FaultInjector.class));var original=new IllegalStateException("시험 종결 실패");
         doAnswer(invocation->{invocation.callRealMethod();throw original;}).when(fault).beforeCommit(value.accepted().jobId());
         var events=new ArrayList<JobEventPublisher.Published>();context.addApplicationListener(event->{if(event instanceof org.springframework.context.PayloadApplicationEvent<?> payload&&payload.getPayload() instanceof JobEventPublisher.Published published)events.add(published);});
         assertThatThrownBy(()->committer(List.of(fault)).commit(value.accepted().jobId(),value.spec())).isSameAs(original);noFinalData(value);assertThat(events).isEmpty();assertThat(state(value.accepted().jobId())).isEqualTo("RUNNING");

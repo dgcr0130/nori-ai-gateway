@@ -67,6 +67,18 @@ class HybridEvidenceSelectionTest {
         assertThat(new EvidenceSelection(String::length,exact-1).select(List.of(round(List.of(small),List.of(),List.of())),List.of(),SearchSettings.defaults()).units()).isEmpty();
         var truncated=new EvidenceSelection(String::length,exact).select(List.of(round(List.of(small),List.of(),List.of())),List.of(other("비문서")),SearchSettings.defaults());assertThat(truncated.truncatedItems()).isTrue();
     }
+    @Test void evidenceJsonSortsAllObjectKeysByUtf8AndNeverReordersArrays() {
+        var node=SchemaContracts.JSON.createObjectNode();node.put("\uD800\uDC00",1).put("\uE000",2);node.putArray("array").add("Z").add("A");
+        assertThat(com.nori.ai.gateway.core.evidence.EvidenceJson.write(node)).isEqualTo("{\"array\":[\"Z\",\"A\"],\"\uE000\":2,\"\uD800\uDC00\":1}");
+        var source=other("설비 상태").withValues(node);String wire=EvidenceSelection.json(List.of(source));
+        assertThat(wire.indexOf("\uE000")).isLessThan(wire.indexOf("\uD800\uDC00"));
+    }
+    @Test void sevenNonDocumentsHaveNoCountLimitAndAnOversizedSingleUnitMarksTruncation() {
+        var units=IntStream.rangeClosed(1,7).mapToObj(i->other("설비 상태 T"+i)).toList();int exact=EvidenceSelection.json(units).length();
+        var selected=new EvidenceSelection(String::length,exact).select(List.of(),units,SearchSettings.defaults());
+        assertThat(selected.units()).containsExactlyElementsOf(units);assertThat(selected.truncatedItems()).isFalse();
+        var empty=new EvidenceSelection(String::length,100).select(List.of(),List.of(other("큰 본문".repeat(1000))),SearchSettings.defaults());assertThat(empty.units()).isEmpty();assertThat(empty.truncatedItems()).isTrue();
+    }
     @Test void equalRrfScoresUseEveryDeclaredTieField() {
         var hits=new ArrayList<DocumentSearch.Hit>();
         for(int id:List.of(5,3,1,4,2,0)) {

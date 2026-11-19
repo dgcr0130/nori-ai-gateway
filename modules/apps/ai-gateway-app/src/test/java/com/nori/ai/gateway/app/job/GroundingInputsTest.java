@@ -20,7 +20,7 @@ class GroundingInputsTest {
     CapabilityManifest tool(String id,ToolKind kind){return ConfiguredTool.create(OwnerSystem.TC,id,"시험 조회",kind,SchemaContracts.parse("{\"type\":\"object\"}"),SchemaContracts.parse("{\"type\":\"object\"}"),List.of("READ"),10000);}
     GroundingInputs inputs(){return inputs(List.of("READ"));}
     GroundingInputs inputs(List<String> sourcePermissions){
-        var config=new GatewaySystemsProperties.SystemConfig("fixture","digest","jwks",null,null,List.of(),List.of(),List.of(new GatewaySystemsProperties.App("app","ns",sourcePermissions)),List.of(),List.of(new GatewaySystemsProperties.Trace("service","ns",sourcePermissions)),"REVIEW",Map.of());
+        var config=new GatewaySystemsProperties.SystemConfig("fixture","digest","jwks",null,null,List.of(),List.of(),List.of(new GatewaySystemsProperties.App("app","ns",sourcePermissions)),List.of(new GatewaySystemsProperties.Repository("repo","main","",sourcePermissions)),List.of(new GatewaySystemsProperties.Trace("service","ns",sourcePermissions)),"REVIEW",Map.of());
         return new GroundingInputs(new GatewaySystemsProperties(Map.of("TC",config)),new CapabilityRegistry(tools,Set.of(ImplementationPhase.PHASE_1),new ContractVersionPolicy()),new ContentSanitizer());
     }
     WorkflowOutcome outcome(List<List<Map<String,Object>>> rows) {
@@ -60,7 +60,10 @@ class GroundingInputsTest {
     }
     @Test void sourcePermissionOrderComesFromTheConfigArrayAndMembershipStillRequiresAllPermissions() {
         var log=Map.<String,Object>of("app","app","namespace","ns","occurredAt",NOW.toString(),"text","설비 상태 T3");
-        var found=inputs(List.of("EXTRA","READ")).collect(job,outcome(List.of(List.of(),List.of(log))));
+        var configured=inputs(List.of("EXTRA","READ"));
+        for(String capability:List.of("logs.search","trace.search","git.searchCode"))assertThat(configured.permissions(job,capability)).containsExactly("EXTRA","READ");
+        assertThat(configured.permissions(job,"fixture.system")).containsExactly("READ");
+        var found=configured.collect(job,outcome(List.of(List.of(),List.of(log))));
         assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).singleElement().satisfies(u->assertThat(u.permissions()).containsExactly("EXTRA","READ"));
         assertThat(EvidenceSelection.json(found.units())).contains("\"permissions\":[\"EXTRA\",\"READ\"]");
         assertThat(inputs(List.of("EXTRA","MISSING")).collect(job,outcome(List.of(List.of(),List.of(log)))).invalidSteps()).containsExactly("call-2");
@@ -71,4 +74,34 @@ class GroundingInputsTest {
         var found=inputs().collect(job,outcome(List.of(List.of(),List.of(),List.of(),rows)));
         assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).extracting(u->u.location().path("path").asString()).containsExactly(earlier,later);
     }
+    @Test void everySourceRequiredFieldIsCheckedWithoutBorrowingAnotherRowsFields() {
+        var system=Map.<String,Object>of("ref","EQP-001","text","설비 상태","values",Map.of());
+        var log=Map.<String,Object>of("app","app","namespace","ns","occurredAt",NOW.toString(),"text","설비 상태");
+        var span=Map.<String,Object>of("service","service","namespace","ns","spanId","span","name","설비 상태","startTimeUnixNano","1700000000000000000","endTimeUnixNano","1700000000000000001","serviceVersion","");
+        var git=Map.<String,Object>of("sourceRepo","repo","path","a.java","ref","main","text","설비 상태");
+        var required=List.of(List.of("ref","text","values"),List.of("app","occurredAt","text"),List.of("service","spanId","name","startTimeUnixNano","endTimeUnixNano","serviceVersion"),List.of("sourceRepo","path","ref","text"));
+        for(int kind=0;kind<4;kind++)for(String field:required.get(kind)) {
+            var damaged=new HashMap<>(List.of(system,log,span,git).get(kind));damaged.remove(field);
+            var rows=new ArrayList<List<Map<String,Object>>>(List.of(List.of(system),List.of(log),List.of(Map.of("traceId","trace","spans",List.of(span))),List.of(git)));
+            rows.set(kind,List.of(kind==2?Map.of("traceId","trace","spans",List.of(damaged)):damaged));
+            var found=inputs().collect(job,outcome(rows));assertThat(found.invalidSteps()).as("%s:%s",kind,field).containsExactly("call-"+(kind+1));assertThat(found.units()).hasSize(3);
+        }
+        var noTrace=inputs().collect(job,outcome(List.of(List.of(system),List.of(log),List.of(Map.of("spans",List.of(span))),List.of(git))));assertThat(noTrace.invalidSteps()).containsExactly("call-3");
+        var valid=inputs().collect(job,outcome(List.of(List.of(system),List.of(log),List.of(Map.of("traceId","trace","spans",List.of(span))),List.of(git))));
+        assertThat(valid.units().get(2).location().path("startTimeUnixNano").asString()).isEqualTo("1700000000000000000");assertThat(valid.units().get(2).body()).contains("1700000000000000000");
+        var location=com.nori.ai.gateway.core.registry.SchemaContracts.JSON.valueToTree(new com.nori.ai.gateway.core.knowledge.DocumentLocation("bucket","a.md","a".repeat(64),"절",3,4));
+        for(String field:List.of("bucket","objectKey","revision","section","lineFrom","lineTo")) {
+            var copy=(tools.jackson.databind.node.ObjectNode)location.deepCopy();copy.remove(field);
+            assertThatThrownBy(()->SchemaContracts.JSON.treeToValue(copy,com.nori.ai.gateway.core.knowledge.DocumentLocation.class)).as(field).isInstanceOf(RuntimeException.class);
+        }
+    }
+    @Test void sourceStatusObservationsGapsWarningsAndPermissionsSurviveExactly() {
+        for(var status:List.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.STALE,ResultStatus.CONFLICT)) {
+            var items=status==ResultStatus.EMPTY?List.of():List.of(Map.of("ref","EQP-001","text","설비 상태","values",Map.of()));
+            var result=ToolResults.result(tools.getFirst(),scope,status,items,NOW,List.of("missing"),List.of(Warning.RETENTION_UNVERIFIED),List.of(new ToolResultMetadata.MissingRange(NOW.minusSeconds(1),NOW)),null);
+            var source=new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("call-1",result,true,items.size())),List.of(),List.of(),new ResultSourceDeps(List.of(),List.of()),List.of(),List.of(),Optional.empty());
+            var found=inputs().collect(job,source);assertThat(found.invalidSteps()).isEmpty();if(status==ResultStatus.EMPTY){assertThat(found.units()).isEmpty();continue;}assertThat(found.units()).singleElement().satisfies(u->{assertThat(u.status()).isEqualTo(status.name());assertThat(u.observedAt()).isEqualTo(NOW.toString());assertThat(u.missingFields()).containsExactly("missing");assertThat(u.warnings()).containsExactly("RETENTION_UNVERIFIED");assertThat(u.retentionMeta().path("missingRanges")).hasSize(1);assertThat(u.retentionMeta().path("unverifiedRanges")).isEmpty();});
+        }
+    }
+
 }

@@ -23,7 +23,7 @@ class ReportSectionsContractIT extends LlmStubSupport {
     private String deps(String job) { return jdbc().sql("SELECT result_source_deps::text FROM gw.result WHERE job_id=:id").param("id", job).query(String.class).single(); }
 
     @Test void theSelectedReadUsesTheSameVerifiedBlocksAndSourceDependencies()throws Exception {
-        var first=run("report-first","B",List.of(compose("설비 상태를 확인했다[e1].")),Optional.empty());var second=run("report-second","B",List.of(compose("설비 상태를 확인했다[e1].")),Optional.empty());assertThat(terminal(first)).isEqualTo("SUCCEEDED");assertThat(terminal(second)).isEqualTo("SUCCEEDED");assertThat(deps(first.jobId())).isEqualTo(deps(second.jobId()));assertThat(payload(first.jobId()).path("blocks")).hasSize(1);assertThat(payload(first.jobId()).path("answer").asString()).isEqualTo("설비 상태를 확인했다[e1].");
+        var first=run("report-first","B",List.of(compose("설비 상태를 확인했다[e1].")),Optional.empty());var second=run("report-second","B",List.of(compose("설비 상태를 확인했다[e1].")),Optional.empty());assertThat(terminal(first)).isEqualTo("SUCCEEDED");assertThat(terminal(second)).isEqualTo("SUCCEEDED");assertThat(deps(first.jobId())).isEqualTo(deps(second.jobId()));assertThat(payload(first.jobId()).path("blocks")).hasSize(1);assertThat(payload(first.jobId()).path("answer").path("text").asString()).isEqualTo("설비 상태를 확인했다.[1]");
     }
     @Test void composerReceivesServerCoverageButNoNewLongNarrativeCall() throws Exception {
         var watch = Optional.of(new TestHookRegistry.PromptWatch(List.of("관측 자료")));

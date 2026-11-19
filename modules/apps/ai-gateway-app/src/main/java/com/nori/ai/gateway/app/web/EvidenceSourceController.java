@@ -15,6 +15,8 @@ public final class EvidenceSourceController {
         if(!access.allowed()) {responses.assertLive(access);return access.response();}
         var entry=evidence.find(scope,jobId,evidenceId).orElseThrow(UniformNotFound::new);
         if(entry.sourceRef().startsWith("system://")&&!new com.nori.ai.gateway.core.scope.OwnedReference(scope.boundSystem(),entry.sourceRef()).belongsTo(scope.boundSystem()))throw new UniformNotFound();
+        var saved=evidence.findAnswerBody(scope,jobId,evidenceId);
+        if(saved.isPresent()){responses.assertLive(access);return Map.of("maskedText",saved.get());}
         if(entry.chunkId()==null||entry.revision()==null)throw new UniformNotFound();
         var reference=new EvidenceSourceRef(scope.boundSystem(),entry.sourceRef(),entry.chunkId(),entry.revision());
         var outcome=sources.read(scope,scope.perm(),reference);responses.assertLive(access);

@@ -48,7 +48,16 @@ public final class JobTerminalCommitter {
             var rows = jdbc.sql("SELECT j.owner_system,j.actor_ref,j.conversation_id,j.created_at,j.status,j.cancel_requested_at,j.request_message_id,j.seq FROM gw.job j JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system WHERE j.id=:id AND j.status IN ('QUEUED','RUNNING') AND (:queuedOnly=false OR j.status='QUEUED') FOR UPDATE OF j,c")
                 .param("queuedOnly",requested.terminalCause()==TerminalSpec.Cause.QUEUE_TIMEOUT)
                 .param("id",jobId).query((rs,n) -> new Object[]{rs.getString(1),rs.getString(2),rs.getString(3),rs.getTimestamp(4).toInstant(),rs.getString(5),rs.getTimestamp(6),rs.getString(7),rs.getLong(8)}).list();
-            if (rows.isEmpty()) return false;
+            if (rows.isEmpty()) {
+                // 재종결은 새 이벤트를 만들지 않지만 같은 소유 Job의 스냅샷 내용은 검증합니다.
+                requested.commitData().filter(d->d.snapshot().isPresent()).ifPresent(d->{
+                    boolean owned=jdbc.sql("SELECT EXISTS(SELECT 1 FROM gw.job j JOIN gw.conversation c ON c.id=j.conversation_id AND c.owner_system=j.owner_system WHERE j.id=:job AND j.actor_ref=:actor AND c.owner_actor_ref=:actor AND j.owner_system=:owner AND j.status NOT IN ('QUEUED','RUNNING'))")
+                        .param("job",jobId).param("actor",d.scope().actorRef().value()).param("owner",d.scope().boundSystem().name()).query(Boolean.class).single();
+                    if(!owned||!jobId.equals(d.jobId())||!jobId.equals(d.scope().requestId()))throw new IllegalArgumentException("재종결 소유 결속이 다릅니다");
+                    snapshots().assertSame(d.scope(),jobId,d.snapshot().orElseThrow());
+                });
+                return false;
+            }
             var row=rows.getFirst(); Instant policyNow=clock.instant();
             // 저장 정밀도로 내리기 전에 정책을 판정하여 180초 직후의 나노초 경계를 보존합니다.
             Instant now=policyNow.truncatedTo(ChronoUnit.MICROS);
@@ -71,7 +80,13 @@ public final class JobTerminalCommitter {
             if (spec.resultStatus()!=null) jdbc.sql("INSERT INTO gw.result(job_id,owner_system,status,error_code,payload,result_source_deps,created_at) VALUES (:id,:owner,:status,:error,CAST(:payload AS jsonb),CAST(:deps AS jsonb),:now)")
                 .param("id",jobId).param("owner",row[0]).param("status",spec.resultStatus().name()).param("error",spec.errorCode()==null?null:spec.errorCode().name())
                 .param("payload",encode(spec.resultPayload())).param("deps",encode(spec.resultSourceDeps())).param("now",Timestamp.from(now)).update();
-            data.ifPresent(value->storeData(jobId,row,value));
+            data.ifPresent(value->{
+                value.snapshot().ifPresent(snapshot->{
+                    if(!snapshot.answer().equals(com.nori.ai.gateway.core.registry.SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"))))throw new IllegalArgumentException("답변과 스냅샷 결속이 다릅니다");
+                    snapshots().save(value.scope(),jobId,snapshot);
+                });
+                storeData(jobId,row,value);
+            });
             event[0]=jdbc.sql("INSERT INTO gw.job_event(job_id,owner_system,type,payload,created_at,external_suppressed) VALUES (:id,:owner,:type,CAST(:payload AS jsonb),:now,:suppressed) RETURNING id")
                 .param("id",jobId).param("owner",row[0]).param("type",spec.eventType())
                 .param("payload",encode(eventPayload(jobId,spec))).param("now",Timestamp.from(now)).param("suppressed",spec.externalSuppressed()).query(Long.class).single();
@@ -117,6 +132,7 @@ public final class JobTerminalCommitter {
             for(String id:message.toolExecutionRefs())if(executions.find(scope,jobId,id).isEmpty()) {throw new IllegalArgumentException("실행 참조 결속이 다릅니다");}
         });
     }
+    private AnswerSnapshotRepository snapshots(){return new AnswerSnapshotRepository(jdbc,new TransactionTemplate(manager),clock);}
     private void stored(boolean stored) {
         if(!stored){throw new IllegalStateException("최종 자료를 저장할 수 없습니다");}
     }

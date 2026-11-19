@@ -20,13 +20,13 @@ import java.util.regex.Pattern;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Response Composer 서술(SPEC §14.5 설정된 작성 예산, §14.6 ②, §22.3). 입력은 Gateway 가 만든 결정론 근거 요약이고
+ * Response Composer 서술(SPEC §14.5 설정된 작성 예산, §14.6 ②, §22.3). 입력은 Gateway가 선택한 마스킹 근거 전체 단위이고
  * Source 원문은 user 메시지의 data 구획에만 둔다. 입력 조립 순서는 호출자 sanitizer 적용분 → {@link PromptReducer} → 관찰 → Client 내부 예산 assert 다.
  * 실패는 {@link ComposerOutcome} 으로만 돌려주며 대체 문장을 만들지 않는다. 사고 표지가 든 content 는 결과에 싣지 않는다.
  */
 public final class ComposerService {
     /** 재시도 요지(분류 재시도와 같은 형식, 직전 출력 원문은 다시 싣지 않는다). */
-    static final String RETRY_PREFIX = "직전 출력이 무효다(오류: ", RETRY_SUFFIX = "). 2~4문장 평문과 [eN] 인용 표기로만 다시 답한다.";
+    static final String RETRY_PREFIX = "직전 출력이 무효다(오류: ", RETRY_SUFFIX = "). 지정된 출력 형식과 토큰 상한을 지켜 다시 답한다.";
     private static final Pattern CITATION = Pattern.compile("\\[e(\\d{1,9})]");
     private static final Pattern NUMBER = Pattern.compile("\\d+(?:\\.\\d+)?");
 
@@ -63,10 +63,11 @@ public final class ComposerService {
     }
 
     /**
-     * {@code narrative} 는 {@link ComposerOutcome#COMPOSED} 일 때만 있다. 위반 수는 기록용이며 차단하지 않는다(AC-22-LIVE).
+     * {@code narrative} 는 {@link ComposerOutcome#COMPOSED} 일 때만 있다. 사실 답변의 answer는 결정적 문장 대조를 통과한 구조이며 일반 도움말은 기존 narrative를 유지한다.
      * {@code reductionSteps} 는 적용한 축소 단계와 전후 토큰 수(원문 없음)다.
      */
-    public record Result(ComposerOutcome outcome, Optional<String> narrative, int calls, int citationViolations, int numberViolations, List<PromptReducer.Step> reductionSteps) {
+    public record Result(ComposerOutcome outcome, Optional<String> narrative, int calls, int citationViolations, int numberViolations, List<PromptReducer.Step> reductionSteps,Optional<com.nori.ai.gateway.core.result.GroundedAnswer> answer) {
+        public Result(ComposerOutcome outcome,Optional<String> narrative,int calls,int citations,int numbers,List<PromptReducer.Step> steps){this(outcome,narrative,calls,citations,numbers,steps,Optional.empty());}
         public Result {
             Objects.requireNonNull(outcome, "outcome"); Objects.requireNonNull(narrative, "narrative"); reductionSteps = List.copyOf(reductionSteps);
             if (outcome == ComposerOutcome.NOT_INVOKED || narrative.isPresent() != (outcome == ComposerOutcome.COMPOSED)) throw new IllegalArgumentException("서술 결과 조합이 잘못되었습니다");
@@ -83,9 +84,21 @@ public final class ComposerService {
     private final LlmCallObserver observer;
     private final LlmCallAudit audit;
     private final String systemPrompt;
+    private final SentenceEvidenceCheck sentenceCheck;
+    private final String configurationSha256;
+    public String configurationSha256(){return configurationSha256;}
 
     public ComposerService(InferenceClient inference, PromptReducer reducer, TokenBudgetPolicy policy, AnswerTokenCounting answers, ExpiryCheckpoint expiry,
             LlmCallObserver observer, LlmCallAudit audit, String systemPrompt) {
+        this(inference,reducer,policy,answers,expiry,observer,audit,systemPrompt,text->{throw new IllegalStateException("문장 분석기가 없습니다");});
+    }
+    public ComposerService(InferenceClient inference, PromptReducer reducer, TokenBudgetPolicy policy, AnswerTokenCounting answers, ExpiryCheckpoint expiry,
+            LlmCallObserver observer,LlmCallAudit audit,String systemPrompt,com.nori.ai.gateway.core.knowledge.SearchLanguage language) {
+        this(inference,reducer,policy,answers,expiry,observer,audit,systemPrompt,language,com.nori.ai.gateway.core.result.AnswerSnapshot.sha(systemPrompt+"\n"+policy.budget(CallType.COMPOSER)+"\n"+policy.evidenceTokens()));
+    }
+    public ComposerService(InferenceClient inference,PromptReducer reducer,TokenBudgetPolicy policy,AnswerTokenCounting answers,ExpiryCheckpoint expiry,LlmCallObserver observer,LlmCallAudit audit,String systemPrompt,com.nori.ai.gateway.core.knowledge.SearchLanguage language,String configurationSha256) {
+        this.configurationSha256=configurationSha256;
+        this.sentenceCheck=new SentenceEvidenceCheck(language);
         this.inference = Objects.requireNonNull(inference, "inference");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
         this.budget = Objects.requireNonNull(policy, "policy").budget(CallType.COMPOSER);
@@ -106,13 +119,13 @@ public final class ComposerService {
         var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> {
             if(input.selectedData().isEmpty())return messages(value,input.evidence(),input.coverage());
             var user=SchemaContracts.JSON.createObjectNode().put("question",value.currentQuestion());user.set("data",SchemaContracts.JSON.readTree(input.selectedData().get()));
-            return List.of(new ChatMessage(ChatMessage.Role.SYSTEM,value.systemPrompt()+"\n"+value.boundSystemConstraint()),new ChatMessage(ChatMessage.Role.USER,ClassificationService.canonical(user)));
+            return List.of(new ChatMessage(ChatMessage.Role.SYSTEM,value.systemPrompt()+"\n"+value.boundSystemConstraint()),new ChatMessage(ChatMessage.Role.USER,com.nori.ai.gateway.core.evidence.EvidenceJson.write(user)));
         });
         if (!reduction.withinBudget()) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         String data = reduction.messages().getLast().content();
         // 이후 검색 단계가 선택한 근거도 설정한 상한을 넘겨 전송할 수 없습니다. 질문은 줄이지 않습니다.
         try {
-            String evidence = ClassificationService.canonical(SchemaContracts.JSON.readTree(data).path("data"));
+            String evidence = input.selectedData().orElseGet(()->ClassificationService.canonical(SchemaContracts.JSON.readTree(data).path("data")));
             if (answers.count(evidence) > evidenceTokens) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         } catch (IllegalArgumentException uncountable) { return failed(ComposerOutcome.LLM_UNAVAILABLE, 0, reduction.steps()); }
         List<ChatMessage> messages = reduction.messages();
@@ -132,7 +145,16 @@ public final class ComposerService {
             calls++;
             if (outcome instanceof InferenceClient.CallFailed) return failed(ComposerOutcome.LLM_UNAVAILABLE, calls, reduction.steps());
             var completed = (InferenceClient.Completed) outcome;
-            if (failure == null) return composed(completed.content(), input.evidence().size(), data, calls, reduction.steps());
+            if (failure == null) {
+                if(input.selectedData().isPresent()) {
+                    var values=SchemaContracts.JSON.readTree(input.selectedData().get()).path("evidence").deepCopy();
+                    for(var value:values){((ObjectNode)value).remove("id");((ObjectNode)value).remove("number");}
+                    var units=SchemaContracts.JSON.convertValue(values,new tools.jackson.core.type.TypeReference<List<com.nori.ai.gateway.core.workflow.EvidenceUnit>>(){});
+                    var checked=sentenceCheck.check(completed.content(),units);
+                    return new Result(ComposerOutcome.COMPOSED,Optional.of(checked.text()),calls,0,0,reduction.steps(),Optional.of(checked));
+                }
+                return composed(completed.content(), input.evidence().size(), data, calls, reduction.steps());
+            }
             List<ChatMessage> retry = new ArrayList<>(reduction.messages());
             retry.add(new ChatMessage(ChatMessage.Role.USER, RETRY_PREFIX + AnswerCheck.retryCode(failure) + RETRY_SUFFIX));
             messages = List.copyOf(retry);

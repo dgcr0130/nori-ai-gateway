@@ -45,7 +45,16 @@ abstract class LlmStubSupport extends P09QueueSupport {
 
     protected LlmScriptRegistry scripts() { return context.getBean(LlmScriptRegistry.class); }
     protected static TestHookRegistry.LlmReply classify(String wire) { return new TestHookRegistry.LlmReply(CallType.CLASSIFY, wire, "stop", null, Math.max(40, answerTokens(wire))); }
-    protected static TestHookRegistry.LlmReply compose(String text) { return new TestHookRegistry.LlmReply(CallType.COMPOSER, text, "stop", null, Math.max(30, answerTokens(text))); }
+    protected static TestHookRegistry.LlmReply compose(String text) {
+        String content=composeWire(text);
+        return new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,Math.max(30,answerTokens(content)));
+    }
+    protected static String composeWire(String text) {
+        var matcher=java.util.regex.Pattern.compile("\\[e([0-9]+)]").matcher(text);var citations=new ArrayList<Integer>();
+        while(matcher.find())citations.add(Integer.parseInt(matcher.group(1)));
+        if(citations.isEmpty()||text.contains("<think>")||text.contains("</think>"))return text;
+        return SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(Map.of("text",text.replaceAll("\\[e[0-9]+]",""),"citations",citations))));
+    }
     /**
      * 분류 wire v3 고정 fixture(SPEC §28.3): {@code n} 은 기존 고정 workflow 경로를 그대로 쓰는 근거 — KQ=[N], LQ=[S], INC=[S,H,I](선택 git 단계 포함),
      * GQ·UNS=[] — 이고 {@code a}=B 다. 다른 근거·표현 길이는 {@link #wire(String,String,String,String,String,java.util.List,String)} 로 명시한다.

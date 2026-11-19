@@ -34,6 +34,6 @@ public final class EvidenceSelection {
             var unit=units.get(i);var item=SchemaContracts.JSON.valueToTree(unit);
             ((tools.jackson.databind.node.ObjectNode)item).put("id","e"+(i+1)).put("number",i+1);array.add(item);
         }
-        return SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(data));
+        return com.nori.ai.gateway.core.evidence.EvidenceJson.write(data);
     }
 }

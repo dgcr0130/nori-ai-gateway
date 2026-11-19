@@ -211,4 +211,12 @@ class F2JobChecksTest {
             assertThatThrownBy(() -> F2LiveSamples.measurement(List.of(), List.of())).hasMessage("LIVE_SAMPLES_EMPTY");
         } finally { F2LiveSamples.clear(); }
     }
+    @org.junit.jupiter.api.Test void narrativeReadsStructuredFactAnswerAndLegacyGeneralHelpWithoutChangingText() throws Exception {
+        var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+        for(String answer:List.of("{\"kind\":\"PARTIAL\",\"text\":\"설비 상태[1]\",\"citations\":[],\"sentences\":[]}","\"도움말\"")) {
+            var response=mapper.readTree("{\"result\":{\"payload\":{\"answer\":"+answer+"}}}");
+            assertThat(new String(F1JobChecks.narrative(response),java.nio.charset.StandardCharsets.UTF_8)).isEqualTo(answer.startsWith("{")?"설비 상태[1]":"도움말");
+        }
+    }
+
 }

@@ -70,7 +70,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
     }
 
     @Test @ExtendWith(OutputCaptureExtension.class) void thinkMarkersFailBothAttemptsWithoutBeingStoredOrLoggedAndARecoveredRetryComposes(CapturedOutput output) throws Exception {
-        String marked = "</think>" + THINK_MARK + " 설비는 정상이다[e1].";
+        String marked = "</think>" + THINK_MARK + " 설비 상태[e1].";
         var failed = admitScripted("think-twice", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose(marked), compose(marked)), Optional.empty(), null);
         assertThat(terminal(failed)).isEqualTo("PARTIAL");
         assertThat(result(failed.jobId())).containsEntry("status", "PARTIAL").containsEntry("error_code", "LLM_UNAVAILABLE");
@@ -78,11 +78,11 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         assertThat(payload(failed.jobId()).path("blocks")).isNotEmpty();
         assertThat(allStored(failed.jobId())).doesNotContain(THINK_MARK, "think>");
         assertThat(output.getAll()).doesNotContain(THINK_MARK);
-        var recovered = admitScripted("think-once", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("<think>" + THINK_MARK), compose("설비는 정상이다[e1].")), Optional.empty(), null);
+        var recovered = admitScripted("think-once", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("<think>" + THINK_MARK), compose("설비 상태[e1].")), Optional.empty(), null);
         assertThat(terminal(recovered)).isEqualTo("SUCCEEDED");
-        assertThat(payload(recovered.jobId()).path("answer").asString()).isEqualTo("설비는 정상이다[e1].");
+        assertThat(payload(recovered.jobId()).path("answer").path("text").asString()).isEqualTo("설비 상태.[1]");
         assertThat(allStored(recovered.jobId())).doesNotContain(THINK_MARK);
-        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:c AND role='assistant'").param("c", recovered.conversationId()).query(String.class).single()).isEqualTo("설비는 정상이다[e1].");
+        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:c AND role='assistant'").param("c", recovered.conversationId()).query(String.class).single()).isEqualTo("설비 상태.[1]");
     }
 
     @Test void sourceTextReachesTheComposerPromptOnlyAfterMaskingInTheActualPath() throws Exception {
