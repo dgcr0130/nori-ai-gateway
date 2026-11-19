@@ -17,11 +17,13 @@ public final class BodySystemFieldGuard {
         .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
     ReplayableRequest read(HttpServletRequest request) throws IOException {
-        byte[] body = request.getInputStream().readAllBytes();
+        boolean feedback=RouteClassifier.isFeedback(request);
+        byte[] body = feedback?request.getInputStream().readNBytes(65537):request.getInputStream().readAllBytes();
+        if(feedback&&body.length>65536)throw com.nori.ai.gateway.core.feedback.FeedbackFailure.invalid();
         JsonNode json = null;
         if (body.length > 0) {
             try { json = JSON.readTree(body); }
-            catch (RuntimeException failure) { throw new ActorAssertionVerifier.Rejected(com.nori.ai.gateway.persistence.audit.auth.AuthRejectionReason.ACTOR_ASSERTION_MISSING); }
+            catch (RuntimeException failure) { if(feedback)throw com.nori.ai.gateway.core.feedback.FeedbackFailure.invalid();throw new ActorAssertionVerifier.Rejected(com.nori.ai.gateway.persistence.audit.auth.AuthRejectionReason.ACTOR_ASSERTION_MISSING); }
         }
         return new ReplayableRequest(request,body,json);
     }

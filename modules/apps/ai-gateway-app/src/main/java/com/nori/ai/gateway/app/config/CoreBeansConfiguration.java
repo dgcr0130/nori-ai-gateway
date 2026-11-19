@@ -13,6 +13,11 @@ import java.util.*;
 /** Spring에 의존하지 않는 Core의 빈 등록 책임을 이 설정에 모읍니다. */
 @Configuration(proxyBeanMethods = false)
 public class CoreBeansConfiguration {
+    @Bean @org.springframework.context.annotation.Lazy
+    com.nori.ai.gateway.core.feedback.FeedbackService feedbackService(com.nori.ai.gateway.core.feedback.FeedbackStore store,com.nori.ai.gateway.core.sanitize.ContentSanitizer sanitizer,com.nori.ai.gateway.core.knowledge.SearchLanguage language,
+            org.springframework.beans.factory.ObjectProvider<com.nori.ai.gateway.core.port.InferenceClient> inference,com.nori.ai.gateway.app.knowledge.FeedbackKnowledge knowledge,org.springframework.beans.factory.ObjectProvider<com.nori.ai.gateway.app.job.recovery.ReadinessGate> readiness) {
+        return new com.nori.ai.gateway.core.feedback.FeedbackService(store,sanitizer,language,text->{if(!readiness.getObject().startupReady())throw new com.nori.ai.gateway.core.feedback.FeedbackFailure(503,"KNOWLEDGE_UNAVAILABLE");var client=inference.getIfAvailable();if(client==null)throw new com.nori.ai.gateway.core.feedback.FeedbackFailure(503,"KNOWLEDGE_UNAVAILABLE");var vectors=client.embed(List.of(text));if(vectors==null||vectors.size()!=1)throw new com.nori.ai.gateway.core.feedback.FeedbackFailure(503,"KNOWLEDGE_UNAVAILABLE");return vectors.getFirst();},knowledge::refresh);
+    }
     @Bean com.nori.ai.gateway.core.knowledge.SearchSettings searchSettings(org.springframework.core.env.Environment env) {
         return new com.nori.ai.gateway.core.knowledge.SearchSettings(env.getProperty("ai.gateway.search.semanticCandidates",Integer.class,20),env.getProperty("ai.gateway.search.keywordCandidates",Integer.class,20),
             env.getProperty("ai.gateway.search.identifierCandidates",Integer.class,20),env.getProperty("ai.gateway.search.rrfK",Integer.class,60),env.getProperty("ai.gateway.search.evidenceLimit",Integer.class,6),

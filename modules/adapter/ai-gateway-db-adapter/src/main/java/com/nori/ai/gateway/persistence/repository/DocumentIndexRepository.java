@@ -40,7 +40,7 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
             for(var document:bundle.documents()) {
                 sql(scope,"INSERT INTO kn.document(system_id,id,index_set_id,bucket,object_key,revision,title,permissions,extraction_issues) VALUES(:system,:id,:set,:bucket,:key,:revision,:title,CAST(:permissions AS jsonb),CAST(:issues AS jsonb))")
                     .param("id",document.id()).param("set",bundle.id()).param("bucket",document.bucket()).param("key",document.objectKey()).param("revision",document.revision()).param("title",document.title())
-                    .param("permissions",json(document.permissions())).param("issues",json(document.issues())).update();
+                    .param("permissions",json(ordered(document.permissions()))).param("issues",json(document.issues())).update();
                 for(var parent:document.parents()) {
                     sql(scope,"INSERT INTO kn.parent_chunk(system_id,id,document_id,location,header,body_masked,body_sha256) VALUES(:system,:id,:document,CAST(:location AS jsonb),:header,:body,:sha)")
                         .param("id",parent.id()).param("document",document.id()).param("location",json(parent.location())).param("header",parent.header()).param("body",parent.bodyMasked()).param("sha",parent.bodySha256()).update();
@@ -74,16 +74,24 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
         return new Bundle(bundleId,settings.embeddingModel(),settings.dimension(),settings.configSha256(),complete,List.of());
     }
     @Override public void activate(VerifiedSystemScope scope,Bundle bundle) {
+        activate(scope,bundle,null);
+    }
+    @Override public void activate(VerifiedSystemScope scope,Bundle bundle,Set<UUID> preparedAnswerIds) {
         tx.executeWithoutResult(status->{
+            sql(scope,"SELECT pg_advisory_xact_lock(hashtextextended(:system,806008))").query((rs,n)->true).single();
+            var current=new HashSet<>(sql(scope,"SELECT id FROM kn.verified_answer WHERE system_id=:system AND active FOR UPDATE").query(UUID.class).list());
+            if(preparedAnswerIds!=null&&!preparedAnswerIds.containsAll(current))throw new IllegalStateException("색인 준비 중 새 검토 답변이 확정되었습니다");
             var state=sql(scope,"SELECT state FROM kn.index_set WHERE system_id=:system AND id=:id AND embedding_model=:model AND embedding_dimension=:dimension AND config_sha256=:sha FOR UPDATE")
                 .param("id",bundle.id()).param("model",bundle.embeddingModel()).param("dimension",bundle.dimension()).param("sha",bundle.configSha256()).query(String.class).single();
             if(!state.equals("BUILDING")) throw new IllegalStateException("준비 중인 색인 묶음이 아닙니다");
             sql(scope,"UPDATE kn.index_set SET state='INACTIVE' WHERE system_id=:system AND state='ACTIVE'").update();
             sql(scope,"UPDATE kn.verified_answer SET active=false WHERE system_id=:system AND active").update();
             for(var answer:bundle.answers()) {
+                // 준비 후 재개방된 답변을 다시 활성화하지 않습니다.
+                if(!current.contains(answer.id()))continue;
                 validateVector(answer.embedding(),bundle.dimension());
                 if(sql(scope,"UPDATE kn.verified_answer SET active=true,embedding_model=:model,embedding_dimension=:dimension,config_sha256=:sha,embedding=CAST(:embedding AS vector),permissions=CAST(:permissions AS jsonb) WHERE system_id=:system AND id=:id AND question_masked=:question")
-                        .param("id",answer.id()).param("question",answer.questionMasked()).param("model",bundle.embeddingModel()).param("dimension",bundle.dimension()).param("sha",bundle.configSha256()).param("embedding",json(answer.embedding())).param("permissions",json(answer.permissions())).update()!=1)
+                        .param("id",answer.id()).param("question",answer.questionMasked()).param("model",bundle.embeddingModel()).param("dimension",bundle.dimension()).param("sha",bundle.configSha256()).param("embedding",json(answer.embedding())).param("permissions",json(ordered(answer.permissions()))).update()!=1)
                     throw new IllegalStateException("검증 답변이 변경되었습니다");
             }
             // DOCUMENT 문항은 정답 위치 대신 보완 대상 revision을 비교합니다. 영구 스냅샷은 손대지 않습니다.
@@ -105,6 +113,7 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
     }
     private static void validateVector(float[] vector,int dimension) { if(vector.length!=dimension)throw new IllegalArgumentException("벡터 차원이 다릅니다");for(float value:vector)if(!Float.isFinite(value))throw new IllegalArgumentException("벡터 값이 잘못되었습니다"); }
     private static String json(Object value) { return SchemaContracts.JSON.writeValueAsString(value); }
+    private static List<String> ordered(Set<String> values){return values.stream().sorted((a,b)->Arrays.compareUnsigned(a.getBytes(java.nio.charset.StandardCharsets.UTF_8),b.getBytes(java.nio.charset.StandardCharsets.UTF_8))).toList();}
     private static float[] vector(String value) { return SchemaContracts.JSON.readValue(value,float[].class); }
     private static DocumentLocation location(String value) { return SchemaContracts.JSON.readValue(value,DocumentLocation.class); }
     private static List<DocumentLocation> locations(String value) { return SchemaContracts.JSON.readValue(value,new tools.jackson.core.type.TypeReference<List<DocumentLocation>>(){}); }

@@ -9,6 +9,7 @@ public final class ReadinessGate implements ApplicationRunner,Ordered {
     public record RecoveryCompleted(){}
     private final List<ReadinessPrecondition> preconditions;private final ApplicationEventPublisher publisher;
     private volatile boolean ready;
+    private final Set<String> knowledgeFailures=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public ReadinessGate(List<ReadinessPrecondition> preconditions,ApplicationEventPublisher publisher){
         this.preconditions=preconditions.stream().sorted(Comparator.comparingInt(ReadinessPrecondition::order)).toList();this.publisher=publisher;
         var routers=this.preconditions.stream().filter(p->p instanceof RecoveryModeRouter).toList();
@@ -23,5 +24,9 @@ public final class ReadinessGate implements ApplicationRunner,Ordered {
         ready=true;publisher.publishEvent(new RecoveryCompleted());
     }
     public boolean ready(){return ready;}
+    public boolean admissionReady(){return ready&&knowledgeFailures.isEmpty();}
+    public boolean startupReady(){return ready;}
+    public void knowledgeUnavailable(String system){knowledgeFailures.add(system);}
+    public void knowledgeRestored(String system){knowledgeFailures.remove(system);}
     public void down(){ready=false;}
 }

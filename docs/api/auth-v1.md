@@ -24,7 +24,7 @@ POST `/v1/query`, `/v1/conversations/{id}/messages`, `/v1/analyses`는 dlg `[A-Z
 
 ## 거절 감사와 응답
 
-기존 audit_event에 AUTH_REJECTED만 추가합니다. token missing/invalid는 owner/actor 모두 SQL NULL, 서비스 검증 뒤 단언 실패(sys 불일치 포함)는 owner만, 완전 검증 뒤 Body 위반은 owner+actor입니다. raw claim/토큰/JWS/dlg/Body/Throwable/JSON payload는 감사에 전달하지 않습니다. 서버 UUID, 공통 Clock의 마이크로초 내림 시각, 닫힌 사유와 401/403 status만 기록합니다. 일반 9개 저장소와 감사 조회는 기존 scope 격리를 유지하므로 신원 NULL 행을 노출하지 않습니다. 감사 자체 90일 보존과 NULL 포함 purge를 유지합니다.
+인증 거절은 기존 audit_event의 AUTH_REJECTED에 기록합니다. token missing/invalid는 owner/actor 모두 SQL NULL, 서비스 검증 뒤 단언 실패(sys 불일치 포함)는 owner만, 완전 검증 뒤 Body 위반은 owner+actor입니다. raw claim/토큰/JWS/dlg/Body/Throwable/JSON payload는 감사에 전달하지 않습니다. 서버 UUID, 공통 Clock의 마이크로초 내림 시각, 닫힌 사유와 401/403 status만 기록합니다. 일반 12개 저장소와 감사 조회는 기존 scope 격리를 유지하므로 신원 NULL 행을 노출하지 않습니다. 검토 확정의 REVIEW_RESOLVED 감사도 원문 없이 검토 트랜잭션에 함께 저장합니다. 감사 자체 90일 보존과 NULL 포함 purge를 유지합니다.
 
 감사 INSERT 및 실제 commit 성공 뒤에만 원래 401/403을 응답합니다. 저장·commit·연결·timeout 실패는 후속 처리 없이 HTTP 503, `Retry-After: 1`, `Content-Type: application/json`과 다음 두 필드만 반환합니다.
 
@@ -33,6 +33,8 @@ POST `/v1/query`, `/v1/conversations/{id}/messages`, `/v1/analyses`는 dlg `[A-Z
 ```
 
 오류 원문·SQL·주소·자격·업무 error enum은 응답하지 않습니다. 재시도·로그 대체·실패 후 chain 진입은 없습니다. 인증 거절 시 대화·메시지·Job·Source·Tool·LLM·캐시 조회는 0이어야 합니다.
+
+006의 피드백·검토 네 경로는 같은 인증 필터를 거치며 오류 외피에 code를 더한 `{code,message,requestId}`를 사용합니다. 이 경로의 본문만 64KiB로 제한하고 잘못된 JSON·본문 초과는 400입니다. 그 밖 경로의 위 응답 형식은 유지합니다. 검토 권한과 근거 권한·커서의 계약은 [Gateway API](gateway-api-v1.md)의 피드백과 검토 절을 따릅니다. 시험 결과는 중앙 006 PLAN의 phase 8 기록에서 확인합니다.
 
 ## 시험용 서명과 pdg
 

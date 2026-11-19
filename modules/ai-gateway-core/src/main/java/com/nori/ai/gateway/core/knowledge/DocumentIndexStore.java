@@ -11,5 +11,6 @@ public interface DocumentIndexStore {
     void saveBuilding(VerifiedSystemScope scope, DocumentCorpus.Bundle bundle);
     DocumentCorpus.Bundle load(VerifiedSystemScope scope, UUID bundleId);
     void activate(VerifiedSystemScope scope, DocumentCorpus.Bundle bundle);
+    default void activate(VerifiedSystemScope scope,DocumentCorpus.Bundle bundle,Set<UUID> preparedAnswerIds){activate(scope,bundle);}
     Optional<String> currentRevision(VerifiedSystemScope scope, String bucket, String objectKey);
 }

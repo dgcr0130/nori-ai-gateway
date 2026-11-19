@@ -14,10 +14,12 @@ import java.nio.charset.StandardCharsets;
 
 /** 결과 항목의 경계를 유지하여 선택과 대조가 서로 다른 본문을 보지 않게 합니다. */
 public final class GroundingInputs implements WorkflowGrounding.Inputs {
+    private final com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary;
     private final GatewaySystemsProperties systems;private final CapabilityRegistry registry;private final ContentSanitizer sanitizer;private final Map<String,String> gitProjects;
     public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer){this(systems,registry,sanitizer,Map.of());}
-    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects){this.systems=systems;this.registry=registry;this.sanitizer=sanitizer;this.gitProjects=Map.copyOf(gitProjects);}
-    @Override public Map<String,String> glossary(JobContext job){return systems.systems().get(job.scope().boundSystem().name()).glossary();}
+    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects){this(systems,registry,sanitizer,gitProjects,(scope,initial)->initial);}
+    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){this.systems=systems;this.registry=registry;this.sanitizer=sanitizer;this.gitProjects=Map.copyOf(gitProjects);this.glossary=glossary;}
+    @Override public Map<String,String> glossary(JobContext job){return glossary.current(job.scope(),systems.systems().get(job.scope().boundSystem().name()).glossary());}
     @Override public List<String> permissions(JobContext job,String capabilityId) {
         var manifest=registry.find(job.scope(),capabilityId).orElse(null);if(manifest==null)return List.of();
         var system=systems.systems().get(job.scope().boundSystem().name());var result=new LinkedHashSet<String>();

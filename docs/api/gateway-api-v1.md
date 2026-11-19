@@ -19,6 +19,10 @@
 | `GET /v1/analyses/{jobId}/evidence/{evidenceId}/source` | 200, 이용 가능한 원문의 `maskedText` |
 | `GET /v1/analyses/{jobId}/blocks/{blockId}/export` | 200, 저장 결과에서 식별한 블록 |
 | `GET /v1/audit/jobs/{jobId}` | 200, 본인·boundSystem Job의 보존 기간 내 감사 |
+| `PUT /v1/answers/{answerId}/feedback` | 200, `{feedbackId,version,state}`; answerId는 Job ID |
+| `GET /v1/reviews?state=OPEN&after=&limit=20` | 200, `{items,nextAfter}`; 현재 검토 권한·근거 권한 필수 |
+| `GET /v1/reviews/{feedbackId}` | 200, 평가·영구 스냅샷·기존 조치·활성 `questionCase` 또는 null |
+| `POST /v1/reviews/{feedbackId}/resolve` | 200, `{feedbackId,version,state}` |
 
 접수 body는 `query`, 선택 `conversationId`, `context`, `resourceRefs`, `options`를 받습니다. 알려진 실행 입력만 snapshot에 보존하며 JWS·contextRef·dlg·HTTP header·클라이언트 신원은 포함하지 않습니다. `context.timezone`, `context.referenceTime`, 선택 `context.timeWindow{from,to}`는 기존 날짜 문법과 timezone·offset·나노초를 검증하고 원래 문자열을 보존합니다. `resourceRefs`의 각 항목은 `{type,ref}`이며 기존 `ResourceRef`로 실행 입력에 투영합니다. `options.allowTools/allowKnowledge`는 부재·null·boolean을 구분하고 미제공을 기본 true/false로 바꾸지 않습니다. 알려진 선택 필드의 부재·명시 null·값을 Job마다 독립적으로 보존합니다. `sourceVersions`는 새 wire 계약으로 추가하지 않습니다.
 
@@ -55,3 +59,28 @@ terminal 상태·이벤트 집계의 정본은 승인 Spec §5.4의 표입니다
 문장은 1~20개, 문장 text는 1~1000 코드포인트·줄바꿈 금지, 문장별 인용은 1~6개입니다. 잘못된 인용·수치·식별자·이름을 포함한 문장은 제거합니다. 일부 제거 또는 통과 문장이 PARTIAL·STALE·CONFLICT 근거를 인용하면 kind는 PARTIAL입니다. 고정 문구는 그 순서로 각각 한 번 공개 text 끝에만 붙이고 sentences에는 넣지 않습니다. 통과 문장 0개나 불충분은 `{kind:"NO_EVIDENCE",text:"근거 없음",citations:[],sentences:[]}`입니다. 정상 자료 부족은 EMPTY·SUCCEEDED이며 장애·부분·절삭은 실제 집계를 보존합니다. 생성 장애는 블록·근거가 모두 없으면 FAILED, 하나라도 있으면 PARTIAL이며 errorCode는 LLM_UNAVAILABLE입니다. 미검증 답변·스냅샷은 저장하지 않습니다.
 
 공개 answerId로 사용하는 식별자는 기존 Job ID입니다. 내부 스냅샷 ID를 API·SSE·내보내기·감사에 노출하지 않습니다. 마스킹 질문·답변·근거 본문과 SHA-256·위치·권한·설정 지문을 영구 보존하고 같은 Job 재종결은 같은 내용 해시만 재사용합니다. 다른 해시는 무결성 오류입니다. 스냅샷 저장 실패는 결과·근거·종결 감사·이벤트를 함께 롤백하며 commit 뒤에만 완료 이벤트를 발행합니다. 대화 삭제 후 스냅샷은 남지만 일반 열람 경로는 모두 404입니다. 시험 결과는 중앙 006 PLAN의 해당 phase 기록에서 확인합니다.
+
+## 피드백과 검토
+
+위 네 API도 서비스 인증과 새 사용자 단언을 사용하며 `dlg`를 받지 않습니다. 요청 본문은 UTF-8 64KiB 이하입니다. 문자열 길이는 Unicode 코드포인트로 계산하고 저장 전에 마스킹합니다. 오류 외피는 `{code,message,requestId}`이며 입력 오류 400, 검토 권한 부족 403, 없거나 열람할 수 없는 ID 404, 버전 충돌 409 `REVIEW_CONFLICT`, 스냅샷 없는 소유 Job 409 `ANSWER_NOT_READY`, DB 실패·확정 전 임베딩 장애 503입니다. 기존 API의 오류 외피는 유지합니다.
+
+피드백 body는 `{rating:"UP"|"DOWN",comment:"0~2000자"}`입니다. 살아 있는 본인 대화에서 현재 열람할 수 있는 답변에만 평가를 씁니다. 같은 본문 재전송은 ID·version을 유지합니다. 최초 UP·빈 지적은 RESOLVED, DOWN 또는 지적이 있으면 OPEN입니다. 확정·기각 후 본문을 바꾸면 version을 1 늘려 OPEN으로 다시 열고 이전 검토 이력을 보존하며 이전 검증 답변·문항을 비활성화합니다. 대화 삭제 후 일반 평가 쓰기는 404이고 검토자는 영구 스냅샷을 계속 검토할 수 있습니다.
+
+검토 목록·상세·조치는 config의 `reviewPermission`과 스냅샷 각 근거의 모든 permissions를 현재 단언에 요구합니다. 근거 권한이 빠진 항목은 목록에서 제외하고 상세·조치에서는 404입니다. 목록은 필터 뒤 createdAt·feedbackId 오름차순으로 정렬하고 limit은 1~100(기본 20)입니다. 서버 커서는 시스템·state에 결속한 마지막 항목의 시각·공개 피드백 ID를 담습니다. 형식·시스템·state 불일치는 400이며 마지막 쪽과 빈 목록의 nextAfter는 null입니다. 재기동 후 커서는 첫 쪽부터 발급합니다. items는 `{feedbackId,version,state,rating,comment,createdAt,updatedAt}`입니다.
+
+상세는 `{feedback,answerId,question,answer,evidence,reviews,questionCase}`입니다. feedback은 목록 항목과 같고 reviews는 `{version,reviewerRef,cause,action,createdAt}` 이력입니다. questionCase는 현재 활성 문항 하나 또는 null이며 문항은 `id,systemId,question,answerable,expectedFacts,evidenceLocations,context,permissions,origin,feedbackId,reviewVersion,documentTargets,predecessorId`를 보존합니다. 검토 문항의 origin은 FEEDBACK, predecessorId는 null입니다. 이 API는 문항 저장·활성 상태를 제공하며 정답률 채점은 별도 평가 기능의 책임입니다.
+
+재발 문항의 질문은 1~2000자 계약을 적용합니다. 이를 넘는 기존 질문은 자르거나 질문 접수 규칙을 바꾸지 않으며, 문항을 생성하는 문서 조치는 400으로 거절합니다. 문항 없는 메모·기각 처리는 같은 제한을 추가하지 않습니다.
+
+RETRIEVAL·ANSWER의 locations는 정답 문항에 그대로 저장되므로 현재 자식 블록의 줄 범위를 사용합니다. 부모 전체 줄 범위를 정답 위치로 바꾸어 저장하지 않습니다. DOCUMENT의 보완 대상은 현재 부모 위치도 사용할 수 있습니다.
+
+resolve body는 `{version,cause,action}`이며 OPEN인 제출 version 하나만 확정합니다. 성공하면 해당 version의 review와 원문 없는 REVIEW_RESOLVED 감사를 저장하고 feedback.version을 1 늘립니다.
+
+| cause | action과 저장 효과 |
+|---|---|
+| DOCUMENT | `{note,locations}`; note 1~2000자·문서 위치 0~6개. 위치 0개면 문항 없음, 위치가 있으면 false 문항의 documentTargets로만 사용하고 사실·정답 위치는 빈 배열입니다. |
+| RETRIEVAL | `{terms,correctAnswer,expectedFacts,locations}`; terms 1~20개(키 1~64자·풀이 1~256자), 문서 위치 1~6개·사실 1~20개(각 1~256자). 용어·검증 답변·true 문항을 저장합니다. |
+| ANSWER | `{correctAnswer,expectedFacts,locations}`; RETRIEVAL과 같은 답변·사실·위치 규칙으로 검증 답변·true 문항을 저장합니다. |
+| REJECT | `{note}`; note 1~2000자. REJECTED로 바꾸며 검색·문항을 만들지 않습니다. |
+
+실시간 근거 전용 스냅샷은 모든 cause에서 `{note}`만 받습니다. 문서 조치는 현재 문서 위치·권한·revision과 사실 본문을 검증합니다. correctAnswer는 `{sentences:[{text,citations:[locations 번호]}]}`이며 기존 문장 대조기에 그대로 넣습니다. 1~20문장·문장 1~1000자·줄바꿈 금지·인용 1~6개를 적용하고 번호/구조 오류나 한 문장이라도 제거되면 400입니다. 위치 확인과 임베딩은 잠금 전에 끝내고 저장 시 version·현재 묶음/revision을 다시 검사합니다. review·version·답변·사전·문항·감사는 한 트랜잭션이며 실패하면 모두 취소합니다. 확정 DB 용어는 초기 config 값보다 우선하고 기존 설정 지문을 바꾸지 않습니다. DB 확정 후 평가·검토 응답은 커밋된 {feedbackId,version,state}의 200을 유지합니다. 메모리 반영 성공 중에는 접수를 닫지 않으며, 겹친 커밋은 최신 DB 상태를 다시 투영하고 실패로 응답하지 않습니다. 실제 메모리 반영 실패 때만 DB version으로 재구성될 때까지 새 질문 접수를 503으로 닫습니다. readiness 헬스와 이미 접수된 Job의 디스패치는 기동 준비 상태를 그대로 사용합니다. DOCUMENT 문항은 대상 문서 revision 변경·삭제 뒤 기동 활성화 트랜잭션에서 비활성화합니다. 원본 문서는 이 API가 수정하지 않습니다. 시험 결과는 중앙 006 PLAN의 phase 8 기록에서 확인합니다.

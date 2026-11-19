@@ -76,7 +76,7 @@ public final class JobAdmissionService {
             control.lockControl();
             // READ COMMITTED의 새 문장 snapshot으로 직전 커밋을 먼저 확인합니다.
             var existing=lookup.find(scope,request.idempotencyKey(),digest);if(existing.isPresent())return existing.get();
-            if(!recovery.ready())throw new Rejected(503,"INFERENCE_UNAVAILABLE",60);
+            if(!recovery.admissionReady())throw new Rejected(503,"INFERENCE_UNAVAILABLE",60);
             var inferenceBlock=inferenceBlock();if(inferenceBlock.isPresent())throw new Rejected(503,inferenceBlock.get().name(),60);
             int queued=queue.count("QUEUED");if(queued>=capacity.queuedDepth())throw new Rejected(503,"QUEUE_FULL",60);
             hooks.ifPresent(TestHookRegistry::beginAdmission);

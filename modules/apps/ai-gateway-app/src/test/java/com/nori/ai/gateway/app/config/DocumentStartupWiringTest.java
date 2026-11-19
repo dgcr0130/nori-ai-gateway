@@ -68,7 +68,7 @@ class DocumentStartupWiringTest {
             when(repository.activeAnswers(any())).thenReturn(mode.equals("verified-answer")?List.of(new DocumentCorpus.Answer(UUID.randomUUID(),"검증 질문",List.of(new DocumentLocation("bucket","rag/a.md",revision,"절",5,5)),Set.of("OLD"),new float[]{9})):List.of());
             doAnswer(call->{order.add("save");saved.set(call.getArgument(1));return null;}).when(repository).saveBuilding(any(),any());
             when(repository.load(any(),any())).thenAnswer(call->saved.get());
-            doAnswer(call->{order.add("activate");active.set(call.getArgument(1));return null;}).when(repository).activate(any(),any());
+            doAnswer(call->{order.add("activate");active.set(call.getArgument(1));return null;}).when(repository).activate(any(),any(),any());
             var credential=directory.resolve("access");Files.writeString(credential,"fixture-key");
             var digest=directory.resolve("digest");Files.writeString(digest,"a".repeat(64));
             var signer=com.nori.ai.gateway.integration.fixtures.testing.StubAssertionSigner.ephemeral("test-eph-document");
@@ -94,7 +94,7 @@ class DocumentStartupWiringTest {
                 var gate=new ReadinessGate(List.of(context.getBean(DocumentStartupRunner.class),recovery),events::add);gate.run(null);
                 boolean failure=mode.endsWith("error");assertThat(gate.ready()).isEqualTo(!failure);
                 assertThat(order.getFirst()).isEqualTo("recovery");
-                if(failure) {assertThat(active.get()).isNull();assertThat(events).isEmpty();verify(repository,never()).activate(any(),any());}
+                if(failure) {assertThat(active.get()).isNull();assertThat(events).isEmpty();verify(repository,never()).activate(any(),any(),any());}
                 else if(!mode.equals("no-sources")) {
                     assertThat(order).containsExactly("recovery","save","activate");assertThat(active.get()).isNotNull();
                     assertThat(active.get().documents()).hasSize(mode.equals("zero")?0:1);assertThat(active.get().toString()).doesNotContain("private-value");

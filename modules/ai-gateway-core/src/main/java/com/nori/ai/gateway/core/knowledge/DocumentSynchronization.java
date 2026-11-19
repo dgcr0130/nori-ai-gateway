@@ -39,7 +39,8 @@ public final class DocumentSynchronization {
                 documents.add(new Document(parsed.id(), parsed.bucket(), parsed.objectKey(), parsed.revision(), parsed.title(), parsed.permissions(), parsed.issues(), parents));
         }
         var answers = new ArrayList<Answer>();
-        for (var answer : store.activeAnswers(scope)) {
+        var originalAnswers=store.activeAnswers(scope);
+        for (var answer : originalAnswers) {
             boolean current = answer.locations().stream().allMatch(location -> documents.stream().anyMatch(d -> d.issues().isEmpty() && d.bucket().equals(location.bucket())
                 && d.objectKey().equals(location.objectKey()) && d.revision().equals(location.revision()) && d.parents().stream().anyMatch(p -> p.location().section().equals(location.section())
                 && p.location().lineFrom() <= location.lineFrom() && p.location().lineTo() >= location.lineTo())));
@@ -55,7 +56,7 @@ public final class DocumentSynchronization {
         var stored = store.load(scope, bundle.id());
         var preparedBundle = new Bundle(stored.id(), stored.embeddingModel(), stored.dimension(), stored.configSha256(), stored.documents(), answers);
         try (var prepared = keywords.prepare(scope, preparedBundle)) {
-            store.activate(scope, bundle);
+            store.activate(scope, bundle,originalAnswers.stream().map(Answer::id).collect(java.util.stream.Collectors.toSet()));
             keywords.install(scope, prepared);
         }
         return bundle;

@@ -137,6 +137,26 @@ class DocumentIndexIT extends PgIntegrationSupport {
             }
         }
     }
+    @Test void preparedAnswerReopenedBeforeActivationNeverBecomesActiveAgain() {
+        try(var database=rawDatabase()){database.bootstrap();database.migrate();try(var context=application(database)) {
+            var store=context.getBean(DocumentIndexRepository.class);var jdbc=context.getBean(JdbcClient.class);var scope=scope("Doc");
+            var first=bundle(List.of(document("A","b".repeat(64))));store.saveBuilding(scope,first);store.activate(scope,first);seedPermanent(jdbc,first.documents().getFirst().parents().getFirst().children().getFirst().location());
+            var original=store.activeAnswers(scope);var next=new Bundle(UUID.randomUUID(),"replacement",3,"f".repeat(64),List.of(document("A","b".repeat(64))),original);store.saveBuilding(scope,next);
+            jdbc.sql("UPDATE kn.feedback SET state='OPEN',version=version+1 WHERE id=(SELECT feedback_id FROM kn.review WHERE cause='ANSWER')").update();jdbc.sql("UPDATE kn.verified_answer SET active=false").update();
+            store.activate(scope,next,Set.of(original.getFirst().id()));assertThat(store.activeAnswers(scope)).isEmpty();assertThat(jdbc.sql("SELECT active FROM kn.verified_answer").query(Boolean.class).single()).isFalse();
+        }}
+    }
+    @Test void activationRejectsAReviewCommittedAfterThePreparedAnswerSnapshotWithoutDroppingIt() {
+        try(var database=rawDatabase()){database.bootstrap();database.migrate();try(var context=application(database)) {
+            var store=context.getBean(DocumentIndexRepository.class);var jdbc=context.getBean(JdbcClient.class);var scope=scope("Doc");
+            var first=bundle(List.of(document("A","b".repeat(64))));store.saveBuilding(scope,first);store.activate(scope,first);seedPermanent(jdbc,first.documents().getFirst().parents().getFirst().children().getFirst().location());
+            var original=store.activeAnswers(scope);var next=new Bundle(UUID.randomUUID(),"replacement",3,"f".repeat(64),List.of(document("A","b".repeat(64))),original);store.saveBuilding(scope,next);
+            UUID review=UUID.randomUUID();jdbc.sql("INSERT INTO kn.review SELECT system_id,:id,feedback_id,2,reviewer_ref,cause,action,created_at FROM kn.review WHERE cause='ANSWER'").param("id",review).update();
+            jdbc.sql("INSERT INTO kn.verified_answer SELECT system_id,:id,:review,question_masked,answer_masked,embedding_model,embedding_dimension,config_sha256,locations,permissions,embedding,true FROM kn.verified_answer").param("id",UUID.randomUUID()).param("review",review).update();
+            assertThatThrownBy(()->store.activate(scope,next,Set.of(original.getFirst().id()))).isInstanceOf(IllegalStateException.class);
+            assertThat(store.activeAnswers(scope)).hasSize(2);assertThat(store.searchState(scope).orElseThrow().id()).isEqualTo(first.id());assertThat(jdbc.sql("SELECT state FROM kn.index_set WHERE id=:id").param("id",next.id()).query(String.class).single()).isEqualTo("BUILDING");
+        }}
+    }
     private void seedPermanent(JdbcClient jdbc,DocumentLocation location) {
         var snapshot=UUID.randomUUID();var feedback=UUID.randomUUID();var review=UUID.randomUUID();
         jdbc.sql("INSERT INTO kn.answer_snapshot VALUES('Doc',:id,'historical-job','actor','검증 질문','{}','[]',repeat('a',64),now())").param("id",snapshot).update();

@@ -7,8 +7,10 @@ import com.nori.ai.gateway.app.web.ResultResponseAssembler;
 import java.util.*;
 /** 저장된 사용자 대화와 현재 결과 열람 경계를 재사용합니다. 요청자가 history를 공급하지 못합니다. */
 public final class ClassificationInputs implements ClassificationService.ContextSource {
+    private final com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary;
     private final GatewaySystemsProperties systems;private final CapabilityRegistry registry;private final MessageRepository messages;private final com.nori.ai.gateway.persistence.repository.JobRepository jobs;private final ResultResponseAssembler access;private final int limit;
-    public ClassificationInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,MessageRepository messages,ResultResponseAssembler access,int limit,com.nori.ai.gateway.persistence.repository.JobRepository jobs){if(limit<0||limit>4)throw new IllegalArgumentException("분류 대화 쌍 설정이 잘못되었습니다");this.jobs=jobs;this.systems=systems;this.registry=registry;this.messages=messages;this.access=access;this.limit=limit;}
+    public ClassificationInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,MessageRepository messages,ResultResponseAssembler access,int limit,com.nori.ai.gateway.persistence.repository.JobRepository jobs){this(systems,registry,messages,access,limit,jobs,(scope,initial)->initial);}
+    public ClassificationInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,MessageRepository messages,ResultResponseAssembler access,int limit,com.nori.ai.gateway.persistence.repository.JobRepository jobs,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){if(limit<0||limit>4)throw new IllegalArgumentException("분류 대화 쌍 설정이 잘못되었습니다");this.jobs=jobs;this.systems=systems;this.registry=registry;this.messages=messages;this.access=access;this.limit=limit;this.glossary=glossary;}
     @Override public ClassificationService.Context load(ClassificationService.Request request){
         var system=systems.systems().get(request.scope().boundSystem().name());if(system==null)throw new IllegalArgumentException("비활성 시스템입니다");
         var pairs=new ArrayList<ClassificationService.HistoryPair>();
@@ -27,6 +29,6 @@ public final class ClassificationInputs implements ClassificationService.Context
             }
             pairs.addAll(ordered.values());
         }
-        while(pairs.size()>limit)pairs.removeFirst();return new ClassificationService.Context(registry.view(request.scope()),pairs,system.glossary(),limit);
+        while(pairs.size()>limit)pairs.removeFirst();return new ClassificationService.Context(registry.view(request.scope()),pairs,glossary.current(request.scope(),system.glossary()),limit);
     }
 }

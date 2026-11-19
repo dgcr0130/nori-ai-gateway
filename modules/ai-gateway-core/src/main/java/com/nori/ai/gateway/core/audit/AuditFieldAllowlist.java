@@ -29,6 +29,10 @@ public final class AuditFieldAllowlist {
         String service = event.scope().authenticatedServiceRef();
         if (event.eventType() != AuditEventType.LLM_CALL && event.llmCall() != null) throw rejected("llmCall");
         switch (event.eventType()) {
+            case REVIEW_RESOLVED -> {
+                requireService(service);requireUuid("requestId",event.scope().requestId());
+                absent(event.traceId(),event.conversationId(),event.jobId(),event.toolId(),event.sourceRef(),event.taskType(),event.status(),event.errorCode(),event.decision(),event.latencyMs());
+            }
             case API_REQUEST -> {
                 requireService(service); requireUuid("requestId", event.scope().requestId()); requireTrace(event.traceId());
                 absent(event.conversationId(), event.jobId(), event.toolId(), event.sourceRef(), event.taskType(), event.status(), event.errorCode(), event.decision(), event.latencyMs());

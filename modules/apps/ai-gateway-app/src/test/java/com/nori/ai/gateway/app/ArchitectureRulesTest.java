@@ -87,7 +87,7 @@ class ArchitectureRulesTest {
     }
     @Test void generalAuditWritesHaveExactlyThePlannedProductionCallers()throws Exception{
         var rules=new LinkedHashMap<String,Set<String>>();
-        rules.put("persistence.audit.AuditWriter.write",Set.of("app.observability.AuditRecorder"));
+        rules.put("persistence.audit.AuditWriter.write",Set.of("app.observability.AuditRecorder","persistence.repository.FeedbackRepository"));
         rules.put("persistence.audit.AuditWriter.writeForJob",Set.of("app.observability.AuditRecorder"));
         rules.put("app.observability.AuditRecorder.write",Set.of("app.security.ServiceTokenAuthFilter","app.job.JobAdmissionService"));
         rules.put("app.observability.AuditRecorder.writeForJob",Set.of("app.job.WorkflowExecutionRecords","app.job.WorkflowExecutionAdapter","app.job.LlmCallAuditRecorder"));

@@ -20,9 +20,9 @@ import java.time.Clock;
 @EnableConfigurationProperties(LokiProperties.class)
 public class WorkflowExecutionConfiguration {
     @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
-    GroundingInputs groundingInputs(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,ObjectProvider<DirectSourceToolExecutor.GitExecutionScopes> scopes){
+    GroundingInputs groundingInputs(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,ObjectProvider<DirectSourceToolExecutor.GitExecutionScopes> scopes,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){
         var projects=new java.util.HashMap<String,String>();var configured=scopes.getIfAvailable();if(configured!=null)for(var repo:configured.repositories())projects.put(repo.sourceRepo(),repo.projectId());
-        return new GroundingInputs(systems,registry,sanitizer,projects);
+        return new GroundingInputs(systems,registry,sanitizer,projects,glossary);
     }
     @Bean WorkflowResourceResolverFactory workflowResourceResolverFactory(SourcePermissionMap permissions,CapabilityRegistry registry,ExpiryCheckpoint expiry){return new WorkflowResourceResolverFactory(permissions,registry,expiry);}
     @Bean WorkflowCacheStore workflowCacheStore(CacheRepository cache,ContentSanitizer sanitizer,CapabilityRegistry registry){return new WorkflowCacheStore(cache,sanitizer,registry);}

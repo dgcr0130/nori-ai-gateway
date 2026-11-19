@@ -49,6 +49,9 @@ public final class ServiceTokenAuthFilter implements Filter {
             assertion = verifier.verify(bodies.assertion(replay),service,replay);
             scope = scopes.forRequest(service,assertion,requestId);
             if (!bodies.check(replay,scope.boundSystem())) throw new ActorAssertionVerifier.Rejected(SYSTEM_SCOPE_MISMATCH);
+        } catch (com.nori.ai.gateway.core.feedback.FeedbackFailure invalid) {
+            output.setStatus(invalid.status());output.setCharacterEncoding("UTF-8");output.setContentType("application/json");
+            output.getWriter().write("{\"code\":\""+invalid.code()+"\",\"message\":\"피드백 입력을 확인해 주세요\",\"requestId\":\""+requestId+"\"}");return;
         } catch (ActorAssertionVerifier.Rejected rejection) {
             // 감사 저장 경계만 변환하며 이후 controller 예외를 인증 거절로 바꾸지 않습니다.
             try {
@@ -57,9 +60,9 @@ public final class ServiceTokenAuthFilter implements Filter {
                 else auditor.actorVerified(service,scope,requestId,rejection.reason());
             } catch (DataAccessException | TransactionException failure) {
                 output.setHeader("Retry-After","1");
-                respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId); return;
+                respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId,RouteClassifier.isFeedback(http)); return;
             }
-            respond(output,rejection.reason().httpStatus(),"인증 또는 요청 범위를 확인할 수 없습니다.",requestId); return;
+            respond(output,rejection.reason().httpStatus(),"인증 또는 요청 범위를 확인할 수 없습니다.",requestId,RouteClassifier.isFeedback(http)); return;
         }
         replay.setAttribute(VERIFIED_SCOPE_ATTRIBUTE,scope);
         assertion.delegation().ifPresent(value -> replay.setAttribute(VERIFIED_DELEGATION_ATTRIBUTE,value));
@@ -70,13 +73,13 @@ public final class ServiceTokenAuthFilter implements Filter {
             try { audit.write(AuditEvent.apiRequest(scope, span.getSpanContext().getTraceId())); }
             catch (DataAccessException | TransactionException failure) {
                 output.setHeader("Retry-After","1");
-                respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId); return;
+                respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId,RouteClassifier.isFeedback(http)); return;
             }
             chain.doFilter(replay,response);
         } finally { span.end(); }
     }
-    private static void respond(HttpServletResponse response, int status, String message, UUID requestId) throws IOException {
+    private static void respond(HttpServletResponse response, int status, String message, UUID requestId,boolean feedback) throws IOException {
         response.setStatus(status); response.setCharacterEncoding("UTF-8"); response.setContentType("application/json");
-        response.getWriter().write("{\"message\":\"" + message + "\",\"requestId\":\"" + requestId + "\"}");
+        response.getWriter().write((feedback?"{\"code\":\""+(status==503?"KNOWLEDGE_UNAVAILABLE":status==403?"REQUEST_FORBIDDEN":"AUTHENTICATION_FAILED")+"\",":"{")+"\"message\":\"" + message + "\",\"requestId\":\"" + requestId + "\"}");
     }
 }
