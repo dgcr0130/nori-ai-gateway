@@ -69,20 +69,21 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         assertThat(allStored(job.jobId())).doesNotContain("FALLBACKMARK");
     }
 
-    @Test @ExtendWith(OutputCaptureExtension.class) void thinkMarkersFailBothAttemptsWithoutBeingStoredOrLoggedAndARecoveredRetryComposes(CapturedOutput output) throws Exception {
+    @Test @ExtendWith(OutputCaptureExtension.class) void groundedThinkingFailsOnceAndOnlyPlainHelpRetainsTheExistingRetry(CapturedOutput output) throws Exception {
         String marked = "</think>" + THINK_MARK + " 설비 상태[e1].";
         var failed = admitScripted("think-twice", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose(marked), compose(marked)), Optional.empty(), null);
         assertThat(terminal(failed)).isEqualTo("PARTIAL");
         assertThat(result(failed.jobId())).containsEntry("status", "PARTIAL").containsEntry("error_code", "LLM_UNAVAILABLE");
-        assertThat(scripts().scriptedCalls(failed.jobId(), CallType.COMPOSER)).isEqualTo(2);
+        assertThat(scripts().scriptedCalls(failed.jobId(), CallType.COMPOSER)).isOne();
         assertThat(payload(failed.jobId()).path("blocks")).isNotEmpty();
         assertThat(allStored(failed.jobId())).doesNotContain(THINK_MARK, "think>");
         assertThat(output.getAll()).doesNotContain(THINK_MARK);
-        var recovered = admitScripted("think-once", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("<think>" + THINK_MARK), compose("설비 상태[e1].")), Optional.empty(), null);
+        var recovered = admitScripted("think-once", "사용 가능한 기능 안내", Map.of(), List.of(classify(wire("GQ", null, null, null, null)), compose("<think>" + THINK_MARK), compose("사용 가능한 기능을 안내합니다.")), Optional.empty(), null);
         assertThat(terminal(recovered)).isEqualTo("SUCCEEDED");
-        assertThat(payload(recovered.jobId()).path("answer").path("text").asString()).isEqualTo("설비 상태.[1]");
+        assertThat(payload(recovered.jobId()).path("answer").asString()).isEqualTo("사용 가능한 기능을 안내합니다.");
+        assertThat(scripts().scriptedCalls(recovered.jobId(),CallType.COMPOSER)).isEqualTo(2);
         assertThat(allStored(recovered.jobId())).doesNotContain(THINK_MARK);
-        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:c AND role='assistant'").param("c", recovered.conversationId()).query(String.class).single()).isEqualTo("설비 상태.[1]");
+        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:c AND role='assistant'").param("c", recovered.conversationId()).query(String.class).single()).isEqualTo("사용 가능한 기능을 안내합니다.");
     }
 
     @Test void sourceTextReachesTheComposerPromptOnlyAfterMaskingInTheActualPath() throws Exception {

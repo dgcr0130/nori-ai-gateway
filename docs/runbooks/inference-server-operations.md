@@ -1,6 +1,6 @@
 # AI Gateway 추론 서버 읽기 전용 확인·모델 적재 runbook
 
-대상: 추론 서버(D44, `192.168.0.160:11434`, Ollama)의 운영자 절차(Plan P17, SPEC §14.6 "readiness"·"모델 적재 절차", §26.1 임차 원칙). 실행자 = 승인된 운영자. 이 문서와 스크립트를 만든 구현 담당은 서버에 접속하지 않았다(현재 NOT_RUN — 로컬 fixture selftest 만 수행).
+현재 Gateway 설정 대상은 `192.168.0.77:11434`(Jetson AGX Orin, Ollama 0.40.13)이며 생성 모델은 `qwen3-vl:30b-a3b-instruct-q4_K_M`, 임베딩 모델은 `bge-m3:latest`이다. `config/ai-gateway.yaml`의 baseUrl은 `http://192.168.0.77:11434/v1`이고 모델 이름은 서버 `/v1/models` id와 정확히 일치해야 한다.
 
 ## 임차 원칙 — 하지 않는 것
 
@@ -14,13 +14,21 @@
 
 접속 자격과 호스트 접속 세부(계정·키 경로 등)는 이 문서에 쓰지 않는다. 아래 `<승인된 로컬 SSH 수단>` 자리는 운영자가 따로 승인받은 접속 명령으로 채운다.
 
+## 현재 Gateway 모델·계수 설정
+
+생성 접두는 `"<|im_start|>assistant\n"`이며 사고 블록 접두를 넣지 않는다. 새 모델은 non-thinking 전용이며 사고 제어 요청 필드를 추가하지 않는다. thinkingTokens 1280·1536은 completion 사용량과 공개 본문 계수 차이의 허용분으로 유지한다. systemContentSuffix는 ""로 두어 system 본문 뒤에 빈 줄을 덧붙이지 않는다. 컨텍스트 8192·기존 예산·토크나이저 파일과 해시·그 외 template 값은 유지한다. Gateway 준비는 공통 `/models`의 두 모델 확인과 최소 생성·임베딩 요청으로 판정한다. 시험 결과는 중앙 006 PLAN의 phase 9 기록에서 확인한다.
+
+## 현재 서버 운영 절차
+
+아래 (a)·(b)와 스크립트 시험은 현재 `192.168.0.77:11434`·`qwen3-vl:30b-a3b-instruct-q4_K_M` 대상 절차다. `aigw-ps-summary.sh`는 (a)의 현재 수동 점검 도구로 생성 모델의 상주·기대 digest·context_length=8192와 임베딩 모델 상주를 검사한다. 이 수동 점검과 Gateway의 공통 API 준비 판정은 별개다. 과거 날짜가 붙은 실측 기록은 그 당시 사실로 보존한다.
+
 ## (a) 읽기 전용 상태 확인
 
 실측·수용 회차(F2 LIVE leaf·F3-PROBE·F4) 전에 반드시 수행하고, (b) 적재 뒤에도 수행한다.
 
 ### 입력
 
-- 생성 모델 `qwen3:4b` 의 기대 digest: 배포 설정의 기대값(P19 readiness 가 대조하는 값과 같은 값). sha256 hex 64자 소문자 전체이며 `sha256:` 접두어는 붙이지 않는다. `ollama list` 의 12자 ID 는 받지 않는다.
+- 생성 모델 `qwen3-vl:30b-a3b-instruct-q4_K_M` 의 기대 digest: 운영자가 별도로 확인한 기대값. Gateway의 공통 준비 검사는 digest를 조회하지 않는다. sha256 hex 64자 소문자 전체이며 `sha256:` 접두어는 붙이지 않는다. `ollama list` 의 12자 ID 는 받지 않는다.
 
 ### 명령
 
@@ -32,13 +40,13 @@
 
 스크립트가 서버에서 하는 일은 loopback `GET http://127.0.0.1:11434/api/ps` 1회(`curl -s --fail --max-time 5`)뿐이다. 응답은 메모리에서 `python3 -I` 필터로만 넘어가고, 필터는 형식을 확인한 모델별 `name`·`digest`·`context_length` 와 `resident_count`·`ok` 만 출력한다. 서버에 `curl`·`python3`·`bash` 가 있어야 한다.
 
-### 출력과 종료 코드
+### 출력 예시와 종료 코드
 
 ```json
-{"models": [{"context_length": 8192, "digest": "<64 hex>", "name": "qwen3:4b"}, {"context_length": 8192, "digest": "<64 hex>", "name": "bge-m3:latest"}], "ok": true, "resident_count": 2}
+{"models": [{"context_length": 8192, "digest": "<64 hex>", "name": "qwen3-vl:30b-a3b-instruct-q4_K_M"}, {"context_length": 8192, "digest": "<64 hex>", "name": "bge-m3:latest"}], "ok": true, "resident_count": 2}
 ```
 
-- `ok=true` 조건 = `qwen3:4b` 상주 AND `bge-m3`(Ollama 는 `bge-m3:latest` 로 보고한다. 태그 없는 `bge-m3` 도 같은 모델로 본다) 상주 AND `qwen3:4b` digest = 인자 AND `qwen3:4b` `context_length=8192`. `bge-m3` 는 상주만 본다. P19 readiness `READY` 와 같은 기준이다.
+- `ok=true` 조건 = `qwen3-vl:30b-a3b-instruct-q4_K_M` 상주 AND `bge-m3`(Ollama 는 `bge-m3:latest` 로 보고한다. 태그 없는 `bge-m3` 도 같은 모델로 본다) 상주 AND `qwen3-vl:30b-a3b-instruct-q4_K_M` digest = 인자 AND `qwen3-vl:30b-a3b-instruct-q4_K_M` `context_length=8192`. `bge-m3` 는 상주만 본다. 이 서버 운영 요약기는 임베딩 모델의 두 별칭을 허용한다. Gateway의 공통 준비 기준은 위 절을 따른다.
 - `resident_count` 는 상주 모델 전체 수다. 다른 사용자의 모델도 목록에 나올 수 있다.
 - exit 0 = `ok=true`, 1 = `ok=false`, 2 = 사용법 오류(`PS_SUMMARY_USAGE: ...`, stderr)·조회 실패(`PS_SUMMARY_FETCH_FAILED` — curl 실패·비 2xx·5초 초과)·파싱 실패(`PS_SUMMARY_PARSE_FAILED` — 비 JSON·`/api/ps` 형식 아님·필드 형식 어긋남). 실패 문구는 고정이며 입력 원문을 담지 않는다.
 
@@ -51,9 +59,9 @@
 | 결과 | 대응 |
 |---|---|
 | `ok=true` | 회차를 진행한다. |
-| `qwen3:4b` 또는 `bge-m3` 미상주 | (b) 모델 적재 절차로 간다. |
-| `qwen3:4b` digest 불일치 | 서버의 모델은 소유자 영역이다. 적재·`pull` 로 고치지 않고 기록한 뒤 회차를 보류한다(이 수동 서버 점검과 별개로 Gateway 공통 readiness는 digest를 조회하지 않는다). |
-| `qwen3:4b` `context_length≠8192` | 서버 설정의 소유자 영역이다. 서버를 바꾸지 않고 기록한 뒤 회차를 보류한다(Gateway는 컨텍스트를 설정 예산과 요청 초과 거절로 관리하며 전용 서버 조회 결과를 readiness에 사용하지 않는다). |
+| `qwen3-vl:30b-a3b-instruct-q4_K_M` 또는 `bge-m3` 미상주 | (b) 모델 적재 절차로 간다. |
+| `qwen3-vl:30b-a3b-instruct-q4_K_M` digest 불일치 | 서버의 모델은 소유자 영역이다. 적재·`pull` 로 고치지 않고 기록한 뒤 회차를 보류한다(이 수동 서버 점검과 별개로 Gateway 공통 readiness는 digest를 조회하지 않는다). |
+| `qwen3-vl:30b-a3b-instruct-q4_K_M` `context_length≠8192` | 서버 설정의 소유자 영역이다. 서버를 바꾸지 않고 기록한 뒤 회차를 보류한다(Gateway는 컨텍스트를 설정 예산과 요청 초과 거절로 관리하며 전용 서버 조회 결과를 readiness에 사용하지 않는다). |
 | exit 2 `PS_SUMMARY_FETCH_FAILED`·`PS_SUMMARY_PARSE_FAILED` | 수동 서버 API 점검의 무응답·형식 오류다. Gateway readiness는 공통 API 요청으로 별도 판정한다. 서비스를 재시작하지 않고 기록한 뒤 회차를 보류한다. |
 
 ## (b) 모델 적재 절차
@@ -61,18 +69,20 @@
 ### 신호
 
 - Gateway 의 600s 지속 `MODEL_LOADING` 경보(SPEC §14.6 관측 유예 600s 초과), 또는
-- (a) 에서 `qwen3:4b`·`bge-m3` 중 하나라도 미상주.
+- (a) 에서 `qwen3-vl:30b-a3b-instruct-q4_K_M`·`bge-m3` 중 하나라도 미상주.
 
 Gateway 는 스스로 모델을 적재하지 않는다. 적재는 운영자의 이 절차뿐이다.
 
 ### 명령
 
-운영자가 `<승인된 로컬 SSH 수단>` 으로 서버 셸에 접속해 서버 loopback 에서 실행한다. 미상주 모델에 해당하는 줄만 실행한다. 둘 다 일반 Ollama 요청이며 모델 관리 API 가 아니다. `-o /dev/null` 로 응답 본문은 출력하지 않고 HTTP 상태 코드만 출력한다. 콜드 로드가 길 수 있어 상한을 관측 유예와 같은 600s 로 둔다.
+운영자가 `<승인된 로컬 SSH 수단>` 으로 서버 셸에 접속해 서버 loopback 에서 실행한다. 생성 모델이 미상주이면 bge-m3 상주 여부와 관계없이 아래 생성 모델 줄 다음 임베딩 모델 줄을 그 순서로 실행한다. 생성 모델은 상주하고 bge-m3만 미상주이면 임베딩 모델 줄만 실행한다. 둘 다 일반 Ollama 요청이며 모델 관리 API 가 아니다. `-o /dev/null` 로 응답 본문은 출력하지 않고 HTTP 상태 코드만 출력한다. 콜드 로드가 길 수 있어 상한을 관측 유예와 같은 600s 로 둔다.
 
-생성 모델 `qwen3:4b`:
+근거(2026-11-20 메인 관측, 각 1회): 12:44:24 KST bge-m3 상주 상태에서 생성 모델 적재 시 `sched.go:596 msg="llama-server model predicted to exceed available memory, evicting"`과 함께 bge-m3가 내려갔다. 13:02:35–13:02:41 KST 생성 모델 상주 상태에서 bge-m3 `/api/embed` 요청은 200이었고 두 모델이 context_length 8192로 함께 상주했다. 13:03:46–13:04:53 KST의 입력·임베딩·이미지·생성 2회 반복 처리 동안에도 두 모델이 계속 상주했다.
+
+생성 모델 `qwen3-vl:30b-a3b-instruct-q4_K_M`:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' --max-time 600 http://127.0.0.1:11434/api/generate -d '{"model":"qwen3:4b"}'
+curl -s -o /dev/null -w '%{http_code}\n' --max-time 600 http://127.0.0.1:11434/api/generate -d '{"model":"qwen3-vl:30b-a3b-instruct-q4_K_M"}'
 ```
 
 - 근거: Ollama API 문서 `POST /api/generate` 의 "Load a model" 항목 — prompt 를 비운 요청은 모델을 메모리에 적재만 한다(생성 없음). 기대 출력 `200`.

@@ -59,6 +59,10 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         if(grounding.isPresent()&&task!=TaskType.GENERAL_QUERY&&outcome.rejection().isEmpty()) {
             prepared=grounding.get().prepare(job,plan,outcome,calls);outcome=prepared.outcome();
         }
+        if(prepared!=null) {
+            if(prepared.sufficient()&&job.inferenceMode()==InferenceMode.ENABLED&&outcome.rejection().isEmpty()&&pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
+            prepared=grounding.orElseThrow().refresh(job,prepared);
+        }
         var spec=composeAndAssemble(job,definition,outcome,prepared);
         if(prepared!=null)spec=groundedStatus(job,spec,prepared);
         return complete(job,spec,outcome,resolved.values(),context,prepared==null?List.of():prepared.selected().units());
@@ -69,10 +73,11 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
      */
     private TerminalSpec composeAndAssemble(JobContext job,WorkflowDefinition definition,WorkflowOutcome outcome,WorkflowGrounding.Prepared prepared) throws InterruptedException {
         if(job.inferenceMode()!=InferenceMode.ENABLED||outcome.rejection().isPresent())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
-        if(prepared!=null&&!prepared.sufficient())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
         var service=composer.orElseThrow(()->new IllegalStateException("서술 구현이 없습니다"));
-        if(pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
-        var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected());
+        if(prepared!=null&&!service.groundedQuestionFits(job))return assembler.assemble(outcome,ComposerOutcome.INPUT_BUDGET_EXCEEDED,job.inferenceMode());
+        if(prepared!=null&&!prepared.sufficient())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
+        if(prepared==null&&pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
+        var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected(),prepared.history());
         var composed=service.compose(job,input);
         return assembler.assembleAnswer(outcome,composed,job.inferenceMode());
     }

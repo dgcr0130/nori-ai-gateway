@@ -45,6 +45,14 @@ class HybridSearchHttpTest {
         return Stream.of("retry","insufficient","embedding-error","dimension-error","question-dimension-error","count-error","verified","same-query","live","general","seven","large","all-removed","partial","http-fail","non-json","truncated-all-removed","source-http-fail","source-non-json","stale-log")
             .map(mode->DynamicTest.dynamicTest(mode,()->run(mode)));
     }
+    @Test void missingOptionalTokenizerAllowsPlainGuardButRejectsStructuredCalls() {
+        var guard=new CoreBeansConfiguration().preCallBudgetAssert(messages->100,com.nori.ai.gateway.core.budget.TokenBudgetPolicy.current(),java.util.Optional.empty());
+        var messages=java.util.List.of(new com.nori.ai.gateway.core.budget.ChatMessage(com.nori.ai.gateway.core.budget.ChatMessage.Role.USER,"질문"));
+        assertThat(guard.check(com.nori.ai.gateway.core.budget.CallType.CLASSIFY,messages,2048)).isEqualTo(new com.nori.ai.gateway.core.budget.PreCallBudgetAssert.Allowed(100));
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\"}");
+        assertThatThrownBy(()->guard.check(com.nori.ai.gateway.core.budget.CallType.CLASSIFY,messages,2048,schema))
+            .isInstanceOf(IllegalStateException.class).hasMessage("구조화 제약 계수기가 없습니다");
+    }
     private void run(String mode)throws Exception {
         var sent=new CopyOnWriteArrayList<String>();var audits=new ArrayList<LlmCallAudit.Attempt>();
         try(var counter=new HfTokenizerCounter(InferenceFixtures.settings("http://127.0.0.1:1/v1"))) {
@@ -74,13 +82,16 @@ class HybridSearchHttpTest {
                     boolean classify=sent.stream().filter(s->s.startsWith("/v1/chat/completions")).count()==1;
                     String task=Set.of("live","seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)?"LIVE_QUERY":mode.equals("general")?"GENERAL_QUERY":"KNOWLEDGE_QUERY";
                     String query=mode.equals("same-query")?"설비 상태 T3":"설비 T3";
-                    String text=classify?"{\"taskType\":\""+task+"\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\""+query+"\",\"retryQuery\":\"상태 T3\"}":"{\"sentences\":[{\"text\":\"설비 상태 T3\",\"citations\":[1,2]}]}";
-                    if(!classify&&!mode.equals("retry")&&!mode.equals("general"))text="{\"sentences\":[{\"text\":\"설비 상태 T3\",\"citations\":[1]}]}";
+                    String text=classify?"{\"taskType\":\""+task+"\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\""+query+"\",\"retryQuery\":\"상태 T3\"}":literalAnswer(messages,mode.equals("retry"));
                     if(classify&&Set.of("seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)) {
                         var wire=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(text);wire.putArray("toolCalls").addObject().put("toolId","asset.read").putObject("arguments");text=wire.toString();
                     }
-                    if(!classify&&Set.of("all-removed","truncated-all-removed").contains(mode))text="{\"sentences\":[{\"text\":\"없는이름 99\",\"citations\":[1]}]}";
-                    if(!classify&&mode.equals("partial"))text="{\"sentences\":[{\"text\":\"설비 상태 T3\",\"citations\":[1]},{\"text\":\"99\",\"citations\":[1]}]}";
+                    if(!classify&&Set.of("all-removed","truncated-all-removed").contains(mode))text="{\"selectedIds\":[\"UNKNOWN\"]}";
+                    if(!classify&&mode.equals("partial")) {
+                        var answer=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(text);
+                        var keys=new ArrayList<String>();answer.propertyNames().forEach(keys::add);assertThat(keys.size()).isGreaterThan(1);
+                        answer.put(keys.getLast(),"invalid");text=answer.toString();
+                    }
                     int prompt=counter.countText(InferenceFixtures.renderer().render(messages)),completion=counter.countText(text);
                     var body=SchemaContracts.JSON.createObjectNode().put("id","local").put("object","chat.completion").put("created",1).put("model","qwen3:4b");
                     body.putArray("choices").addObject().put("index",0).put("finish_reason","stop").set("message",SchemaContracts.JSON.createObjectNode().put("role","assistant").put("content",text));
@@ -94,12 +105,12 @@ class HybridSearchHttpTest {
                 var values=new HashMap<>(InferenceFixtures.properties());values.put("ai.gateway.inference.mode","enabled");values.put("ai.gateway.llm.baseUrl","http://127.0.0.1:"+server.getAddress().getPort()+"/v1");
                 context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("local",values));
                 var policy=TokenBudgetPolicy.current();context.registerBean(TokenBudgetPolicy.class,()->policy);
-                context.registerBean(PreCallBudgetAssert.class,()->new PreCallBudgetAssert(context.getBean(PromptTokenCounting.class),policy));context.registerBean(TruncationDetector.class,TruncationDetector::new);
+                context.registerBean(PreCallBudgetAssert.class,()->new PreCallBudgetAssert(context.getBean(PromptTokenCounting.class),policy,context.getBean(HfTokenizerCounter.class)::countText));context.registerBean(TruncationDetector.class,TruncationDetector::new);
                 context.registerBean(GenerationSemaphore.class,()->new GenerationSemaphore(1));context.registerBean(Clock.class,Clock::systemUTC);
                 context.registerBean(io.micrometer.core.instrument.MeterRegistry.class,io.micrometer.core.instrument.simple.SimpleMeterRegistry::new);
                 context.register(InferenceAdapterModuleConfiguration.class);context.refresh();context.getBean(InferenceReadinessService.class).stop();
                 var now=Instant.now();var scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("READ"),"a".repeat(64),now.minusSeconds(60),now.plusSeconds(3600),"job");
-                var first=doc("a.md",Set.of("verified","same-query","all-removed","partial","http-fail","non-json").contains(mode)?"설비 상태 T3":"설비 T3",1);var second=doc("b.md",mode.equals("insufficient")?"통신 T3":"상태 T3",-1);
+                var first=doc("a.md",mode.equals("partial")?"설비 상태 T3\n부가 설명이다.":Set.of("verified","same-query","all-removed","http-fail","non-json").contains(mode)?"설비 상태 T3":"설비 T3",1);var second=doc("b.md",mode.equals("insufficient")?"통신 T3":"상태 T3",-1);
                 var exactId=new UUID(2,1);var answers=mode.equals("verified")?List.of(
                     new DocumentCorpus.Answer(exactId,"설비 상태 T3",List.of(first.parents().getFirst().location()),Set.of("READ"),new float[]{0,1}),
                     new DocumentCorpus.Answer(new UUID(2,2),"다른 질문",List.of(first.parents().getFirst().location()),Set.of("READ"),new float[]{1,0})):List.<DocumentCorpus.Answer>of();
@@ -120,7 +131,8 @@ class HybridSearchHttpTest {
                     public Round search(VerifiedSystemScope current,String query,List<String> targets,SearchSettings policy){return search(current,query,query,targets,policy);}
                     @Override public Round search(VerifiedSystemScope current,String query,String question,List<String> targets,SearchSettings policy){var found=delegate.search(current,query,question,targets,policy);observedRounds.add(found);return found;}
                 };
-                var grounding=config.workflowGrounding(observedSearch,index,settings,new EvidenceSelection(context.getBean(HfTokenizerCounter.class)::countText,policy.evidenceTokens()),groundingInputs,Clock.systemUTC(),expiry);
+                var composer=new ComposerService(client,new PromptReducer(context.getBean(PromptTokenCounting.class),policy),policy,context.getBean(HfTokenizerCounter.class)::countText,expiry,LlmCallObserver.NONE,audits::add,"제공된 근거만 사용합니다.",index);
+                var grounding=config.workflowGrounding(observedSearch,index,settings,new EvidenceSelection(context.getBean(HfTokenizerCounter.class)::countText,policy.evidenceTokens()),groundingInputs,Clock.systemUTC(),expiry,composer);
                 var validator=new PlanValidator(registry,new PlanInjectionSeam.NoOp(),Clock.systemUTC(),12,12);var permissions=new SourcePermissionMap(Map.of(business.sourceAllowlistRef(),new SourcePermissionMap.Entry(Set.of("READ"),false)));var authorization=new SourceAuthorizationStep(permissions,(source,current)->false);
                 var credential=temp.resolve("gateway-token");java.nio.file.Files.writeString(credential,"local-fixture-token");
                 var systemQuery=new com.nori.ai.gateway.integration.system.HttpSystemQueryAdapter(new com.nori.ai.gateway.integration.system.SystemQuerySettings(Map.of(OwnerSystem.TC,new com.nori.ai.gateway.integration.system.SystemQuerySettings.Endpoint(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),credential))),Clock.systemUTC(),new ContentSanitizer());
@@ -129,7 +141,6 @@ class HybridSearchHttpTest {
                     @Override public ToolResultEnvelope execute(com.nori.ai.gateway.core.plan.PlanStep step,CapabilityManifest manifest,VerifiedSystemScope current,ExecutionContext execution){return staleLog(manifest,current,now);}
                 }:new BusinessToolExecutor(systemQuery,Clock.systemUTC());
                 var executor=new com.nori.ai.gateway.core.workflow.WorkflowExecutor(registry,validator,new ToolDispatcher(registry,validator,new ToolResultContractValidator(versions),new DispatchInjectionSeam.NoOp(),List.of(businessExecutor),Clock.systemUTC()),authorization,expiry,Clock.systemUTC(),mock(ToolResultCache.class),new BlockBuilder(new UiSchemaValidator()),mock(com.nori.ai.gateway.core.workflow.WorkflowExecutor.ExecutionRecorder.class),new LogSummarizer(),new GeneralQueryHelpBuilder());
-                var composer=new ComposerService(client,new PromptReducer(context.getBean(PromptTokenCounting.class),policy),policy,context.getBean(HfTokenizerCounter.class)::countText,expiry,LlmCallObserver.NONE,audits::add,"제공된 근거만 사용합니다.",index);
                 var adapter=new WorkflowExecutionAdapter(registry,new WorkflowPlanBuilder(registry),executor,new WorkflowResourceResolverFactory(permissions,registry,expiry),new TimeWindowResolver(),mock(MessageRepository.class),expiry,new ContentSanitizer(),new TerminalOutcomeAssembler(),new ConversationSummaryBuilder(),new com.nori.ai.gateway.core.evidence.EvidenceAssembler(),mock(AuditRecorder.class),Optional.of(composer),new LogSummarizer(),Optional.empty(),Optional.of(grounding));
                 var terminal=adapter.execute(job);
                 long embeddings=sent.stream().filter(s->s.startsWith("/v1/embeddings")).count(),chats=sent.stream().filter(s->s.startsWith("/v1/chat/completions")).count();
@@ -140,7 +151,7 @@ class HybridSearchHttpTest {
                     assertThat(embeddingRequests.get(i)).isEqualTo(SchemaContracts.JSON.valueToTree(expected));
                 }
                 switch(mode) {
-                    case "retry"->{assertThat(embeddings).isEqualTo(2);assertThat(chats).isEqualTo(2);assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("text").asString()).isEqualTo("설비 상태 T3[1][2]");assertThat(terminal.commitData().orElseThrow().sourceDeps().knowledgeDocuments()).hasSize(2);}
+                    case "retry"->{assertThat(embeddings).isEqualTo(2);assertThat(chats).isEqualTo(2);assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("text").asString()).isEqualTo("설비 T3[1]\n상태 T3[2]");assertThat(terminal.commitData().orElseThrow().sourceDeps().knowledgeDocuments()).hasSize(2);}
                     case "seven"->{assertThat(embeddings).isZero();assertThat(chats).as("status=%s payload=%s paths=%s",terminal.resultStatus(),terminal.resultPayload(),sent.stream().map(v->v.split(" ")[0]).toList()).isEqualTo(2);var saved=terminal.commitData().orElseThrow().snapshot().orElseThrow();assertThat(saved.evidence()).hasSize(7);for(int i=0;i<7;i++){assertThat(saved.evidence().get(i).path("number").asInt()).isEqualTo(i+1);assertThat(saved.evidence().get(i).path("bodyMasked").asString()).isEqualTo("설비 상태 T3 항목 "+(i+1));}assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");}
                     case "large"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(1);assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.PARTIAL);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.PARTIAL);assertThat(terminal.eventType()).isEqualTo("job.partial");assertThat(terminal.resultPayload().get("missingFields")).isEqualTo(List.of("truncatedItems"));assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("kind").asString()).isEqualTo("NO_EVIDENCE");}
                     case "all-removed","truncated-all-removed"->{
@@ -157,7 +168,7 @@ class HybridSearchHttpTest {
                         var blocks=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("blocks"));if(data){assertThat(embeddings).isZero();assertThat(blocks).isNotEmpty();assertThat(commit.evidence()).isNotEmpty();}else{assertThat(blocks).isEmpty();assertThat(commit.evidence()).isEmpty();}
                         assertThat(audits.stream().filter(a->a.callType()==CallType.COMPOSER)).hasSize(1);
                     }
-                    case "general"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);}
+                    case "general"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);assertThat(terminal.resultPayload().get("answer")).isEqualTo("등록된 기능을 안내합니다.");}
                     case "verified"->{
                         assertThat(embeddings).isEqualTo(1);assertThat(chats).isEqualTo(2);
                         // 대역 단위 벡터의 내적에서 질문·완전 일치 답변은 1, 질문·검색 질의 방향 답변은 0입니다.
@@ -168,6 +179,17 @@ class HybridSearchHttpTest {
                 }
             }finally{server.stop(0);}
         }
+    }
+    /** 선택된 실제 단위와 같은 text/인용만 반환하며 검색 결과나 token oracle을 바꾸지 않습니다. */
+    private String literalAnswer(List<ChatMessage> messages,boolean all) {
+        var evidence=SchemaContracts.JSON.readTree(messages.getLast().content()).path("data").path("evidence");
+        if(!evidence.isArray()||evidence.isEmpty())return "등록된 기능을 안내합니다.";
+        var result=SchemaContracts.JSON.createObjectNode();
+        for(int i=0;i<evidence.size();i++) {
+            var marker=java.util.regex.Pattern.compile("\\[(C[0-9]+)@L[0-9]+]").matcher(evidence.get(i).path("body").asString());
+            boolean first=true;while(marker.find()){result.put(marker.group(1),(all||i==0)&&first);first=false;}
+        }
+        return result.toString();
     }
     private ToolResultEnvelope staleLog(CapabilityManifest manifest,VerifiedSystemScope scope,Instant at) {
         // 조회 어댑터 이후의 고정 LOG 관측값을 주입하고 선택·Nori 대조·실제 HTTP 작성·종결은 운영 경로를 거칩니다.

@@ -67,6 +67,7 @@ class CoreSeamDefaultsTest {
     }
     private void assertDefaults(org.springframework.boot.test.context.assertj.AssertableApplicationContext context) {
         assertThat(context).hasNotFailed().hasSingleBean(PlanInjectionSeam.class).hasSingleBean(DispatchInjectionSeam.class);
+        assertThat(context).doesNotHaveBean(com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter.class);
         assertThat(context.getBean(PlanInjectionSeam.class)).isExactlyInstanceOf(PlanInjectionSeam.NoOp.class);
         assertThat(context.getBean(DispatchInjectionSeam.class)).isExactlyInstanceOf(DispatchInjectionSeam.NoOp.class);
     }

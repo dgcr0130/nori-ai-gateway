@@ -14,11 +14,17 @@ import java.nio.charset.StandardCharsets;
 
 /** 결과 항목의 경계를 유지하여 선택과 대조가 서로 다른 본문을 보지 않게 합니다. */
 public final class GroundingInputs implements WorkflowGrounding.Inputs {
+    private final com.nori.ai.gateway.core.llm.ClassificationService.ContextSource history;
     private final com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary;
     private final GatewaySystemsProperties systems;private final CapabilityRegistry registry;private final ContentSanitizer sanitizer;private final Map<String,String> gitProjects;
     public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer){this(systems,registry,sanitizer,Map.of());}
     public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects){this(systems,registry,sanitizer,gitProjects,(scope,initial)->initial);}
-    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){this.systems=systems;this.registry=registry;this.sanitizer=sanitizer;this.gitProjects=Map.copyOf(gitProjects);this.glossary=glossary;}
+    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){this(systems,registry,sanitizer,gitProjects,glossary,null);}
+    public GroundingInputs(GatewaySystemsProperties systems,CapabilityRegistry registry,ContentSanitizer sanitizer,Map<String,String> gitProjects,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary,com.nori.ai.gateway.core.llm.ClassificationService.ContextSource history){this.systems=systems;this.registry=registry;this.sanitizer=sanitizer;this.gitProjects=Map.copyOf(gitProjects);this.glossary=glossary;this.history=history;}
+    @Override public List<com.nori.ai.gateway.core.llm.CitedHistoryContext.Pair> history(JobContext job) {
+        if(history==null||com.nori.ai.gateway.core.llm.CitedHistoryContext.reference(job).isEmpty())return List.of();
+        return history.load(new com.nori.ai.gateway.core.llm.ClassificationService.Request(job.scope(),job.conversationId(),job.jobId(),job.cancellation(),job.requestInput())).references();
+    }
     @Override public Map<String,String> glossary(JobContext job){return glossary.current(job.scope(),systems.systems().get(job.scope().boundSystem().name()).glossary());}
     @Override public List<String> permissions(JobContext job,String capabilityId) {
         var manifest=registry.find(job.scope(),capabilityId).orElse(null);if(manifest==null)return List.of();

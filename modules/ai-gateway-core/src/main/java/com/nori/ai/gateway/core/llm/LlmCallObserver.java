@@ -15,5 +15,11 @@ public interface LlmCallObserver {
     /** 반환한 범위는 그 호출이 끝나면 닫는다. */
     Scope open(String jobId, CallType type, List<ChatMessage> messages);
 
+    /** 원문·질문·근거·토큰값을 기록하지 않는 내부 debug 관측입니다. */
+    default void diagnostic(String jobId, CallType type, LlmDiagnostic reason) {
+        System.getLogger(LlmCallObserver.class.getName()).log(System.Logger.Level.DEBUG,
+            "LLM_DIAGNOSTIC job={0} type={1} reason={2}", jobId, type, reason);
+    }
+
     interface Scope extends AutoCloseable { @Override void close(); }
 }

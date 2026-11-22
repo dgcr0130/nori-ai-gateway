@@ -16,24 +16,33 @@ public final class SentenceEvidenceCheck {
     private static final tools.jackson.databind.json.JsonMapper STRICT=SchemaContracts.JSON.rebuild().enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final SearchLanguage language;
     public SentenceEvidenceCheck(SearchLanguage language){this.language=Objects.requireNonNull(language);}
-    public GroundedAnswer check(String output,List<EvidenceUnit> units) {
+    public GroundedAnswer check(String output,List<EvidenceUnit> units) { return check(output,units,reason->{}); }
+    public GroundedAnswer check(String output,List<EvidenceUnit> units,java.util.function.Consumer<LlmDiagnostic> diagnostic) {
+        return check(output,units,diagnostic,row->true);
+    }
+    /** LLM 소비자만 행 선택 제약을 더합니다. 외피를 복구하거나 기존 비LLM 검증에 제약을 강제하지 않습니다. */
+    GroundedAnswer check(String output,List<EvidenceUnit> units,java.util.function.Consumer<LlmDiagnostic> diagnostic,
+            java.util.function.Predicate<JsonNode> selectedSentence) {
         final JsonNode root;
-        try { root=SchemaContracts.parse(output);STRICT.readTree(output); }catch(RuntimeException invalid){return GroundedAnswer.noEvidence();}
-        if(!root.isObject()||root.size()!=1||!root.path("sentences").isArray()||root.path("sentences").isEmpty()||root.path("sentences").size()>20)return GroundedAnswer.noEvidence();
+        try { root=SchemaContracts.parse(output);STRICT.readTree(output); }catch(RuntimeException invalid){diagnostic.accept(LlmDiagnostic.SENTENCE_JSON);return GroundedAnswer.noEvidence();}
+        if(!root.isObject()||root.size()!=1||!root.path("sentences").isArray()||root.path("sentences").size()>20){diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE);return GroundedAnswer.noEvidence();}
+        if(root.path("sentences").isEmpty()){diagnostic.accept(LlmDiagnostic.SENTENCE_EMPTY);return GroundedAnswer.noEvidence();}
         var kept=new ArrayList<GroundedAnswer.Sentence>();var cited=new TreeSet<Integer>();var states=new HashSet<String>();
         for(var row:root.get("sentences")) {
-            if(!row.isObject()||row.size()!=2||!row.path("text").isString()||!row.path("citations").isArray())continue;
+            if(!row.isObject()||row.size()!=2||!row.path("text").isString()||!row.path("citations").isArray()){diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE);continue;}
             String text=row.get("text").asString();int length=text.codePointCount(0,text.length());
-            if(length<1||length>1000||text.codePoints().anyMatch(c->c=='\n'||c=='\r'||c==0x85||c==0x2028||c==0x2029)||row.get("citations").isEmpty()||row.get("citations").size()>6)continue;
+            if(length<1||length>1000||text.codePoints().anyMatch(c->c=='\n'||c=='\r'||c==0x85||c==0x2028||c==0x2029)||row.get("citations").isEmpty()||row.get("citations").size()>6){diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE);continue;}
             var numbers=new ArrayList<Integer>();boolean valid=true;
             for(var number:row.get("citations")) {
                 if(!number.isIntegralNumber()||!number.canConvertToInt()||number.asInt()<1||number.asInt()>units.size()){valid=false;break;}
                 numbers.add(number.asInt());
             }
-            if(!valid)continue;
+            if(!valid){diagnostic.accept(LlmDiagnostic.SENTENCE_CITATION);continue;}
+            if(!selectedSentence.test(row)){diagnostic.accept(LlmDiagnostic.COMPOSE_SELECTION);continue;}
             String body=String.join("\n",numbers.stream().map(n->units.get(n-1).body()).toList());
             String headers=String.join("\n",numbers.stream().map(n->units.get(n-1).header()).toList());
-            if(!facts(text,body)||!names(text,body+"\n"+headers))continue;
+            if(!facts(text,body)){diagnostic.accept(LlmDiagnostic.SENTENCE_FACT);continue;}
+            if(!names(text,body+"\n"+headers)){diagnostic.accept(LlmDiagnostic.SENTENCE_NAME);continue;}
             kept.add(new GroundedAnswer.Sentence(text,numbers));cited.addAll(numbers);
             for(int number:numbers)states.add(units.get(number-1).status());
         }

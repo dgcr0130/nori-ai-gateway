@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.*;
 @Tag("stage-F2") @Tag("label-LLM_STUB")
 abstract class LlmStubSupport extends P09QueueSupport {
     static final Set<String> PERMS = Set.of("EQP_READ","COMM_LOG_READ","MODEL_READ","DLQ_READ","AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ","AI_DOC_READ");
+    protected static final String OBSERVED_TEXT="EQP-001 설비 상태 장애 원인 로그 모델 공정 적용 조건 정의 관측 자료";
     protected final OllamaEndpointStub stub = new OllamaEndpointStub();
     protected Set<String> perms = PERMS;
 
@@ -39,7 +40,7 @@ abstract class LlmStubSupport extends P09QueueSupport {
     @BeforeEach void inferenceReady() throws Exception {
         await(() -> context.getBean(InferenceReadinessService.class).ready());context.getBean(InferenceReadinessService.class).stop();stub.clear();
         // 작성 시험은 실제 HTTP 본문이 충분한 고정 자료를 사용합니다. 위치(ref)를 본문으로 대신하지 않습니다.
-        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).evidenceText="EQP-001 설비 상태 장애 원인 로그 모델 공정 적용 조건 정의 관측 자료";
+        context.getBean(com.nori.ai.gateway.integration.fixtures.StandardSystemStub.class).evidenceText=OBSERVED_TEXT;
     }
     @AfterEach void closeStub() { stub.close(); }
 
@@ -47,6 +48,16 @@ abstract class LlmStubSupport extends P09QueueSupport {
     protected static TestHookRegistry.LlmReply classify(String wire) { return new TestHookRegistry.LlmReply(CallType.CLASSIFY, wire, "stop", null, Math.max(40, answerTokens(wire))); }
     protected static TestHookRegistry.LlmReply compose(String text) {
         String content=composeWire(text);
+        return new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,Math.max(30,answerTokens(content)));
+    }
+    /** 성공 fixture가 실제 제공된 후보 ID를 명시합니다. 무효 출력의 자동 보정에는 사용하지 않습니다. */
+    protected static TestHookRegistry.LlmReply composeSelection(String... ids) {
+        return composeSelection(Arrays.stream(ids).mapToInt(id->Integer.parseInt(id.substring(1))).max().orElse(0),ids);
+    }
+    protected static TestHookRegistry.LlmReply composeSelection(int count,String... ids) {
+        var decisions=SchemaContracts.JSON.createObjectNode();for(int i=1;i<=count;i++)decisions.put("C"+i,false);
+        for(String id:ids)decisions.put(id,true);
+        String content=decisions.toString();
         return new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,Math.max(30,answerTokens(content)));
     }
     protected static String composeWire(String text) {

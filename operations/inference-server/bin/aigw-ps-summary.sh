@@ -2,7 +2,7 @@
 # 추론 서버 읽기 전용 상태 요약(Plan P17, SPEC §14.6). 운영자가 추론 서버에서 실행한다.
 # loopback GET /api/ps 응답을 파이프로만 받아 모델 name·digest·context_length·resident_count·ok 만 출력한다.
 # 응답 원문은 출력·저장하지 않으며, 파싱 실패 시 고정 문구만 낸다. GET 외 요청은 보내지 않는다.
-# 사용: aigw-ps-summary.sh <qwen3:4b 기대 digest(sha256 hex 64자)> [--input-file <path>]
+# 사용: aigw-ps-summary.sh <qwen3-vl:30b-a3b-instruct-q4_K_M 기대 digest(sha256 hex 64자)> [--input-file <path>]
 #   --input-file 은 로컬 fixture 시험 전용이다(서버 실행에 쓰지 않는다).
 # 종료 코드: 0 = ok=true, 1 = ok=false, 2 = 사용법 오류·조회 실패·파싱 실패.
 set -euo pipefail
@@ -28,7 +28,7 @@ fi
 FILTER=$(cat <<'PY'
 import json, re, sys
 
-GENERATION_MODEL = 'qwen3:4b'
+GENERATION_MODEL = 'qwen3-vl:30b-a3b-instruct-q4_K_M'
 # Ollama 는 태그 없는 이름을 ':latest' 로 보고한다.
 EMBEDDING_MODEL_NAMES = ('bge-m3', 'bge-m3:latest')
 EXPECTED_CONTEXT_LENGTH = 8192

@@ -133,6 +133,22 @@ class InferenceRequestContractIT extends StackContextSupport {
             assertThat(request.header("Authorization")).as("자격 파일 생략 시 Authorization 없음").isNull();
     }
 
+    @Test void structuredOutputUsesTheSameActualPromptCounterAndItsOwnConstraintBudget() {
+        start();awaitReadinessAndClear();
+        var messages=messagesOf(100);usagePrompt.set(100);
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"sentences\":{\"type\":\"array\",\"items\":{\"enum\":[{\"text\":\"조건이 없으면 전송하지 않는다.\",\"citations\":[1]}]}}},\"required\":[\"sentences\"],\"additionalProperties\":false}");
+        assertThat(client().chat(CallType.COMPOSER,messages,max(CallType.COMPOSER),new com.nori.ai.gateway.core.job.CancellationToken(),schema))
+            .isInstanceOfSatisfying(Completed.class,value->{assertThat(value.inputTokens()).isEqualTo(100);assertThat(value.promptTokens()).isEqualTo(100);});
+        var request=stub.received().stream().filter(r->r.path().equals("/v1/chat/completions")).findFirst().orElseThrow();
+        var body=JSON.readTree(request.body());
+        assertThat(body.path("response_format").path("json_schema").path("schema")).isEqualTo(JSON.readTree(schema.schema()));
+        assertThat(body.path("messages").toString()).doesNotContain("citations","enum");
+        assertThat(context.getBean(PromptTokenCounting.class).count(messages)).isEqualTo(100);
+        var large=new com.nori.ai.gateway.core.llm.StructuredOutput(JSON.writeValueAsString(Map.of("enum",List.of("문법선택 ".repeat(6000)))));
+        assertThat(client().chat(CallType.COMPOSER,messages,max(CallType.COMPOSER),new com.nori.ai.gateway.core.job.CancellationToken(),large)).isInstanceOf(InferenceClient.BudgetExceeded.class);
+        assertThat(stub.count("/v1/chat/completions")).isOne();
+    }
+
     @Test @ExtendWith(OutputCaptureExtension.class)
     void serverErrorDisconnectAndEmptyChoicesAreOneRequestPerAttemptAndLeakNoSentinel(CapturedOutput output) {
         start();

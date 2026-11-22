@@ -29,8 +29,13 @@ public final class ScriptedChatTransport implements ChatTransport {
     }
 
     @Override public Response send(CallType type,List<ChatMessage> messages,int maxTokens,java.time.Duration timeout) {
+        return send(type,messages,maxTokens,timeout,null);
+    }
+
+    @Override public Response send(CallType type,List<ChatMessage> messages,int maxTokens,java.time.Duration timeout,
+            com.nori.ai.gateway.core.llm.StructuredOutput output) {
         var reply = scripts.next(type);
-        if (reply.isEmpty()) return live.send(type, messages, maxTokens, timeout);
+        if (reply.isEmpty()) return live.send(type, messages, maxTokens, timeout, output);
         var value = reply.get();
         int promptTokens = value.promptTokens() == null ? counter.count(messages) : value.promptTokens();
         return new Response(value.content(), value.finishReason(), promptTokens, value.completionTokens());

@@ -20,10 +20,26 @@ public final class PreCallBudgetAssert {
 
     private final PromptTokenCounting counter;
     private final TokenBudgetPolicy policy;
+    private final com.nori.ai.gateway.core.llm.AnswerTokenCounting constraintCounter;
 
     public PreCallBudgetAssert(PromptTokenCounting counter, TokenBudgetPolicy policy) {
+        this(counter,policy,null);
+    }
+
+    public PreCallBudgetAssert(PromptTokenCounting counter, TokenBudgetPolicy policy, com.nori.ai.gateway.core.llm.AnswerTokenCounting constraintCounter) {
         this.counter = Objects.requireNonNull(counter, "counter");
         this.policy = Objects.requireNonNull(policy, "policy");
+        this.constraintCounter = constraintCounter;
+    }
+
+    /** 문법 제약은 메시지에 넣지 않습니다. 크기 제한과 실제 prompt 계수를 혼합하지 않습니다. */
+    public Outcome check(CallType type,List<ChatMessage> messages,int maxTokens,com.nori.ai.gateway.core.llm.StructuredOutput output) {
+        var checked=check(type,messages,maxTokens);
+        if(checked instanceof Exceeded||output==null)return checked;
+        if(constraintCounter==null)throw new IllegalStateException("구조화 제약 계수기가 없습니다");
+        int count=constraintCounter.count(output.schema());
+        int limit=type==CallType.COMPOSER?policy.evidenceTokens():policy.budget(type).inputLimit();
+        return count>limit?new Exceeded(checked.count(),Set.of(TokenBudgetPolicy.Violation.INPUT_LIMIT)):checked;
     }
 
     /** {@code maxTokens} 는 그 유형의 정책값(답변 상한 + 사고 상한)이어야 한다. 다른 값은 설정 한 곳 원칙 위반이라 거부한다. */

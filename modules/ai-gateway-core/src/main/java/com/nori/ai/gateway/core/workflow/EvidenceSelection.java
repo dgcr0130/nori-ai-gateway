@@ -12,7 +12,12 @@ public final class EvidenceSelection {
     }
     private final AnswerTokenCounting tokens;private final int budget;
     public EvidenceSelection(AnswerTokenCounting tokens,int budget){this.tokens=tokens;if(budget<1)throw new IllegalArgumentException("근거 예산이 잘못되었습니다");this.budget=budget;}
+    public boolean fitsTransmission(String data,String schema){return tokens.count(data)<=budget&&tokens.count(schema)<=budget;}
     public Selected select(List<DocumentSearch.Round> rounds,List<EvidenceUnit> other,SearchSettings settings) {
+        return select(rounds, other, settings, units -> tokens.count(json(units)) <= budget);
+    }
+    /** 본문·순서는 그대로 두고 요청별 실제 직렬화/문맥/출력 문법 예산으로 전체 단위를 선택합니다. */
+    public Selected select(List<DocumentSearch.Round> rounds,List<EvidenceUnit> other,SearchSettings settings,java.util.function.Predicate<List<EvidenceUnit>> fits) {
         var ranked=RankFusion.fuse(rounds,settings.rrfK());var parents=new LinkedHashMap<String,EvidenceUnit>();
         var children=new HashMap<UUID,List<DocumentLocation>>();
         for(var score:ranked)children.computeIfAbsent(score.hit().parent().id(),key->new ArrayList<>()).add(score.hit().child().location());
@@ -23,11 +28,11 @@ public final class EvidenceSelection {
         for(var round:rounds)for(var answer:round.verified())for(var hit:answer.parents())parents.putIfAbsent(hit.parent().id().toString(),EvidenceUnit.document(hit,children.get(hit.parent().id())));
         for(var score:ranked)parents.putIfAbsent(score.hit().parent().id().toString(),EvidenceUnit.document(score.hit(),children.get(score.hit().parent().id())));
         var units=new ArrayList<EvidenceUnit>();int documents=0;
-        for(var unit:parents.values())if(documents<settings.evidenceLimit()&&fits(units,unit)){units.add(unit);documents++;}
-        boolean truncated=false;for(var unit:other)if(fits(units,unit))units.add(unit);else truncated=true;
+        for(var unit:parents.values())if(documents<settings.evidenceLimit()&&fits(units,unit,fits)){units.add(unit);documents++;}
+        boolean truncated=false;for(var unit:other)if(fits(units,unit,fits))units.add(unit);else truncated=true;
         return new Selected(units,json(units),truncated);
     }
-    private boolean fits(List<EvidenceUnit> selected,EvidenceUnit next) { var copy=new ArrayList<>(selected);copy.add(next);return tokens.count(json(copy))<=budget; }
+    private boolean fits(List<EvidenceUnit> selected,EvidenceUnit next,java.util.function.Predicate<List<EvidenceUnit>> fits) { var copy=new ArrayList<>(selected);copy.add(next);return fits.test(List.copyOf(copy)); }
     public static String json(List<EvidenceUnit> units) {
         var data=SchemaContracts.JSON.createObjectNode();var array=data.putArray("evidence");
         for(int i=0;i<units.size();i++) {

@@ -18,6 +18,14 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.*;
 
 class ScriptedChatTransportTest {
+    @Test void schemaIgnoringMixedIdsAreNotSilentlyRepairedByTheOperationalTransport() {
+        String content="{\"selectedIds\":[\"C1\",\"UNKNOWN\"]}";
+        bind("mixed-ids",List.of(new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,20)),Optional.empty());
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"selectedIds\":{\"type\":\"array\",\"items\":{\"enum\":[\"C1\"]}}},\"required\":[\"selectedIds\"],\"additionalProperties\":false}");
+        try(var observed=scripts.open("mixed-ids",CallType.COMPOSER,MESSAGES)) {
+            assertThat(transport.send(CallType.COMPOSER,MESSAGES,3072,java.time.Duration.ofSeconds(3),schema).content()).isEqualTo(content);
+        }
+    }
     static final class Movable extends Clock {
         Instant now = Instant.parse("2026-11-06T00:00:00Z");
         @Override public ZoneId getZone() { return ZoneOffset.UTC; }
@@ -40,6 +48,23 @@ class ScriptedChatTransportTest {
     }
     private ChatTransport.Response call(String job, CallType type) {
         try (var scope = scripts.open(job, type, MESSAGES)) { return transport.send(type, MESSAGES, 5_120); }
+    }
+
+    @Test void structuredRequestsKeepScriptReplayAndForwardConstraintsUnchangedToLive() {
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\"}");
+        bind("structured",List.of(new TestHookRegistry.LlmReply(CallType.CLASSIFY,"{}","stop",null,1)),Optional.empty());
+        try(var scope=scripts.open("structured",CallType.CLASSIFY,MESSAGES)) {
+            assertThat(transport.send(CallType.CLASSIFY,MESSAGES,2048,java.time.Duration.ofSeconds(3),schema).content()).isEqualTo("{}");
+        }
+        var forwarded=new ArrayList<com.nori.ai.gateway.core.llm.StructuredOutput>();
+        var live=new ChatTransport(){
+            public Response send(CallType type,List<ChatMessage> messages,int max){throw new AssertionError();}
+            public Response send(CallType type,List<ChatMessage> messages,int max,java.time.Duration timeout,com.nori.ai.gateway.core.llm.StructuredOutput output){forwarded.add(output);return new Response("{}","stop",777,1);}
+        };
+        var compatible=new ScriptedChatTransport(live,scripts,m->777);
+        assertThat(compatible.send(CallType.CLASSIFY,MESSAGES,2048,java.time.Duration.ofSeconds(3),schema).content()).isEqualTo("{}");
+        assertThat(forwarded).containsExactly(schema);
+        assertThatThrownBy(()->liveTransport.send(CallType.CLASSIFY,MESSAGES,2048,java.time.Duration.ofSeconds(3),schema)).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test void boundJobGetsItsScriptInOrderWhileUnboundAndUnarmedJobsGoToTheLiveTransport() {

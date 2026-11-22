@@ -30,8 +30,8 @@ public class CoreBeansConfiguration {
     }
     @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
     com.nori.ai.gateway.core.workflow.WorkflowGrounding workflowGrounding(com.nori.ai.gateway.core.knowledge.DocumentSearch search,com.nori.ai.gateway.core.knowledge.SearchLanguage language,
-            com.nori.ai.gateway.core.knowledge.SearchSettings settings,com.nori.ai.gateway.core.workflow.EvidenceSelection selection,com.nori.ai.gateway.app.job.GroundingInputs inputs,Clock clock,com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiry) {
-        return new com.nori.ai.gateway.core.workflow.WorkflowGrounding(search,language,settings,selection,inputs,clock,expiry);
+            com.nori.ai.gateway.core.knowledge.SearchSettings settings,com.nori.ai.gateway.core.workflow.EvidenceSelection selection,com.nori.ai.gateway.app.job.GroundingInputs inputs,Clock clock,com.nori.ai.gateway.core.expiry.ExpiryCheckpoint expiry,com.nori.ai.gateway.core.llm.ComposerService composer) {
+        return new com.nori.ai.gateway.core.workflow.WorkflowGrounding(search,language,settings,selection,inputs,clock,expiry,composer::fitsGrounded);
     }
     @Bean @ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
     com.nori.ai.gateway.core.knowledge.DocumentSearch documentSearch(com.nori.ai.gateway.persistence.repository.DocumentIndexRepository store,
@@ -88,7 +88,11 @@ public class CoreBeansConfiguration {
     @Bean com.nori.ai.gateway.core.job.GenerationSemaphore generationSemaphore(CapacityProfile capacity,org.springframework.core.env.Environment environment) { var settings=com.nori.ai.gateway.integration.inference.LlmSettings.load(environment); if(capacity.generationConcurrency()!=settings.generationConcurrency())throw new IllegalStateException("생성 동시성 설정이 다릅니다"); return new com.nori.ai.gateway.core.job.GenerationSemaphore(settings.generationConcurrency()); }
     @Bean com.nori.ai.gateway.core.budget.TokenBudgetPolicy tokenBudgetPolicy(org.springframework.core.env.Environment environment) { return com.nori.ai.gateway.integration.inference.LlmSettings.load(environment).policy(); }
     @Bean com.nori.ai.gateway.core.budget.PromptReducer promptReducer(com.nori.ai.gateway.core.budget.PromptTokenCounting counter, com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy) { return new com.nori.ai.gateway.core.budget.PromptReducer(counter, policy); }
-    @Bean com.nori.ai.gateway.core.budget.PreCallBudgetAssert preCallBudgetAssert(com.nori.ai.gateway.core.budget.PromptTokenCounting counter, com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy) { return new com.nori.ai.gateway.core.budget.PreCallBudgetAssert(counter, policy); }
+    @Bean com.nori.ai.gateway.core.budget.PreCallBudgetAssert preCallBudgetAssert(com.nori.ai.gateway.core.budget.PromptTokenCounting counter, com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy,Optional<com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter> tokenizer) {
+        // 비활성·부분 컨텍스트에 tokenizer를 강제하지 않으며 구조화 호출에서 없는 계수기는 기존 guard가 거절합니다.
+        return new com.nori.ai.gateway.core.budget.PreCallBudgetAssert(counter,policy,
+            tokenizer.map(value->(com.nori.ai.gateway.core.llm.AnswerTokenCounting)value::countText).orElse(null));
+    }
     @Bean com.nori.ai.gateway.core.budget.TruncationDetector truncationDetector() { return new com.nori.ai.gateway.core.budget.TruncationDetector(); }
     @Bean ManifestLoader manifestLoader() { return new ManifestLoader(); }
     @Bean ContractVersionPolicy contractVersionPolicy() { return new ContractVersionPolicy(); }

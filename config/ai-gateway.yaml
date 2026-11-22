@@ -54,9 +54,9 @@ ai:
       coreTermLimit: 4
       retryCount: 1
     llm:
-      baseUrl: http://192.168.0.160:11434/v1
-      generationModel: qwen3:4b
-      embeddingModel: bge-m3
+      baseUrl: http://192.168.0.77:11434/v1
+      generationModel: qwen3-vl:30b-a3b-instruct-q4_K_M
+      embeddingModel: bge-m3:latest
       temperature: 0.0
       contextTokens: 8192
       requestTimeout: 60s
@@ -76,6 +76,6 @@ ai:
           messageSuffix: "<|im_end|>\n"
           sameRoleSeparator: "\n\n"
           mergeSameRole: true
-          generationPrefix: "<|im_start|>assistant\n<think>\n"
-          systemContentSuffix: "\n\n"
+          generationPrefix: "<|im_start|>assistant\n"
+          systemContentSuffix: ""
           contentSuffix: ""

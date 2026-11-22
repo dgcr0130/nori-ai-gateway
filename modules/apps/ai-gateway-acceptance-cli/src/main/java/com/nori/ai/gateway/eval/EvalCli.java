@@ -5,6 +5,7 @@ import com.nori.ai.gateway.eval.ci.BuildIdentityManifest;
 import com.nori.ai.gateway.eval.ci.CiEvidence;
 import com.nori.ai.gateway.eval.f3.EmbeddingProfile;
 import com.nori.ai.gateway.eval.io.Json;
+import com.nori.ai.gateway.eval.answer.AnswerEvaluate;
 import com.nori.ai.gateway.eval.report.*;
 import java.io.PrintStream;
 import java.nio.file.*;
@@ -16,7 +17,9 @@ public final class EvalCli {
     private final PrintStream out;
     private final PrintStream err;
     private final Path root;
-    public EvalCli(Map<String,String> env, PrintStream out, PrintStream err, Path root) { this.env = Map.copyOf(env); this.out = out; this.err = err; this.root = root.toAbsolutePath().normalize(); }
+    private final AnswerEvaluate.InputResolver answerInputs;
+    public EvalCli(Map<String,String> env, PrintStream out, PrintStream err, Path root) { this(env,out,err,root,AnswerEvaluate.FILES); }
+    public EvalCli(Map<String,String> env, PrintStream out, PrintStream err, Path root,AnswerEvaluate.InputResolver answerInputs) { this.env = Map.copyOf(env); this.out = out; this.err = err; this.root = root.toAbsolutePath().normalize();this.answerInputs=answerInputs; }
     public static void main(String[] args) { System.exit(new EvalCli(System.getenv(), System.out, System.err, Path.of(".")).execute(args)); }
     public int execute(String... arguments) {
         try { dispatch(arguments); return 0; }
@@ -32,6 +35,10 @@ public final class EvalCli {
         if (nested && operation.startsWith("--")) throw new EvalException(2, "UNKNOWN_COMMAND");
         Args args = new Args(arguments, nested ? 2 : 1, Set.of("--require-executed", "--require-docker"));
         switch (command) {
+            case "answer-evaluate" -> {
+                int exit=new AnswerEvaluate(answerInputs).execute(args,root,env,out);
+                if(exit!=0)throw new EvalException(exit,"정답률 기준을 충족하지 못했습니다");
+            }
             case "leaf-extract" -> {
                 args.only("--otr-dir", "--task", "--module", "--out", "--current-fingerprint", "--require-executed", "--catalog", "--runtime-classpath-file");
                 Path runtimeClasspathFile = args.optional("--runtime-classpath-file") == null ? null : path(args.required("--runtime-classpath-file"));

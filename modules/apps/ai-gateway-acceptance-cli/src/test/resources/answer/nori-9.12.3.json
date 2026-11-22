@@ -1,0 +1,411 @@
+{
+  "version": "9.12.3",
+  "dictionary": "bundled",
+  "userDictionary": null,
+  "decompound": "NONE",
+  "outputUnknownUnigrams": false,
+  "discardPunctuation": true,
+  "filters": [],
+  "observations": [
+    {
+      "text": "코드는 100입니다",
+      "tokens": [
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 0,
+          "surface": "코드",
+          "tag": "NNG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 3,
+          "morphemes": [],
+          "start": 2,
+          "surface": "는",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 7,
+          "morphemes": [],
+          "start": 4,
+          "surface": "100",
+          "tag": "SN",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 10,
+          "morphemes": [
+            {
+              "tag": "VCP",
+              "text": "이"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 7,
+          "surface": "입니다",
+          "tag": "VCP",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "코드는 100이 아닙니다",
+      "tokens": [
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 0,
+          "surface": "코드",
+          "tag": "NNG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 3,
+          "morphemes": [],
+          "start": 2,
+          "surface": "는",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 7,
+          "morphemes": [],
+          "start": 4,
+          "surface": "100",
+          "tag": "SN",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 8,
+          "morphemes": [],
+          "start": 7,
+          "surface": "이",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 13,
+          "morphemes": [
+            {
+              "tag": "VCN",
+              "text": "아니"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 9,
+          "surface": "아닙니다",
+          "tag": "VCN",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "코드는 100이 안 됩니다",
+      "tokens": [
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 0,
+          "surface": "코드",
+          "tag": "NNG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 3,
+          "morphemes": [],
+          "start": 2,
+          "surface": "는",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 7,
+          "morphemes": [],
+          "start": 4,
+          "surface": "100",
+          "tag": "SN",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 8,
+          "morphemes": [],
+          "start": 7,
+          "surface": "이",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 10,
+          "morphemes": [],
+          "start": 9,
+          "surface": "안",
+          "tag": "MAG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 14,
+          "morphemes": [
+            {
+              "tag": "VV",
+              "text": "되"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 11,
+          "surface": "됩니다",
+          "tag": "VV",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "재시도 없음으로 설정됩니다",
+      "tokens": [
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 0,
+          "surface": "재시",
+          "tag": "NNG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 3,
+          "morphemes": [],
+          "start": 2,
+          "surface": "도",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 5,
+          "morphemes": [],
+          "start": 4,
+          "surface": "없",
+          "tag": "VA",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 6,
+          "morphemes": [],
+          "start": 5,
+          "surface": "음",
+          "tag": "E",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 8,
+          "morphemes": [],
+          "start": 6,
+          "surface": "으로",
+          "tag": "J",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 11,
+          "morphemes": [],
+          "start": 9,
+          "surface": "설정",
+          "tag": "NNG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 14,
+          "morphemes": [
+            {
+              "tag": "XSV",
+              "text": "되"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 11,
+          "surface": "됩니다",
+          "tag": "XSV",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "못 합니다",
+      "tokens": [
+        {
+          "end": 1,
+          "morphemes": [],
+          "start": 0,
+          "surface": "못",
+          "tag": "MAG",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 5,
+          "morphemes": [
+            {
+              "tag": "VV",
+              "text": "하"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 2,
+          "surface": "합니다",
+          "tag": "VV",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "하지 못합니다",
+      "tokens": [
+        {
+          "end": 1,
+          "morphemes": [],
+          "start": 0,
+          "surface": "하",
+          "tag": "VV",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 1,
+          "surface": "지",
+          "tag": "E",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 7,
+          "morphemes": [
+            {
+              "tag": "VX",
+              "text": "못하"
+            },
+            {
+              "tag": "E",
+              "text": "ᄇ니다"
+            }
+          ],
+          "start": 3,
+          "surface": "못합니다",
+          "tag": "VX",
+          "type": "INFLECT"
+        }
+      ]
+    },
+    {
+      "text": "하지 않습니다",
+      "tokens": [
+        {
+          "end": 1,
+          "morphemes": [],
+          "start": 0,
+          "surface": "하",
+          "tag": "VV",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 1,
+          "surface": "지",
+          "tag": "E",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 4,
+          "morphemes": [],
+          "start": 3,
+          "surface": "않",
+          "tag": "VX",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 7,
+          "morphemes": [],
+          "start": 4,
+          "surface": "습니다",
+          "tag": "E",
+          "type": "MORPHEME"
+        }
+      ]
+    },
+    {
+      "text": "없습니다",
+      "tokens": [
+        {
+          "end": 1,
+          "morphemes": [],
+          "start": 0,
+          "surface": "없",
+          "tag": "VA",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 4,
+          "morphemes": [],
+          "start": 1,
+          "surface": "습니다",
+          "tag": "E",
+          "type": "MORPHEME"
+        }
+      ]
+    },
+    {
+      "text": "하지 마세요",
+      "tokens": [
+        {
+          "end": 1,
+          "morphemes": [],
+          "start": 0,
+          "surface": "하",
+          "tag": "VV",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 2,
+          "morphemes": [],
+          "start": 1,
+          "surface": "지",
+          "tag": "E",
+          "type": "MORPHEME"
+        },
+        {
+          "end": 6,
+          "morphemes": [
+            {
+              "tag": "VX",
+              "text": "말"
+            },
+            {
+              "tag": "E",
+              "text": "시"
+            },
+            {
+              "tag": "E",
+              "text": "어요"
+            }
+          ],
+          "start": 3,
+          "surface": "마세요",
+          "tag": "VX",
+          "type": "INFLECT"
+        }
+      ]
+    }
+  ]
+}

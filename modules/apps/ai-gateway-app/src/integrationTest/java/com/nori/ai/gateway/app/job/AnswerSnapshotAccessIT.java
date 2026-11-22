@@ -12,11 +12,11 @@ class AnswerSnapshotAccessIT extends LlmStubSupport {
         try(var client=java.net.http.HttpClient.newHttpClient()){return client.send(request,java.net.http.HttpResponse.BodyHandlers.ofString());}
     }
     @Test void actualValidatedSnapshotAndCitationsSurviveDeletionWhileEveryOrdinaryPathBecomes404() throws Exception {
-        var job=admitScripted("snapshot-access","EQP-001 상태",windowOnly(),List.of(classify(wire("LQ","EQP-001",null,null,null)),compose("{\"sentences\":[{\"text\":\"설비 상태\",\"citations\":[1]}]}")),Optional.empty(),null);
+        var job=admitScripted("snapshot-access","EQP-001 상태",windowOnly(),List.of(classify(wire("LQ","EQP-001",null,null,null)),composeSelection("C1")),Optional.empty(),null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
-        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:conversation AND role='assistant'").param("conversation",job.conversationId()).query(String.class).single()).isEqualTo("설비 상태[1]");
-        var answer=payload(job.jobId()).path("answer");assertThat(answer.path("kind").asString()).isEqualTo("ANSWER");assertThat(answer.path("text").asString()).isEqualTo("설비 상태[1]");
-        assertThat(answer.path("sentences")).isEqualTo(json.readTree("[{\"text\":\"설비 상태\",\"citations\":[1]}]"));String evidence=answer.path("citations").get(0).path("evidenceId").asString();
+        assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:conversation AND role='assistant'").param("conversation",job.conversationId()).query(String.class).single()).isEqualTo(OBSERVED_TEXT+"[1]");
+        var answer=payload(job.jobId()).path("answer");assertThat(answer.path("kind").asString()).isEqualTo("ANSWER");assertThat(answer.path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");
+        assertThat(answer.path("sentences")).isEqualTo(json.valueToTree(List.of(Map.of("text",OBSERVED_TEXT,"citations",List.of(1)))));String evidence=answer.path("citations").get(0).path("evidenceId").asString();
         var stored=jdbc().sql("SELECT id::text,answer::text,evidence::text,question_masked,config_sha256 FROM kn.answer_snapshot WHERE job_id=:job").param("job",job.jobId()).query().singleRow();String internal=(String)stored.get("id");
         assertThat(json.readTree((String)stored.get("answer"))).isEqualTo(answer);assertThat(stored.get("question_masked")).isEqualTo("EQP-001 상태");assertThat((String)stored.get("config_sha256")).matches("[0-9a-f]{64}");
         var units=json.readTree((String)stored.get("evidence"));assertThat(units).hasSize(1);String body=context.getBean(StandardSystemStub.class).evidenceText;

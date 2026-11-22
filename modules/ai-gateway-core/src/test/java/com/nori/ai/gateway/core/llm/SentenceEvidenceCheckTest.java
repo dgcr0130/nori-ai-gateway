@@ -13,6 +13,16 @@ class SentenceEvidenceCheckTest {
     EvidenceUnit unit(String body,String header,String status){return new EvidenceUnit("SYSTEM",null,SchemaContracts.JSON.createObjectNode().put("toolId","read").put("ref","r").put("observedAt","2026-11-19T00:00:00Z"),header,body,List.of("READ"),status,"2026-11-19T00:00:00Z",List.of(),SchemaContracts.JSON.createObjectNode(),List.of(),List.of());}
     String output(Object... rows){return SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(rows)));}
     Map<String,Object> row(String text,Integer... citations){return Map.of("text",text,"citations",List.of(citations));}
+    @Test void anAllowedEnumRowStillNeedsFactsAndNounsAndNonLlmCallKeepsItsOriginalContract() {
+        var units=List.of(unit("설비 10","","SUCCESS"));
+        var itemSchema=SchemaContracts.JSON.valueToTree(Map.of("enum",List.of(row("설비",1),row("99",1),row("부산",1))));
+        var reasons=new ArrayList<LlmDiagnostic>();
+        var result=check.check(output(row("설비",1),row("99",1),row("부산",1)),units,reasons::add,value->SchemaContracts.matches(itemSchema,value));
+        assertThat(result.kind()).isEqualTo("PARTIAL");assertThat(result.text()).isEqualTo("설비[1]");
+        assertThat(result.sentences()).hasSize(1);assertThat(result.citations()).singleElement().satisfies(value->assertThat(value.number()).isEqualTo(1));
+        assertThat(reasons).containsExactly(LlmDiagnostic.SENTENCE_FACT,LlmDiagnostic.SENTENCE_NAME);
+        assertThat(check.check(output(row("설비 상태",1)),List.of(unit("설비 상태 T3","","SUCCESS"))).kind()).isEqualTo("ANSWER");
+    }
     @Test void onlyCitedBodySuppliesNumbersAndIdentifiersWhileNamesMayUseItsOwnHeader() {
         var units=List.of(unit("설비 T3 S1F2 EQP-001 linger.ms 1.5ms -2 20%","서울 Alpha","SUCCESS"),unit("부산 Beta 77 T30 EQP-0010","","SUCCESS"));
         var result=check.check(output(row("설비 T3 S1F2 EQP-001 linger.ms 1.5ms -2 20%",1),row("서울 Alpha 확인",1),row("부산 77",1),row("Beta",1),row("EQP-00",1),row("T30",1)),units);

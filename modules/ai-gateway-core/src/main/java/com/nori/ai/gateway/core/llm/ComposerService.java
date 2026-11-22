@@ -48,7 +48,10 @@ public final class ComposerService {
      * @param toolResults 단계 결과(축소 4단계의 필수 필드 투영 포함)
      * @param logSummary 결정론 Log Summarizer 요약(없으면 빈 문자열)
      */
-    public record Input(List<EvidenceDigest> evidence, List<PromptDraft.ToolResult> toolResults, String logSummary, List<String> rawLogLines, String question, List<CoverageDigest> coverage, Optional<String> selectedData) {
+    public record Input(List<EvidenceDigest> evidence, List<PromptDraft.ToolResult> toolResults, String logSummary, List<String> rawLogLines, String question, List<CoverageDigest> coverage, Optional<String> selectedData, Optional<ClassificationService.HistoryPair> matchedHistory) {
+        public Input(List<EvidenceDigest> evidence,List<PromptDraft.ToolResult> tools,String summary,List<String> lines,String question,List<CoverageDigest> coverage,Optional<String> selectedData) {
+            this(evidence,tools,summary,lines,question,coverage,selectedData,Optional.empty());
+        }
         public Input(List<EvidenceDigest> evidence,List<PromptDraft.ToolResult> tools,String summary,List<String> lines,String question,List<CoverageDigest> coverage) {
             this(evidence,tools,summary,lines,question,coverage,Optional.empty());
         }
@@ -56,7 +59,7 @@ public final class ComposerService {
             this(evidence, toolResults, logSummary, rawLogLines, question, List.of());
         }
         public Input {
-            evidence = List.copyOf(evidence); toolResults = List.copyOf(toolResults); rawLogLines = List.copyOf(rawLogLines); coverage = List.copyOf(coverage);Objects.requireNonNull(selectedData);
+            evidence = List.copyOf(evidence); toolResults = List.copyOf(toolResults); rawLogLines = List.copyOf(rawLogLines); coverage = List.copyOf(coverage);Objects.requireNonNull(selectedData);Objects.requireNonNull(matchedHistory);
             Objects.requireNonNull(logSummary, "logSummary"); Objects.requireNonNull(question, "question");
         }
         @Override public String toString() { return "ComposerInput[보호됨]"; }
@@ -85,6 +88,7 @@ public final class ComposerService {
     private final LlmCallAudit audit;
     private final String systemPrompt;
     private final SentenceEvidenceCheck sentenceCheck;
+    private final com.nori.ai.gateway.core.knowledge.SearchLanguage language;
     private final String configurationSha256;
     public String configurationSha256(){return configurationSha256;}
 
@@ -94,11 +98,11 @@ public final class ComposerService {
     }
     public ComposerService(InferenceClient inference, PromptReducer reducer, TokenBudgetPolicy policy, AnswerTokenCounting answers, ExpiryCheckpoint expiry,
             LlmCallObserver observer,LlmCallAudit audit,String systemPrompt,com.nori.ai.gateway.core.knowledge.SearchLanguage language) {
-        this(inference,reducer,policy,answers,expiry,observer,audit,systemPrompt,language,com.nori.ai.gateway.core.result.AnswerSnapshot.sha(systemPrompt+"\n"+policy.budget(CallType.COMPOSER)+"\n"+policy.evidenceTokens()));
+        this(inference,reducer,policy,answers,expiry,observer,audit,systemPrompt,language,com.nori.ai.gateway.core.result.AnswerSnapshot.sha(systemPrompt+"\n"+policy.budget(CallType.COMPOSER)+"\n"+policy.evidenceTokens()+"\n"+EvidenceCandidateSelection.PROMPT_VERSION+"\n"+EvidenceCandidateSelection.systemPrompt(false)+"\n"+EvidenceCandidateSelection.systemPrompt(true)+"\n"+EvidenceCandidateSelection.CONDITION_INSTRUCTION+"\n"+QuestionAnswerShape.contract()));
     }
     public ComposerService(InferenceClient inference,PromptReducer reducer,TokenBudgetPolicy policy,AnswerTokenCounting answers,ExpiryCheckpoint expiry,LlmCallObserver observer,LlmCallAudit audit,String systemPrompt,com.nori.ai.gateway.core.knowledge.SearchLanguage language,String configurationSha256) {
         this.configurationSha256=configurationSha256;
-        this.sentenceCheck=new SentenceEvidenceCheck(language);
+        this.language=Objects.requireNonNull(language);this.sentenceCheck=new SentenceEvidenceCheck(language);
         this.inference = Objects.requireNonNull(inference, "inference");
         this.reducer = Objects.requireNonNull(reducer, "reducer");
         this.budget = Objects.requireNonNull(policy, "policy").budget(CallType.COMPOSER);
@@ -114,13 +118,10 @@ public final class ComposerService {
     public Result compose(JobContext job, Input input) {
         // 취소면 Prompt 조립도 하지 않는다.
         expiry.assertLive(job.cancellation());
+        if(input.selectedData().isPresent())return composeGrounded(job,input);
         var draft = new PromptDraft(systemPrompt, "boundSystem: " + job.scope().boundSystem().name(), List.of(), List.of(), input.logSummary(),
             input.rawLogLines(), input.toolResults(), input.question());
-        var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> {
-            if(input.selectedData().isEmpty())return messages(value,input.evidence(),input.coverage());
-            var user=SchemaContracts.JSON.createObjectNode().put("question",value.currentQuestion());user.set("data",SchemaContracts.JSON.readTree(input.selectedData().get()));
-            return List.of(new ChatMessage(ChatMessage.Role.SYSTEM,value.systemPrompt()+"\n"+value.boundSystemConstraint()),new ChatMessage(ChatMessage.Role.USER,com.nori.ai.gateway.core.evidence.EvidenceJson.write(user)));
-        });
+        var reduction = reducer.reduce(CallType.COMPOSER, draft, value -> messages(value,input.evidence(),input.coverage()));
         if (!reduction.withinBudget()) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         String data = reduction.messages().getLast().content();
         // 이후 검색 단계가 선택한 근거도 설정한 상한을 넘겨 전송할 수 없습니다. 질문은 줄이지 않습니다.
@@ -129,12 +130,13 @@ public final class ComposerService {
             if (answers.count(evidence) > evidenceTokens) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
         } catch (IllegalArgumentException uncountable) { return failed(ComposerOutcome.LLM_UNAVAILABLE, 0, reduction.steps()); }
         List<ChatMessage> messages = reduction.messages();
+        StructuredOutput output=null;
         int calls = 0;
         for (int attempt = 0; attempt < 2; attempt++) {
             expiry.assertLive(job.cancellation());
             InferenceClient.ChatOutcome outcome;
             try (var scope = observer.open(job.jobId(), CallType.COMPOSER, messages)) {
-                outcome = inference.chat(CallType.COMPOSER, messages, budget.requestMaxTokens(), job.cancellation());
+                outcome = inference.chat(CallType.COMPOSER, messages, budget.requestMaxTokens(), job.cancellation(), output);
             }
             String failure = outcome instanceof InferenceClient.Completed answered ? AnswerCheck.failure(answered, budget, answers) : null;
             // 시도마다 같은 축소 단계(첫 조립 기준)를 함께 남긴다. 재시도 입력 계수는 Client 의 호출 직전 계수다.
@@ -146,13 +148,6 @@ public final class ComposerService {
             if (outcome instanceof InferenceClient.CallFailed) return failed(ComposerOutcome.LLM_UNAVAILABLE, calls, reduction.steps());
             var completed = (InferenceClient.Completed) outcome;
             if (failure == null) {
-                if(input.selectedData().isPresent()) {
-                    var values=SchemaContracts.JSON.readTree(input.selectedData().get()).path("evidence").deepCopy();
-                    for(var value:values){((ObjectNode)value).remove("id");((ObjectNode)value).remove("number");}
-                    var units=SchemaContracts.JSON.convertValue(values,new tools.jackson.core.type.TypeReference<List<com.nori.ai.gateway.core.workflow.EvidenceUnit>>(){});
-                    var checked=sentenceCheck.check(completed.content(),units);
-                    return new Result(ComposerOutcome.COMPOSED,Optional.of(checked.text()),calls,0,0,reduction.steps(),Optional.of(checked));
-                }
                 return composed(completed.content(), input.evidence().size(), data, calls, reduction.steps());
             }
             List<ChatMessage> retry = new ArrayList<>(reduction.messages());
@@ -160,6 +155,69 @@ public final class ComposerService {
             messages = List.copyOf(retry);
         }
         return failed(ComposerOutcome.LLM_UNAVAILABLE, calls, reduction.steps());
+    }
+
+    private record Grounded(List<com.nori.ai.gateway.core.workflow.EvidenceUnit> units,EvidenceCandidateSelection selector,String data,PromptReducer.Reduction reduction) {}
+
+    /** 근거 부족으로 작성을 생략해도 질문·필수 지시 자체의 예산 초과를 자료 부족으로 바꾸지 않습니다. */
+    public boolean groundedQuestionFits(JobContext job) {
+        expiry.assertLive(job.cancellation());
+        return grounded(job,job.requestInput().maskedQuestion(),List.of(),Optional.empty()).reduction().withinBudget();
+    }
+
+    /** 검색 선택과 실제 작성에 같은 직렬화·계수기를 사용합니다. 실패하면 단위를 절삭하거나 제약을 버리지 않습니다. */
+    public boolean fitsGrounded(JobContext job,List<com.nori.ai.gateway.core.workflow.EvidenceUnit> units,Optional<ClassificationService.HistoryPair> history) {
+        try {var prepared=grounded(job,job.requestInput().maskedQuestion(),units,history);return fits(prepared);}
+        catch(IllegalArgumentException invalid){return false;}
+    }
+    private boolean fits(Grounded value) {return value.reduction().withinBudget()&&answers.count(value.data())<=evidenceTokens&&answers.count(value.selector().decisionOutput().schema())<=evidenceTokens;}
+    private Grounded grounded(JobContext job,String question,List<com.nori.ai.gateway.core.workflow.EvidenceUnit> units,Optional<ClassificationService.HistoryPair> history) {
+        var selector=EvidenceCandidateSelection.prepare(units);String data=selector.transmittedData(question,units,language,history);
+        var draft=new PromptDraft(EvidenceCandidateSelection.systemPrompt(history.isPresent()),"boundSystem: "+job.scope().boundSystem().name(),List.of(),List.of(),"",List.of(),List.of(),question);
+        var reduction=reducer.reduce(CallType.COMPOSER,draft,value->EvidenceCandidateSelection.messages(job.scope().boundSystem().name(),value.currentQuestion(),data,history.isPresent()));
+        return new Grounded(List.copyOf(units),selector,data,reduction);
+    }
+    private Result composeGrounded(JobContext job,Input input) {
+        final Grounded prepared;
+        try {
+            String original=input.selectedData().orElseThrow();SchemaContracts.canonicalize(original);
+            var root=SchemaContracts.JSON.readTree(original);if(!root.isObject()||root.size()!=1||!root.path("evidence").isArray())throw new IllegalArgumentException();
+            var values=root.get("evidence").deepCopy();for(int i=0;i<values.size();i++) {
+                var value=values.get(i);if(!value.isObject()||value.path("number").asInt()!=i+1||!value.path("id").asString().equals("e"+(i+1)))throw new IllegalArgumentException();
+                ((ObjectNode)value).remove("id");((ObjectNode)value).remove("number");
+            }
+            var units=SchemaContracts.JSON.convertValue(values,new tools.jackson.core.type.TypeReference<List<com.nori.ai.gateway.core.workflow.EvidenceUnit>>(){});
+            if(!com.nori.ai.gateway.core.evidence.EvidenceJson.write(root).equals(com.nori.ai.gateway.core.workflow.EvidenceSelection.json(units)))throw new IllegalArgumentException();
+            prepared=grounded(job,input.question(),units,input.matchedHistory());
+        }catch(IllegalArgumentException invalid){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.COMPOSE_SELECTION);return noEvidence(0,List.of());}
+        try {
+            if(answers.count(prepared.selector().decisionOutput().schema())>evidenceTokens){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.OUTPUT_CONSTRAINT_BUDGET);return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED,0,prepared.reduction().steps());}
+            if(!fits(prepared))return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED,0,prepared.reduction().steps());
+        }catch(IllegalArgumentException uncountable){return failed(ComposerOutcome.LLM_UNAVAILABLE,0,prepared.reduction().steps());}
+        if(prepared.selector().candidates().isEmpty()){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.COMPOSE_SELECTION);return noEvidence(0,prepared.reduction().steps());}
+        expiry.assertLive(job.cancellation());InferenceClient.ChatOutcome outcome;
+        try(var observed=observer.open(job.jobId(),CallType.COMPOSER,prepared.reduction().messages())) {
+            outcome=inference.chat(CallType.COMPOSER,prepared.reduction().messages(),budget.requestMaxTokens(),job.cancellation(),prepared.selector().decisionOutput());
+        }
+        String failure=outcome instanceof InferenceClient.Completed completed?AnswerCheck.failure(completed,budget,answers):null;
+        audit.record(LlmCallAudit.attempt(job.scope(),job.conversationId(),job.jobId(),CallType.COMPOSER,budget.requestMaxTokens(),outcome,failure==null?null:ErrorCode.LLM_UNAVAILABLE,prepared.reduction().steps()));
+        expiry.assertLive(job.cancellation());
+        if(outcome instanceof InferenceClient.BudgetExceeded)return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED,0,prepared.reduction().steps());
+        if(!(outcome instanceof InferenceClient.Completed completed)||failure!=null)return failed(ComposerOutcome.LLM_UNAVAILABLE,1,prepared.reduction().steps());
+        var debug=System.getLogger(ComposerService.class.getName());
+        if(debug.isLoggable(System.Logger.Level.DEBUG))debug.log(System.Logger.Level.DEBUG,
+            "COMPOSE_SELECTION_DIAGNOSTIC job={0} dataSha={1} schemaSha={2} bodyShas={3} candidateCount={4} selectedIds={5} outputSha={6} messageShas={7} candidateMapSha={8}",
+            job.jobId(),com.nori.ai.gateway.core.result.AnswerSnapshot.sha(prepared.data()),com.nori.ai.gateway.core.result.AnswerSnapshot.sha(prepared.selector().decisionOutput().schema()),
+            prepared.units().stream().map(unit->com.nori.ai.gateway.core.result.AnswerSnapshot.sha(unit.body())).toList(),prepared.selector().candidates().size(),prepared.selector().validDecisionIds(completed.content()),
+            com.nori.ai.gateway.core.result.AnswerSnapshot.sha(completed.content()),prepared.reduction().messages().stream().map(message->com.nori.ai.gateway.core.result.AnswerSnapshot.sha(message.content())).toList(),prepared.selector().candidateMapSha());
+        String reconstructed=prepared.selector().reconstructDecisionRows(completed.content(),reason->observer.diagnostic(job.jobId(),CallType.COMPOSER,reason));
+        var rows=SchemaContracts.parse(EvidenceSpanSelection.create(prepared.units()).schema()).path("properties").path("sentences");
+        var answer=sentenceCheck.check(reconstructed,prepared.units(),reason->observer.diagnostic(job.jobId(),CallType.COMPOSER,reason),row->rows.path("maxItems").asInt()!=0&&SchemaContracts.matches(rows.path("items"),row));
+        answer=QuestionAnswerShape.apply(job.requestInput().maskedQuestion(),answer,reason->observer.diagnostic(job.jobId(),CallType.COMPOSER,reason));
+        return new Result(ComposerOutcome.COMPOSED,Optional.of(answer.text()),1,0,0,prepared.reduction().steps(),Optional.of(answer));
+    }
+    private static Result noEvidence(int calls,List<PromptReducer.Step> steps) {
+        var answer=com.nori.ai.gateway.core.result.GroundedAnswer.noEvidence();return new Result(ComposerOutcome.COMPOSED,Optional.of(answer.text()),calls,0,0,steps,Optional.of(answer));
     }
 
     /** system = 고정 지시 + boundSystem 제약, user = 질문과 data 구획(canonical JSON). 같은 draft 는 같은 메시지를 만든다. */

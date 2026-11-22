@@ -68,9 +68,9 @@ class LlmScriptedTransportIT extends LlmStubSupport {
     }
 
     @Test @Tag("AC-31") void stubUsageEqualsTheGatewayCountAndAShorterUsageIsDetectedAsTruncationBehindTheScript() throws Exception {
-        var counted = admitScripted("usage-count", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("상태를 확인했다[e1].")), Optional.empty(), null);
+        var counted = admitScripted("usage-count", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), composeSelection("C1")), Optional.empty(), null);
         assertThat(terminal(counted)).isEqualTo("SUCCEEDED");
-        assertThat(payload(counted.jobId()).path("answer").path("text").asString()).isEqualTo("상태를 확인했다.[1]");
+        assertThat(payload(counted.jobId()).path("answer").path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");
         var truncated = admitScripted("usage-short", "EQP-001 상태 알려줘", windowOnly(),
             List.of(classify(wire("LQ", "EQP-001", null, null, null)), new TestHookRegistry.LlmReply(CallType.COMPOSER, "상태를 확인했다[e1].", "stop", 1, 10)), Optional.empty(), null);
         assertThat(terminal(truncated)).isEqualTo("PARTIAL");
@@ -80,12 +80,14 @@ class LlmScriptedTransportIT extends LlmStubSupport {
 
     @Test void anIncidentExecutesOnlyItsSelectedListAndAggregatesAsSuccess() throws Exception {
         perms = Set.of("EQP_READ", "COMM_LOG_READ", "DLQ_READ", "AI_LOG_READ", "AI_TRACE_READ");
-        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("장애 근거를 확인했다[e1].")), Optional.empty(), null);
+        // 단일 업무 자료와 4개 앱의 로그 행, 빈 trace fixture가 만든 5후보를 모두 판정합니다.
+        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), composeSelection(5,"C1")), Optional.empty(), null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");
         var trace = new ArrayList<String>();
         payload(job.jobId()).path("trace").forEach(value -> trace.add(value.path("outcome").asString()));
         assertThat(trace).isEmpty();
         assertThat(jdbc().sql("SELECT capability_id FROM gw.tool_execution WHERE job_id=:id").param("id",job.jobId()).query(String.class).list()).containsExactlyInAnyOrder("tc.eqp.getOperationalSnapshot","logs.search","trace.search");
         assertThat(result(job.jobId())).containsEntry("status", "SUCCESS").containsEntry("error_code", null);
+        assertThat(jdbc().sql("SELECT jsonb_array_length(evidence) FROM kn.answer_snapshot WHERE job_id=:job").param("job",job.jobId()).query(Integer.class).single()).isEqualTo(5);
     }
 }

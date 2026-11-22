@@ -26,7 +26,7 @@ class HybridSearchIT extends LlmStubSupport {
         return "{\"taskType\":\""+task+"\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\"설비 상태 T3\",\"retryQuery\":\"설비 T3 상태 설정\"}";
     }
     @Test void activeCorpusFlowsThroughTheActualJobAndProtectsStoredResultWithDocumentDependencies()throws Exception {
-        seed();var job=admitScripted("hybrid-document","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),compose("설비 상태 T3[e1].")),Optional.empty(),null);
+        seed();var job=admitScripted("hybrid-document","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),composeSelection("C1")),Optional.empty(),null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");assertThat(result(job.jobId())).containsEntry("status","SUCCESS");assertThat(scripts().scriptedCalls(job.jobId(),CallType.CLASSIFY)).isOne();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
         assertThat(stub.count("/v1/embeddings")).isEqualTo(1);assertThat(payload(job.jobId()).path("toolSummary")).hasSize(1);
         var deps=json.readTree(jdbc().sql("SELECT result_source_deps::text FROM gw.result WHERE job_id=:id").param("id",job.jobId()).query(String.class).single());assertThat(deps.path("knowledgeDocuments")).hasSize(1);assertThat(deps.path("knowledgeDocuments").get(0).path("revision").asString()).isEqualTo("a".repeat(64));

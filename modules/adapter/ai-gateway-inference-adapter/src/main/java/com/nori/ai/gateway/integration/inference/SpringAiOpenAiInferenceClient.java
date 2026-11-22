@@ -48,7 +48,12 @@ public final class SpringAiOpenAiInferenceClient implements InferenceClient {
     }
 
     @Override public ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens, com.nori.ai.gateway.core.job.CancellationToken cancellation) {
-        var checked = budget.check(type, messages, maxTokens);
+        return chat(type, messages, maxTokens, cancellation, null);
+    }
+
+    @Override public ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens, com.nori.ai.gateway.core.job.CancellationToken cancellation,
+            com.nori.ai.gateway.core.llm.StructuredOutput output) {
+        var checked = budget.check(type, messages, maxTokens, output);
         if (checked instanceof PreCallBudgetAssert.Exceeded exceeded) return ChatOutcome.budgetExceeded(exceeded.count());
         long started = System.nanoTime();
         try {
@@ -67,7 +72,7 @@ public final class SpringAiOpenAiInferenceClient implements InferenceClient {
         try {
             Duration left = cancellation.remaining(requestTimeout);
             if (left.isZero() || Thread.currentThread().isInterrupted()) return failed(FailureReason.INTERRUPTED, null, started, checked.count());
-            response = transport.send(type, List.copyOf(messages), maxTokens, left);
+            response = transport.send(type, List.copyOf(messages), maxTokens, left, output);
             if (cancellation.remaining(requestTimeout).isZero() || Thread.currentThread().isInterrupted()) return failed(FailureReason.INTERRUPTED, null, started, checked.count());
         }
         catch (RuntimeException failure) { return failed(FailureReason.TRANSPORT, failure.getClass().getName(), started, checked.count()); }

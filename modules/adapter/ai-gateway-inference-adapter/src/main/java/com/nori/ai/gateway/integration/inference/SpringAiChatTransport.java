@@ -28,7 +28,15 @@ public final class SpringAiChatTransport implements ChatTransport {
     }
 
     @Override public Response send(CallType type, List<ChatMessage> messages, int maxTokens, java.time.Duration timeout) {
-        OpenAiChatOptions options = model.getOptions().mutate().maxTokens(maxTokens).timeout(timeout).build();
+        return send(type, messages, maxTokens, timeout, null);
+    }
+
+    @Override public Response send(CallType type, List<ChatMessage> messages, int maxTokens, java.time.Duration timeout,
+            com.nori.ai.gateway.core.llm.StructuredOutput output) {
+        var builder = model.getOptions().mutate().maxTokens(maxTokens).timeout(timeout);
+        if (output != null) builder.responseFormat(OpenAiChatModel.ResponseFormat.builder()
+            .type(OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA).jsonSchema(output.schema()).strict(true).build());
+        OpenAiChatOptions options = builder.build();
         var response = model.call(new Prompt(renderer.normalize(messages).stream().map(SpringAiChatTransport::message).toList(), options));
         var result = response == null ? null : response.getResult();
         var usage = response == null || response.getMetadata() == null ? null : response.getMetadata().getUsage();

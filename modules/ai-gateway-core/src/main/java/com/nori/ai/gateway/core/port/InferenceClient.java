@@ -17,6 +17,12 @@ public interface InferenceClient {
         return chat(type, messages, maxTokens);
     }
 
+    /** 수동 응답 대역의 기존 진입점은 유지합니다. 운영 구현은 제약을 전송하며 소비자는 응답도 다시 검사합니다. */
+    default ChatOutcome chat(CallType type, List<ChatMessage> messages, int maxTokens, com.nori.ai.gateway.core.job.CancellationToken cancellation,
+            com.nori.ai.gateway.core.llm.StructuredOutput output) {
+        return chat(type, messages, maxTokens, cancellation);
+    }
+
     /** 입력 순서대로 벡터를 돌려준다. 실패는 {@link EmbeddingFailed} 다. */
     List<float[]> embed(List<String> inputs);
 

@@ -21,4 +21,16 @@ class SentenceEvidenceNoriTest {
             assertThat(language.analyze("서울 설비 상태")).containsExactly(new SearchLanguage.Term("서울","NNP"),new SearchLanguage.Term("설비","NNG"),new SearchLanguage.Term("상태","NNG"));
         }
     }
+
+    @Test void diagnosticsDistinguishFactsNamesAndCitationWithoutReturningRawContent() {
+        try(var language=new MemoryDocumentKeywordIndex()) {
+            var check=new SentenceEvidenceCheck(language);var units=List.of(unit("설비 1.5ms Alpha EQP-001",""));
+            var reasons=new ArrayList<com.nori.ai.gateway.core.llm.LlmDiagnostic>();
+            assertThat(check.check(output("설비 15ms",1),units,reasons::add).kind()).isEqualTo("NO_EVIDENCE");
+            assertThat(check.check(output("부산",1),units,reasons::add).kind()).isEqualTo("NO_EVIDENCE");
+            assertThat(check.check(output("설비",2),units,reasons::add).kind()).isEqualTo("NO_EVIDENCE");
+            assertThat(reasons).containsExactly(com.nori.ai.gateway.core.llm.LlmDiagnostic.SENTENCE_FACT,com.nori.ai.gateway.core.llm.LlmDiagnostic.SENTENCE_NAME,com.nori.ai.gateway.core.llm.LlmDiagnostic.SENTENCE_CITATION);
+            assertThat(reasons.toString()).doesNotContain("부산","Alpha","EQP-001");
+        }
+    }
 }

@@ -66,3 +66,44 @@ bash operations/deploy-checks/aigw-verify-credentials.sh cleanup
 ```bash
 bash operations/deploy-checks/aigw-verify-credentials-selftest.sh   # stub kubectl, 실제 자격·클러스터·DB 0
 ```
+
+## 기계적 정답률 평가
+
+제품 루트의 명령 형식은 다음과 같습니다.
+
+```powershell
+.\gradlew.bat :apps:ai-gateway-acceptance-cli:run --args="answer-evaluate --system TC --questions acceptance/question-sets/tc-answers-v1.jsonl --gateway http://localhost:8080" --no-daemon
+```
+
+`AI_GATEWAY_EVAL_SERVICE_TOKEN_FILE`과 `AI_GATEWAY_EVAL_SIGNER_FILE`은 자격 파일의 경로입니다. 상대 경로는 제품 루트 기준입니다. 토큰·개인키 본문을 명령행이나 로그에 넣지 않습니다. 평가 키는 로컬 시험 Gateway의 TC 공개 JWKS에만 등록합니다.
+
+토큰 파일은 UTF-8의 Bearer 토큰 본문만 담습니다. Gateway와 같이 앞뒤 공백·끝 개행을 `strip()`하고 `[A-Za-z0-9._~+/-]+=*`를 검사합니다. `Bearer ` 접두사는 파일에 넣지 않습니다. JDK `SecureRandom`으로 32바이트 이상을 생성해 Base64URL로 인코딩하여 보호된 파일에 쓰고, 공백·끝 개행을 뺀 동일 토큰 bytes의 SHA-256 소문자 hex를 로컬 Gateway TC `serviceTokenSha256File`에 씁니다.
+
+서명 파일은 UTF-8 JSON 객체 하나이며 다음 8개 필드만 둡니다. 누락·알 수 없는 필드·형식 오류는 첫 HTTP 요청 전 exit 2입니다.
+
+| 필드 | 내용 |
+|---|---|
+| `privateJwk` | EC P-256 개인 JWK 객체. `kty=EC`, `crv=P-256`, `kid`, Base64URL의 `x`·`y`·`d`를 갖습니다. 기존 ES256·공개/개인키 쌍 검사를 적용합니다. |
+| `issuer` | `config/ai-gateway.yaml`의 해당 시스템 issuer와 같은 문자열 |
+| `subject` | 평가 사용자 ID, `[A-Za-z0-9_-]{1,64}` |
+| `permissions` | 평가 사용자 부여 권한 배열, 각 `[A-Z0-9_]{1,64}` |
+| `codeSha256` | 측정자가 실행한 로컬 Gateway jar 파일의 SHA-256 |
+| `generationModelSha256` | Ollama `/api/tags`가 보고한 생성 모델 digest |
+| `embeddingModelSha256` | 같은 응답의 임베딩 모델 digest |
+| `configSha256` | 로컬 Gateway가 시험 DB의 활성 `kn.index_set.config_sha256`에 기록한 지문 |
+
+JWK는 JDK 21의 `KeyPairGenerator.getInstance("EC")`에 `ECGenParameterSpec("secp256r1")`을 지정하여 생성합니다. `ECPublicKey.getW()`의 X/Y와 `ECPrivateKey.getS()`를 각각 부호 없는 32바이트로 맞추어 padding 없는 Base64URL로 인코딩합니다. 이 값을 `privateJwk`에 넣고, 같은 객체에서 개인 `d`를 뺀 공개 JWK만 `{"keys":[공개 JWK]}` 형태로 로컬 Gateway TC `actorJwksFile`에 씁니다. 실행 가능한 생성·서명 대조 예시는 CLI의 `EvaluationFilesTest`와 `JwkAssertionSignerTest`입니다. 자격은 파일에서 읽어 주입하며 키·토큰을 stdout으로 확인하지 않습니다. Gateway는 기동 때 자격을 읽으므로 해당 시험 파일을 지정한 뒤 기동합니다.
+
+지문 네 개는 모두 64자리 소문자 hex입니다. CLI는 형식만 검사하며 실행 환경과 일치하는 값의 공급은 측정자가 담당합니다. jar는 `Get-FileHash -Algorithm SHA256 -LiteralPath <실행 jar 경로>`의 Hash를 소문자로 변환합니다. 모델 digest는 허가된 메인 측정 환경에서 Ollama `/api/tags` 응답의 `models[]`에서 실제 실행 모델(`qwen3-vl:30b-a3b-instruct-q4_K_M`, `bge-m3:latest`)의 `digest`를 읽습니다. 설정 지문은 Gateway 기동·문서 동기화 후 시험 DB에서 다음 읽기 전용 조회로 확인합니다. 공유 운영 DB를 조회하지 않습니다.
+
+```sql
+SELECT config_sha256
+FROM kn.index_set
+WHERE system_id = 'TC' AND state = 'ACTIVE';
+```
+
+CLI는 제품 루트 `config/ai-gateway.yaml`의 `ai.gateway.systems.<--system>`에서 issuer·reviewPermission과 tools·documents·apps·traces·repositories의 requiredPermissions 합집합을 읽습니다. 필요한 값의 `${...}`를 해석하지 않으며 문자열·배열 리터럴이 아니면 환경 오류입니다. 평가 사용자는 검토 권한과 이 합집합 전체를 가져야 합니다. 문항 permissions는 질문·대화·결과 요청에, 서명 파일의 전체 권한은 검토 문항 수집에 씁니다. 각 단언의 pdg는 정렬·중복 제거한 perm을 끝 개행 없이 LF로 이어 UTF-8 SHA-256으로 계산합니다.
+
+원본 Markdown은 제품 루트 `rag-documents/<bucket>/<objectKey>`에서 읽습니다. 세트의 사실·자식 위치·원본 revision을 대조하고, 응답 결과 payload의 문서 위치(답변 인용과 근거 포함, 업무 조회 values 제외)에서 세트가 요구하는 문서와 bucket·objectKey가 같고 revision이 다른 위치가 하나라도 있으면 채점 없이 입력 오류 exit 2로 종료합니다. SeaweedFS를 CLI가 직접 읽지 않습니다. 로컬 파일은 시험 Gateway 기동에 사용한 원본과 같아야 합니다.
+
+결과는 stdout JSON이고 합격은 exit 0, 기준 미달은 1, 입력·자료·환경 오류는 2입니다. 시험 결과는 중앙 [006 PLAN의 phase 9](../../../nori-sdd-specs/work-items/006-ai-gateway-redesign/spec-plan.md) 기록에서 확인합니다.
