@@ -72,7 +72,7 @@ class StackSmokeIT extends StackContextSupport {
             assertThat(Class.forName(name)).isNotNull();
         }
         // P14: BOM 관리 registry-otlp의 실제 artifact·명시 registry·OTel 조합과 logging 경계 회귀입니다.
-        assertLoadedArtifact(io.micrometer.registry.otlp.OtlpMeterRegistry.class, "micrometer-registry-otlp-1.16.6.jar");
+        assertLoadedArtifact(io.micrometer.registry.otlp.OtlpMeterRegistry.class, "micrometer-registry-otlp-1.16.9.jar");
         assertLoadedArtifact(Class.forName("io.opentelemetry.proto.collector.metrics.v1.ExportMetricsServiceRequest"), "opentelemetry-proto-1.8.0-alpha.jar");
         // 공용 fixture 기본값은 export off이므로 OTLP registry는 없고 SDK provider는 유지됩니다(전용 수신 시험만 loopback으로 켭니다).
         assertThat(context.getBeansOfType(io.micrometer.core.instrument.MeterRegistry.class).values()).singleElement().isNotInstanceOf(io.micrometer.registry.otlp.OtlpMeterRegistry.class);

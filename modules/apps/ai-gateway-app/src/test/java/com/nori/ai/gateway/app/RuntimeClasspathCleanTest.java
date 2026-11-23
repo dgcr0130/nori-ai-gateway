@@ -16,7 +16,7 @@ class RuntimeClasspathCleanTest {
         String runtime = Files.readString(file);
         assertThat(runtime).isNotBlank().contains("org.springframework.boot:spring-boot:", "ai.djl.huggingface:tokenizers:",
             "native/lib/linux-x86_64/cpu/libtokenizers.so", "native/lib/win-x86_64/cpu/tokenizers.dll",
-            "io.micrometer:micrometer-registry-otlp:1.16.6 ", "io.opentelemetry.proto:opentelemetry-proto:1.8.0-alpha ");
+            "io.micrometer:micrometer-registry-otlp:1.16.9 ", "io.opentelemetry.proto:opentelemetry-proto:1.8.0-alpha ");
         assertThat(runtime).doesNotContain("junit-platform-reporting", "junit-platform-launcher", ":apps:ai-gateway-acceptance-cli:", "test-fixtures", "testFixtures", "org.testcontainers:");
         assertThat(runtime).doesNotContain("\r");
         // migration 은 앱 밖(루트 Gradle Flyway)이다. 앱 런타임에는 Spring Flyway 자동 설정·DB 방언 모듈이 없고 guard 용 flyway-core 만 남는다.

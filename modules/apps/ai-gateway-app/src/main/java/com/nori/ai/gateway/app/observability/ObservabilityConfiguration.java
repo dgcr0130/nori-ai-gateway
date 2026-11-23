@@ -28,7 +28,7 @@ import org.springframework.context.annotation.Import;
 
 /**
  * OTLP metrics·traces 연결이다. javaagent·tracing bridge·표준 HTTP handler는 쓰지 않는다.
- * Boot 4.0.7의 OTLP metrics 자동구성은 `spring-boot-opentelemetry` 모듈 클래스를 조건으로 요구하는데 그 모듈은 runtime에 없으므로,
+ * Boot 4.0.10의 OTLP metrics 자동구성은 `spring-boot-opentelemetry` 모듈 클래스를 조건으로 요구하는데 그 모듈은 runtime에 없으므로,
  * 같은 `micrometer-registry-otlp` API로 registry를 명시 생성한다. 지표는 {@link MetricsCatalog} 목록만 내보낸다.
  */
 @Configuration(proxyBeanMethods = false)

@@ -11,7 +11,7 @@ import org.gradle.process.CommandLineArgumentProvider
 // Flyway (DB 스키마 마이그레이션) — 레포 단일 owner 외부 도구(nori-wm-ui-backend build.gradle.kts 와 같은 형태)
 // ----------------------------------------------------------------------------
 // Flyway gradle 플러그인은 JDBC 드라이버·DB 방언 모듈을 buildscript classpath 로 받는다(플러그인과 같은 classloader).
-// postgresql 버전은 catalog 에 항목이 없어 Spring Boot 4.0.7 BOM 의 postgresql.version 과 같은 값을 쓴다.
+// postgresql 버전은 catalog 에 항목이 없어 Spring Boot 4.0.10 BOM 의 postgresql.version 과 같은 값을 쓴다.
 buildscript {
     repositories {
         gradlePluginPortal()
@@ -88,6 +88,10 @@ subprojects {
     pluginManager.withPlugin("java") {
     dependencies {
         add("implementation", platform(rootProject.libs.spring.boot.bom))
+        // Boot BOM 밖에서 취약 버전이 들어오는 전이 의존을 수정 버전 이상으로 올린다(catalog 주석 참고).
+        for (pinned in listOf(rootProject.libs.httpcore5.core, rootProject.libs.httpcore5.h2, rootProject.libs.snappy.java, rootProject.libs.lz4.java)) {
+            constraints.add("implementation", pinned)
+        }
         add("testRuntimeOnly", "org.junit.platform:junit-platform-reporting")
         if (project.path != ":apps:ai-gateway-acceptance-cli") {
             add("testImplementation", rootProject.libs.junit.jupiter)

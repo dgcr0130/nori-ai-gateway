@@ -21,7 +21,7 @@
 
 ### 수집 경로 (Plan §10.1)
 
-- metrics: `micrometer-registry-otlp` 명시 registry → `http://alloy-gateway.monitoring.svc:4318/v1/metrics` (`ai.gateway.otlp.metrics.enabled=true`). Boot 4.0.7 OTLP metrics 자동구성은 `spring-boot-opentelemetry`의 `OpenTelemetryProperties` 클래스를 조건으로 요구하며 그 모듈이 runtime에 없어 활성화되지 않는다.
+- metrics: `micrometer-registry-otlp` 명시 registry → `http://alloy-gateway.monitoring.svc:4318/v1/metrics` (`ai.gateway.otlp.metrics.enabled=true`). Boot 4.0.10 OTLP metrics 자동구성은 `spring-boot-opentelemetry`의 `OpenTelemetryProperties` 클래스를 조건으로 요구하며 그 모듈이 runtime에 없어 활성화되지 않는다.
 - traces: 명시 `SdkTracerProvider` + `OtlpHttpSpanExporter` → `/v1/traces`(`ai.gateway.otlp.traces.enabled=true`일 때만 exporter 연결, 꺼져도 SDK trace는 생성). 만드는 span은 두 가지다: 정상 인증 `/v1/*` 요청마다 `ServiceTokenAuthFilter`가 원격 부모 없이 만드는 `aigw.request`(SERVER, 속성 0)와 직접 Source 요청의 `aigw.source.request`(CLIENT, `source_id`·`method`·`status_class`). javaagent·tracing bridge·표준 HTTP handler 없음.
 - logs: stdout `AllowlistJsonEncoder`. OTLP `/v1/logs`는 G-OBS-READBACK 확인 후 `ai.gateway.otlp.logs.enabled=true`로만 켠다.
 

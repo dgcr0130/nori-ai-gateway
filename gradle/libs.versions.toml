@@ -1,6 +1,6 @@
 [versions]
 jsonCanonicalization = "1.1"
-springBoot = "4.0.7"
+springBoot = "4.0.10"
 springAi = "2.0.2"
 testcontainers = "2.0.3"
 djlTokenizers = "0.40.0"
@@ -14,14 +14,19 @@ commonmark = "0.32.0"
 lucene = "9.12.3"
 otelLogback = "2.33.1-alpha"
 openaiJava = "4.80.0"
-# java-module-conventions 가 compileOnly 로 붙이는 slf4j-api 는 BOM 밖에서 버전이 필요하다. Spring Boot 4.0.7 BOM 의 slf4j.version 과 같다.
-slf4j = "2.0.18"
-# 루트 외부 Flyway 도구(U5)용. Spring Boot 4.0.7 BOM 의 flyway.version 과 같다.
+# java-module-conventions 가 compileOnly 로 붙이는 slf4j-api 는 BOM 밖에서 버전이 필요하다. Spring Boot 4.0.10 BOM 의 slf4j.version 과 같다.
+slf4j = "2.0.20"
+# 루트 외부 Flyway 도구(U5)용. Spring Boot 4.0.10 BOM 의 flyway.version 과 같다.
 flyway = "11.14.1"
-# 루트 Flyway buildscript classpath 의 JDBC 드라이버. Spring Boot 4.0.7 BOM 의 postgresql.version 과 같다.
-postgresql = "42.7.11"
+# 루트 Flyway buildscript classpath 의 JDBC 드라이버. Spring Boot 4.0.10 BOM 의 postgresql.version 과 같다.
+postgresql = "42.7.14"
 # noricloud GitLab Package Registry project 33 의 고정 release.
 noriObjectStorage = "0.0.1"
+# Spring Boot 4.0.10 BOM 이 수정 버전으로 올리지 않는 전이 런타임 의존의 CI trivy HIGH 수정 버전. 루트가 모든 Java 모듈에 constraint 로 건다.
+# httpcore5·httpcore5-h2 는 AWS SDK apache5-client → httpclient5 5.6.1, snappy-java·lz4-java 는 spring-boot-starter-kafka → kafka-clients 4.1.2 경유다.
+httpcore5 = "5.4.3"
+snappyJava = "1.1.10.9"
+lz4Java = "1.11.4"
 
 [libraries]
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
@@ -52,6 +57,10 @@ flyway-gradle-plugin = { module = "org.flywaydb:flyway-gradle-plugin", version.r
 flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
 flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+httpcore5-core = { module = "org.apache.httpcomponents.core5:httpcore5", version.ref = "httpcore5" }
+httpcore5-h2 = { module = "org.apache.httpcomponents.core5:httpcore5-h2", version.ref = "httpcore5" }
+snappy-java = { module = "org.xerial.snappy:snappy-java", version.ref = "snappyJava" }
+lz4-java = { module = "at.yawk.lz4:lz4-java", version.ref = "lz4Java" }
 
 [plugins]
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
