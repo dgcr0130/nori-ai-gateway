@@ -6,3 +6,46 @@ __pycache__/
 *.pyc
 acceptance/results/inference-diagnosis/
 **/.claude/progress/
+
+# IDE가 생성하는 로컬 프로젝트 정보와 컴파일 출력은 공유하지 않습니다.
+.classpath
+.project
+.settings/
+/out/
+
+# 로컬 환경값은 제외하되 배포 예제와 템플릿은 계속 추적합니다.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.*.example
+!.env.*.sample
+!.env.*.template
+/config/*.local.properties
+/config/*.local.yaml
+/config/*.local.yml
+
+# runtime-credentials.md의 자격 파일만 제외하고 공용 설정 placeholder는 보존합니다.
+/config/token
+/config/access-key
+/config/secret-key
+/config/service-tokens.json
+/config/jwks.json
+/config/hook-token-sha256
+/config/AI_GATEWAY_DB_USER
+/config/AI_GATEWAY_DB_PASSWORD
+
+# 루트 실행 로그와 JVM 진단 출력만 제외하여 수용 결과 원문을 보존합니다.
+/logs/
+/*.log
+/*.hprof
+/*.jfr
+
+# OS 메타데이터와 편집 중 생성되는 복구 파일은 공유하지 않습니다.
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
