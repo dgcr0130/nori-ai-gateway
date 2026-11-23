@@ -113,13 +113,11 @@ include(":adapter:ai-gateway-gitlab-adapter")
 project(":adapter:ai-gateway-gitlab-adapter").projectDir = file("modules/adapter/ai-gateway-gitlab-adapter")
 
 /* ===================================================
- * 3. Application Modules (단일 조립 루트 앱 + 배포 수용 하네스 + 수용 기준 점검 CLI)
+ * 3. Application Modules (단일 조립 루트 앱 + 수용 기준 점검 CLI)
  * =================================================== */
 
 include(":apps:ai-gateway-app")
 project(":apps").projectDir = file("modules/apps")
 project(":apps:ai-gateway-app").projectDir = file("modules/apps/ai-gateway-app")
-include(":apps:ai-gateway-acceptance-app")
-project(":apps:ai-gateway-acceptance-app").projectDir = file("modules/apps/ai-gateway-acceptance-app")
 include(":apps:ai-gateway-acceptance-cli")
 project(":apps:ai-gateway-acceptance-cli").projectDir = file("modules/apps/ai-gateway-acceptance-cli")

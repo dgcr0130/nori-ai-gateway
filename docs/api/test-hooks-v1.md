@@ -1,6 +1,8 @@
 # Verify 시험 훅 계약 v1
 
-verify 프로필에서 Job 결속·취소·실행 목록·관측을 검증하는 계약입니다. 업무 응답은 Gateway 외부의 로컬 표준 HTTP 대역이 제공합니다.
+로컬 Gradle 시험의 verify 프로필에서 Job 결속·취소·실행 목록·관측을 검증하는 계약입니다. 업무 응답은 Gateway 외부의 로컬 표준 HTTP 대역이 제공합니다.
+
+배포 chart에는 hook을 켜는 입력·토큰·시험 볼륨이 없으며 운영 prod에는 등록하지 않습니다.
 
 모든 아래 경로는 `verify` 프로필과 `ai.gateway.test-hooks.enabled=true`에서만 등록됩니다. 필수 `ai.gateway.test-hooks.token-sha256-file`은 UTF-8 소문자 SHA-256 64자리(끝 LF 선택) 파일입니다. 부재·형식 오류는 입력 원인·내용을 노출하지 않고 기동 실패합니다. 요청의 `X-AIGW-Hook-Token`을 SHA-256으로 바꿔 constant-time 비교하며 누락·불일치·중복 헤더는 빈 404입니다.
 
@@ -27,20 +29,20 @@ SQL·URL·호스트·파일 경로 입력이나 토큰·위임·원문·Prompt·
 
 `scenario.toolCalls`는 0~4개이며 생략하면 빈 목록입니다. 실제 분류를 대체하는 시험에서만 사용하고 입력 schema·권한·실행 예산·Dispatcher 검사는 그대로 거칩니다. `scenario.seam`은 `{kind,capabilityId?,sourceId?,ownerSystem?}`이며 기존 등록 도구·Source에만 적용됩니다. directive는 접수 tx와 Job별 결속 수명을 공유하며 singleton 등록 값을 바꾸지 않습니다. idle reset은 seam을 초기화합니다.
 
-업무 대역 `StandardSystemStub`은 system adapter의 testFixtures에만 있습니다. `/internal/ai/v1/query`로 실제 HTTP 클라이언트를 검사하고 Gateway 제품에 제어 endpoint를 추가하지 않습니다. 수용 하네스의 `AIGW_BACKEND_FIXTURE_URL`·`AIGW_BACKEND_FIXTURE_TOKEN_FILE`은 별도 대역의 주소·제어 토큰 파일입니다. 대역의 `/__fixture/reset`·`/__fixture/scenario`·`/__fixture/delegations`·`/__fixture/calls`만 그 주소로 보내며, Gateway `/__test/*`와 인증을 분리합니다. 운영 backend 주소로 이 fixture 제어를 보내지 않습니다. 하네스 reset은 Gateway의 idle reset 성공 후에만 대역 호출 횟수·시나리오를 초기화하며, 등록 위임과 폐기 상태는 보존합니다.
+업무 대역 `StandardSystemStub`은 system adapter의 testFixtures에만 있습니다. 로컬 Gradle 시험이 `/internal/ai/v1/query`의 실제 HTTP 클라이언트를 검사하며 Gateway 제품에 제어 endpoint를 추가하지 않습니다. 대역 제어는 운영 backend로 보내지 않습니다.
 
 ## P15 추가 계약
 
 | 경로 | 입력·응답 |
 |---|---|
-| POST `/__test/egress-probe` | `{targetId}` 만 사용(본문의 다른 필드·호스트·포트 무시). 차트가 렌더한 `{release}-egress-probe` ConfigMap 파일(`ai.gateway.test-hooks.egress-targets-file`, JSON 배열 `[{id,host,port,expect}]`)의 id 이면 Gateway Pod 안에서 TCP connect 1회(timeout 3s, 본문 송신 0) → 200 `{targetId, connected, errorClass}`(errorClass = null·`TIMEOUT`·`REFUSED`·`UNRESOLVED`·`NO_ROUTE`·`IO_ERROR`, 주소 반환 0). 목록 밖 id·targetId 부재 404 |
-| GET `/__test/egress-probe` | (P21) 요청 본문 미사용. 같은 목록 파일의 대상을 파일 순서대로 200 `[{id, expect}]`(`expect` = `ALLOWED`·`BLOCKED`) 로만 돌려준다(호스트·포트·주소 반환 0, 연결 시도 0). 수용 AC-35-EGRESS 는 이 목록만 판정 입력으로 쓰며, 목록에 `BLOCKED` 가 하나 이상이고 양성 대조 id `inference-endpoint`(추론 endpoint)·`db-main`(주 DB) 가 `ALLOWED` 로 있어야 판정한다(없으면 NOT_RUN — runconfig fixture `operations/deploy/scripts/runconfig/fixtures/lint-verify.json` 과 같은 id) |
+| POST `/__test/egress-probe` | `{targetId}` 만 사용(본문의 다른 필드·호스트·포트 무시). 로컬 시험이 제공한 목록 파일(`ai.gateway.test-hooks.egress-targets-file`, JSON 배열 `[{id,host,port,expect}]`)의 id 이면 시험 앱에서 TCP connect 1회(timeout 3s, 본문 송신 0) → 200 `{targetId, connected, errorClass}`(errorClass = null·`TIMEOUT`·`REFUSED`·`UNRESOLVED`·`NO_ROUTE`·`IO_ERROR`, 주소 반환 0). 목록 밖 id·targetId 부재 404 |
+| GET `/__test/egress-probe` | (P21) 요청 본문 미사용. 같은 목록 파일의 대상을 파일 순서대로 200 `[{id, expect}]`(`expect` = `ALLOWED`·`BLOCKED`) 로만 돌려준다(호스트·포트·주소 반환 0, 연결 시도 0). 로컬 시험은 이 목록의 기대값과 연결 결과를 대조합니다. |
 | POST `/__test/embedding-probe` | (`ai.gateway.inference.mode=enabled`에서 등록) 요청 본문 미사용. 실제 `InferenceClient.embed(["probe"])` 1회 → 200 `{dimension, modelDigest}`. 공통 API에서 digest를 조회하지 않으므로 `modelDigest`는 null이다(기존 nullable 응답 유지). 임베딩 실패 503 `{reason}`(`TRANSPORT`·`EMPTY_RESPONSE`). 벡터 값·입력·주소 반환 0 |
 | POST `/__test/readiness-stub` | (`ai.gateway.inference.mode=enabled`, verify 전용) 정확히 `{kind}`(문자열). `MODEL_LOADING`·`INFERENCE_UNAVAILABLE`은 고정 준비 관측값을 주입하고 30초 주기에도 유지한다. `OFF`는 고정을 해제해 설정한 `/models`·최소 chat·embedding을 실제 검사한다. 전환 직후 1회 검사 → 200 `{state}`(`READY`·위 두 상태). 고정 두 kind는 외부 요청 0회이다. kind 부재·추가 필드·목록 밖 kind 400 |
 | POST `/__test/arm`의 `scenario.llmScript` | (P20, 라벨 LLM_STUB, verify+enabled+`ai.gateway.inference.mode=enabled` 일 때만 효과) optional 비어 있지 않은 배열 `[{callType, content, finishReason, usage:{completionTokens, promptTokens?}}]`. `callType`=`CLASSIFY`·`PLAN`·`COMPOSER`, `content`=문자열 또는 null(빈 응답). `CLASSIFY` 의 정상 응답 fixture 는 여섯 키 JSON `{taskType,toolCalls,targets,timeWindow,searchQuery,retryQuery}`이며 추가·누락 키는 `CONTRACT_INVALID`로 거부된다(hook 은 내용을 검사하지 않음), 사실 답변 `COMPOSER`의 정상 content는 `{sentences:[{text,citations:[번호]}]}` JSON 문자열이고 일반 도움말은 평문이다, `finishReason` 문자열, `completionTokens`·`promptTokens` 0 이상 정수(`promptTokens` 생략 시 그 호출의 실제 Gateway 계수). 결속 Job 의 추론 호출만 `ScriptedChatTransport` 가 순번대로 돌려주며 예산 assert·잘림 감지는 Client 에 그대로 남는다. 유형 불일치·소진은 그 호출의 전송 실패다. 무장 없는 Job·스크립트 없는 결속 Job 은 운영 전송(`liveChatTransport`)으로 간다. 스크립트 원문은 무장 본문(하네스 fixture)에서만 오고 로그·응답·증거에 싣지 않는다. 형식 위반 400 |
 | GET `/__test/prompt-watch/{requestKey}` | (P20, 위와 같은 조건) 무장 `scenario.promptWatch={sentinels:[1~16개, 각 1~64 코드포인트]}` 이 결속된 Job 의 분류·Composer 조립 Prompt(PromptReducer 뒤·PreCallBudgetAssert 직전)에서 sentinel 이 든 호출 수만 메모리에 센다 → 200 `[{callType, sentinelIndex, matchCount}]`(관찰된 호출 유형마다 sentinel 전부). Prompt 원문·부분 문자열 반환 0. requestKey 의 결속 Job 이 정확히 1개가 아니거나 관찰이 없으면 404. 결속 Job terminal 뒤 60s 보관 후 삭제, idle reset 이 함께 지운다 |
 
-hook 은 verify+enabled 조건에 더해 목록 파일 설정이 있을 때만 등록된다(차트 verify 렌더는 항상 마운트, 형식 위반 파일은 기동 실패). 판정(ALLOWED/BLOCKED 대조)은 수용 하네스 쪽 AC-35-EGRESS(P21) 몫이며, 대상 목록은 GET `/__test/egress-probe` 에서만 읽는다(수용 Job env 입력 없음).
+hook 은 verify+enabled 조건에 더해 목록 파일 설정이 있을 때만 등록된다(로컬 시험이 목록을 공급하며 형식 위반 파일은 기동 실패). 판정(ALLOWED/BLOCKED 대조)은 로컬 시험의 몫이며, 대상 목록은 GET `/__test/egress-probe` 에서만 읽는다(배포 입력 없음).
 
 DISPATCH_OWNER_OVERRIDE는 Plan 단계 원본을 유지하며 해당 Job의 지정 capability를 Dispatcher 직전에만 WM 소유로 투영합니다. 기존 OWNER_OVERRIDE의 Plan/Dispatch 동작은 유지합니다.
 

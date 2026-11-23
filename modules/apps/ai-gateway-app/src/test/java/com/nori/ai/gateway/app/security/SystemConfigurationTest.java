@@ -86,4 +86,20 @@ class SystemConfigurationTest {
         }
     }
 
+    @Test void deploymentCredentialPathsUseContainerDefaultsAndRespectEnvironmentOverrides() throws Exception {
+        var loader = new org.springframework.boot.env.YamlPropertySourceLoader();
+        var source = new org.springframework.core.io.FileSystemResource(java.nio.file.Path.of(System.getProperty("aigw.rootDir"), "config/ai-gateway.yaml"));
+        for (boolean override : List.of(false, true)) {
+            var env = new MockEnvironment();
+            var variables = Map.<String,Object>of("AI_GATEWAY_TC_SERVICE_TOKEN_SHA256_FILE", "/local/service",
+                "AI_GATEWAY_TC_ACTOR_JWKS_FILE", "/local/jwks", "AI_GATEWAY_TC_GATEWAY_TOKEN_FILE", "/local/gateway");
+            env.getPropertySources().addFirst(new org.springframework.core.env.SystemEnvironmentPropertySource("fixtureEnvironment", override ? variables : Map.of()));
+            for (var properties : loader.load("deployment", source)) env.getPropertySources().addLast(properties);
+            var tc = bind(env).systems().get("TC");
+            assertThat(tc.serviceTokenSha256File()).isEqualTo(override ? "/local/service" : "/app/config/tc-service-token-sha256");
+            assertThat(tc.actorJwksFile()).isEqualTo(override ? "/local/jwks" : "/app/config/tc-actor-jwks.json");
+            assertThat(tc.gatewayTokenFile()).isEqualTo(override ? "/local/gateway" : "/app/config/tc-gateway-token");
+        }
+    }
+
 }

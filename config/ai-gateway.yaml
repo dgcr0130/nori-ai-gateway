@@ -4,11 +4,11 @@ ai:
     systems:
       TC:
         issuer: tc-ui-backend
-        serviceTokenSha256File: ${AI_GATEWAY_TC_SERVICE_TOKEN_SHA256_FILE}
-        actorJwksFile: ${AI_GATEWAY_TC_ACTOR_JWKS_FILE}
+        serviceTokenSha256File: ${AI_GATEWAY_TC_SERVICE_TOKEN_SHA256_FILE:/app/config/tc-service-token-sha256}
+        actorJwksFile: ${AI_GATEWAY_TC_ACTOR_JWKS_FILE:/app/config/tc-actor-jwks.json}
         reviewPermission: AI_REVIEW
         backendUrl: http://tc-ui-backend.tc.svc:8080
-        gatewayTokenFile: ${AI_GATEWAY_TC_GATEWAY_TOKEN_FILE}
+        gatewayTokenFile: ${AI_GATEWAY_TC_GATEWAY_TOKEN_FILE:/app/config/tc-gateway-token}
         tools:
           - {"id":"tc.eqp.getOperationalSnapshot","description":"설비 운영 상태 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64}},"required":["eqp"],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["EQP_READ"],"timeoutMs":10000}
           - {"id":"tc.model.read","description":"모델 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":["string","null"],"minLength":1,"maxLength":64}},"required":[],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["MODEL_READ"],"timeoutMs":10000}

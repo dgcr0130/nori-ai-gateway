@@ -4,7 +4,9 @@
 
 ## 배포 입력 승인 기록
 
-배포 입력별 승인 기록은 [acceptance/approvals/](../acceptance/approvals/)에 파일 하나씩 있습니다. `operations/deploy/scripts/runconfig.py`는 deploy 모드에서 runconfig 값의 `approvalRef`가 이 폴더 안 파일이고 `Status: APPROVED` 행이 있을 때만 받아들이며, `postgres-image`·`corpus-inventory`·`netpol-targets` 기록은 항상 승인 상태여야 합니다. 이 폴더는 배포 checkout 검사(`operations/` 미커밋 0) 밖이므로 배포 시점에 승인 기록을 추가해도 checkout 검사에 걸리지 않습니다.
+운영 앱 설정 정본은 `config/ai-gateway.yaml`이며 CI가 ConfigMap으로 전달합니다. 운영자는 namespace `tc`의 Secret `ai-gateway-config`와 protected CI 변수 `AI_GATEWAY_DB_USER`·`AI_GATEWAY_DB_PASSWORD`를 준비합니다([운영 자격](runbooks/runtime-credentials.md)). main·tag push의 migrate는 공유 DB에 자동 적용되며 deploy는 수동입니다. 과거 [acceptance/approvals/](../acceptance/approvals/) 기록은 이력으로 보존하며 현재 배포 실행기의 입력으로 사용하지 않습니다.
+
+앱 bootJar는 2026-11-23 실측 196,796,788바이트로 GitLab job artifact 기본 상한 100MB를 넘습니다. 그래서 `package`는 jar를 이 프로젝트 Generic 패키지 저장소의 `ai-gateway-app/ci/app.jar`로 올리고 SHA-256을 dotenv로 넘깁니다. `build`는 같은 파일을 내려받아 그 SHA-256과 대조한 뒤에만 이미지를 만듭니다. 거의 동시에 도는 파이프라인이 더 늦게 올렸으면 해시가 달라 `build`가 실패하며, 그때는 `package`부터 다시 실행합니다. 같은 이름 파일은 프로젝트 패키지 정리 정책(중복 1개 유지, 2026-11-23 설정, 약 12시간 주기)이 지웁니다.
 
 ## 관측 수신·경보 전달 (G-ALERT · G-OBS-READBACK, P14)
 
@@ -50,6 +52,12 @@
 
 31일 fixture는 최신 6시간 하위 창부터 총 496건의 GET을 보냈습니다. 각 하위 요청의 앱 정확 일치와 namespace AND를 검사했고 namespace 단독 selector는 0건입니다. 총 줄 상한·하위 limit·마감으로 조회하지 못한 구간은 `missingRanges`로 구분했습니다. 보존 미확정·확정·범위 밖과 EMPTY를 별도로 확인했습니다.
 
-양성 제어 helper의 TC 4개·WM 2개 고정 앱은 acceptance 모듈에서만 사용합니다. 로컬 WM 양성 fixture는 1건의 합성 자료에 대한 건수·라벨·시각만 반환하며 운영 Connector의 허용 앱을 늘리지 않습니다.
+운영 Connector의 앱·namespace·trace 허용 범위는 시스템 config를 사용합니다. 로컬 양성 fixture는 운영 허용 범위를 늘리지 않습니다.
 
-Source 관측 속성과 meter 태그는 `source_id`, `method`, `status_class` 3개입니다. 검색어·URL·응답 본문·토큰을 이 문서에 보관하지 않습니다. 실제 Loki·Tempo·GitLab 건수와 Service 대상 확인은 수행하지 않았습니다.
+Source 관측 속성과 meter 태그는 `source_id`, `method`, `status_class` 3개입니다. 검색어·URL·응답 본문·토큰을 이 문서에 보관하지 않습니다. Loki·Tempo의 Service 대상·Pod 포트는 2026-11-23 제공 실측에 따라 연결 선언에 반영합니다. 실제 조회 API 응답과 GitLab 조회 건수는 별도 확인 대상입니다.
+
+## 운영 통신·기동
+
+차트는 앱 설정의 backendUrl 보유 시스템마다 namespace·Pod selector를 받아 ingress와 backend 포트를 계산합니다. LLM·S3는 앱 설정의 명시적 IPv4·포트에서 /32 규칙을 만들고 DB·DNS·Loki·Tempo·OTLP는 values-prod.yaml의 공용 대상을 씁니다. Loki는 canary와 구별하도록 세 라벨 전체로 선택합니다. 클러스터 안 수용 실행 장치는 두지 않습니다.
+
+startupProbe는 readiness와 분리된 `/actuator/health/liveness`를 10초·180회로 확인합니다. 문서 동기화 동안 readiness는 닫혀 있고 liveness는 그 의존성으로 닫지 않습니다. CI 배포 대기 시간 2100초는 startupProbe의 최대 1800초와 이후 readiness 전환 여유를 포함합니다. 메모리를 실측한 뒤 resources와 JVM RAM 비율을 확정하며 그 전에는 임의 값을 두지 않습니다.

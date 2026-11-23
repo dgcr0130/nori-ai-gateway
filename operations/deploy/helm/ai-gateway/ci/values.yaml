@@ -1,0 +1,11 @@
+systems:
+  A: {backend: {namespace: ns-a, podSelector: {app: a}}}
+  B: {backend: {namespace: ns-b, podSelector: {app: b}}}
+  C: {backend: {namespace: ns-c, podSelector: {app: c}}}
+netpol:
+  targets:
+    db: {cidr: 192.0.2.150/32, port: 15432}
+    dns: {namespace: kube-system, podSelector: {k8s-app: kube-dns}, port: 53, protocols: [UDP, TCP]}
+    loki: {namespace: monitoring, podSelector: {app: loki}, port: 3100}
+    tempo: {namespace: monitoring, podSelector: {app: tempo}, port: 3200}
+    otlp: {namespace: monitoring, podSelector: {app: alloy}, port: 4318}

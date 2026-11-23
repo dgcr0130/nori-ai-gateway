@@ -2,11 +2,45 @@
 set -euo pipefail
 set +x
 export PYTHONDONTWRITEBYTECODE=1
-[[ -f operations/deploy/scripts/runconfig.py ]] || { printf 'AI_ROOT_REQUIRED\n' >&2; exit 2; }
+[[ -f config/ai-gateway.yaml ]] || { printf 'AI_ROOT_REQUIRED\n' >&2; exit 2; }
 python3 -B - "$@" <<'PY'
 import argparse,collections,datetime,json,os,pathlib,subprocess,sys
-sys.path.insert(0,str(pathlib.Path('operations/deploy/scripts').resolve()))
-from runconfig import InputError,item,load,approval
+# 배포 실행기와 독립적으로 기존 inventory 입력·승인 범위를 보존합니다.
+class InputError(Exception):
+    pass
+
+def load(path):
+    try:
+        data = json.loads(pathlib.Path(path).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        raise InputError('RUNCONFIG_INVALID')
+    if not isinstance(data, dict):
+        raise InputError('RUNCONFIG_INVALID')
+    return data
+
+def item(data, key, deploy=False):
+    node = data
+    for part in key.split('.'):
+        if not isinstance(node, dict) or part not in node:
+            raise InputError('RUNCONFIG_MISSING:' + key)
+        node = node[part]
+    if not isinstance(node, dict) or 'value' not in node or 'approvalRef' not in node:
+        raise InputError('RUNCONFIG_MISSING:' + key)
+    ref = node['approvalRef']
+    root = pathlib.Path.cwd().resolve()
+    if not isinstance(ref, str):
+        raise InputError('RUNCONFIG_MISSING:' + key)
+    path = (root / ref).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise InputError('RUNCONFIG_MISSING:' + key)
+    if deploy:
+        import re
+        if not path.is_relative_to(root / 'acceptance/approvals'):
+            raise InputError('RUNCONFIG_NOT_APPROVED:' + key)
+        content = path.read_text(encoding='utf-8')
+        if not re.search(r'^Status: APPROVED\s*$', content, re.M) or re.search(r'^Status: (BLOCKED|NOT_RUN|PENDING)\s*$', content, re.M):
+            raise InputError('RUNCONFIG_NOT_APPROVED:' + key)
+    return node['value']
 import yaml
 parser=argparse.ArgumentParser()
 parser.add_argument('--runconfig',required=True); parser.add_argument('--bucket',required=True)

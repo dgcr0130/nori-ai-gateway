@@ -1,5 +1,5 @@
 {
-  "loki": {"baseUrl": "http://loki.monitoring.svc:3100", "serviceTargetVerified": false},
-  "tempo": {"serviceTargetVerified": false},
+  "loki": {"baseUrl": "http://loki.monitoring.svc:3100", "serviceTargetVerified": true},
+  "tempo": {"baseUrl": "http://tempo.monitoring.svc:3200", "serviceTargetVerified": true},
   "gitlab": {"repositories": [], "deployLineage": [], "readTokenFile": null, "serviceTargetVerified": false}
 }

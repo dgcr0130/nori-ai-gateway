@@ -16,7 +16,7 @@ public final class HarnessMain {
         String config=parsed.get("--config");
         if(!Set.of(HarnessP09TestPorts.class.getName()).contains(config))throw new IllegalArgumentException("명시 시험 설정이 필요합니다");
         org.springframework.context.ConfigurableApplicationContext context;
-        try {context=new SpringApplicationBuilder(AiGatewayApplication.class).sources(Class.forName(config)).profiles("verify").run();}
+        try {context=new SpringApplicationBuilder(AiGatewayApplication.class).sources(Class.forName(config),com.nori.ai.gateway.app.StackContextSupport.LocalSourceIsolation.class).profiles("verify").run();}
         catch(Throwable failure){for(Throwable cause=failure;cause!=null;cause=cause.getCause()){System.out.println(cause.getClass().getName());if(cause instanceof org.springframework.beans.factory.BeanCreationException bean&&bean.getBeanName()!=null&&bean.getBeanName().matches("[A-Za-z][A-Za-z0-9_.]{0,100}"))System.out.println("HARNESS_STARTUP_BEAN="+bean.getBeanName());}System.exit(1);return;}
         if(context.getBean(ReadinessGate.class).ready()){
             int port=((WebServerApplicationContext)context).getWebServer().getPort();

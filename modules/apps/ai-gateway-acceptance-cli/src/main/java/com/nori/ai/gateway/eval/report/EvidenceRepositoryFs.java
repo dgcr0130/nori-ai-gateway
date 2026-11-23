@@ -9,7 +9,7 @@ import java.util.*;
 
 /**
  * 수용 결과 정본 저장소. 위치는 acceptance/results/&lt;단계 폴더&gt; 이고, 단계 식별값(F0~F4)은 레코드 데이터로 두며
- * 폴더 이름은 단계 내용으로 정한다(operations/deploy-checks/result_folders.py 와 같은 대응).
+ * 폴더 이름은 단계 내용으로 정한다(기존 단계 결과 디렉터리와 같은 대응).
  */
 public final class EvidenceRepositoryFs {
     public static final String RESULTS_ROOT = "acceptance/results";

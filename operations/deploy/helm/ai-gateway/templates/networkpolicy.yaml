@@ -1,44 +1,52 @@
 {{- include "aigw.guard" . -}}
+{{- $gateway := (.Values.appConfig | fromYaml).ai.gateway -}}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: {{ .Release.Name }}
+  namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "aigw.labels" . | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: {{ .Values.app.name }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   policyTypes: [Ingress, Egress]
-  ingress:
+  ingress:{{ if not .Values.systems }} []{{ end }}
+    {{- range $id, $system := .Values.systems }}
+    # backend-ingress: {{ $id }}
     - from:
-        - podSelector:
-            matchLabels:
-              app: tc-ui-backend
-        {{- if and (eq .Values.profile "verify") .Values.acceptance.enabled }}
-        - podSelector:
-            matchLabels:
-              app: ai-gateway-acceptance
-              app.kubernetes.io/instance: {{ .Release.Name }}
-        {{- end }}
+        {{- include "aigw.peer" $system.backend | nindent 8 }}
       ports:
-        - {protocol: TCP, port: 8080}
+        - {protocol: TCP, port: {{ $.Values.app.containerPort }}}
+    {{- end }}
   egress:
-    {{- include "aigw.dbEgress" . | nindent 4 }}
-    {{- $targets := list "dns" "loki" "tempo" "alloy" "gitlab" -}}
-    {{- if .Values.inference.enabled }}{{- $targets = append $targets "inference" -}}{{ end -}}
-    {{- if .Values.knowledgeSource.read.enabled }}{{- $targets = append $targets "seaweed" -}}{{ end -}}
-    {{- if .Values.ingest.enabled }}{{- $targets = append $targets "kafka" -}}{{ end -}}
-    {{- range $key := $targets }}
-    {{- $target := index $.Values.netpol.targets $key }}
+    {{- range $id, $system := .Values.systems }}
+    {{- $endpoint := include "aigw.endpoint" (dict "url" (index $gateway.systems $id).backendUrl "explicit" false "ipv4" false) | fromJson }}
+    # backend-egress: {{ $id }}:{{ $endpoint.port }}
+    - to:
+        {{- include "aigw.peer" $system.backend | nindent 8 }}
+      ports:
+        - {protocol: TCP, port: {{ $endpoint.port }}}
+    {{- end }}
+    {{- range $url := list $gateway.llm.baseUrl $gateway.documents.s3Endpoint }}
+    {{- $endpoint := include "aigw.endpoint" (dict "url" $url "explicit" true "ipv4" true) | fromJson }}
+    - to:
+        - ipBlock:
+            cidr: {{ printf "%s/32" $endpoint.host | quote }}
+      ports:
+        - {protocol: TCP, port: {{ $endpoint.port }}}
+    {{- end }}
+    {{- $gitlab := false }}
+    {{- range $gateway.systems }}{{ if .repositories }}{{ $gitlab = true }}{{ end }}{{ end }}
+    {{- range $key, $target := .Values.netpol.targets }}
+    {{- if or (ne $key "gitlab") $gitlab }}
     - to:
         {{- include "aigw.peer" $target | nindent 8 }}
       ports:
-        - protocol: {{ ternary "UDP" "TCP" (eq $key "dns") }}
-          port: {{ $target.port }}
-        {{- if eq $key "dns" }}
-        - protocol: TCP
-          port: {{ $target.port }}
+        {{- range default (list "TCP") $target.protocols }}
+        - {protocol: {{ . }}, port: {{ $target.port }}}
         {{- end }}
+    {{- end }}
     {{- end }}

@@ -44,12 +44,11 @@ NORI 공용 AI Gateway(Java 21, Spring Boot 4, Gradle 멀티 모듈, 헥사고�
 | `:adapter:ai-gateway-source-support`(패키지 `integration.source`) | `modules/adapter/ai-gateway-source-support` | loki·tempo·gitlab adapter 가 함께 쓰는 Source HTTP·관측·접근 검사·시스템별 조회 위치. core 에만 의존하고, Source adapter 는 이 모듈과 core 에만 의존한다 |
 | `:adapter:ai-gateway-system-adapter` | `modules/adapter/ai-gateway-system-adapter` | 등록 시스템의 표준 업무 조회 HTTP port 구현. core에만 제품 의존하며 시스템별 주소·자격은 앱에서 공급한다 |
 | `:apps:ai-gateway-app` | `modules/apps/ai-gateway-app` | 단일 조립 루트(Boot 앱·web·보안·Job 워커·시험 전용 hook). web 은 분리하지 않는다 |
-| `:apps:ai-gateway-acceptance-app` | `modules/apps/ai-gateway-acceptance-app` | 배포 환경 대상 수용 하네스(application plugin·installDist, k8s Job 이미지) |
 | `:apps:ai-gateway-acceptance-cli` | `modules/apps/ai-gateway-acceptance-cli` | 수용 기준 점검 CLI(`test-evidence`·`ingest`·`gate`·`record`·`perf`·`ci-evidence`). 패키지 `com.nori.ai.gateway.eval` |
 
 - 금지 의존: core → 다른 모듈/Spring/JDBC, adapter ↔ adapter, 수용 기준 점검 CLI(`eval` 패키지) → gateway 모듈. ArchUnit 시험이 강제한다.
 - 빈 등록은 `@ComponentScan` 없이 각 모듈 `*ModuleConfiguration` 의 `@Import` 로 명시한다. 새 `@Component`·`@Service`·`@RestController` 를 추가하면 같은 모듈 `*ModuleConfiguration` 의 import 와 `@Import` 를 함께 바꾼다. core 타입 빈은 app 의 `CoreBeansConfiguration` `@Bean` 으로만 등록한다. `ModuleConfigurationCompletenessTest` 가 누락을 FAIL 로 잡는다.
-- 운영 도구는 `operations/`, Dockerfile 은 `operations/deploy/docker/`, helm 차트는 `operations/deploy/helm/ai-gateway/`(U6 에서 `nori-tc-exec` 에서 이관), 배포 스크립트·runconfig 는 `operations/deploy/scripts/`, 배포 점검 스크립트는 `operations/deploy-checks/`, 배포 설정은 루트 `config/ai-gateway-*.properties`, runbook 은 `docs/runbooks/` 다.
+- 운영 도구는 `operations/`, Dockerfile 은 `operations/deploy/docker/`, helm 차트는 `operations/deploy/helm/ai-gateway/`(U6 에서 `nori-tc-exec` 에서 이관), 배포는 `.gitlab-ci.yml`의 형제 방식 job이 담당하며 `prod` 프로필만 사용한다. 앱 설정 정본은 `config/ai-gateway.yaml`이고 CI `--set-file appConfig`로 ConfigMap을 만든다. Secret은 운영자가 만들고 chart가 전체 참조한다. DB placeholder 설정은 루트 `config/ai-gateway-db.properties`, runbook 은 `docs/runbooks/` 다.
 - 수용 기준과 결과는 `acceptance/` 다: 필수 통합 시험 목록 `required-integration-tests.txt`, 질문 세트 `question-sets/`, 배포 입력·성능 기준 승인 기록 `approvals/`, 단계별 결과 `results/<단계 폴더>/`(F1 `gateway-foundation`, F2 `llm-integration`, F3 `rag-integration`, F4 `tc-integration`), 종료된 추론 진단 기록 `history/inference-diagnosis/`.
 
 ## 5. 검증 명령
@@ -61,6 +60,7 @@ Windows PowerShell, cwd `C:/workspace_nori/nori-tc/nori-ai-gateway`, 각 명령�
 - 시험 실행 증거: 각 Test task 명령 직후 별도로 `.\gradlew.bat :apps:ai-gateway-acceptance-cli:run --args="test-evidence verify --tasks <task 경로>"`(integrationTest 는 `-Paigw.requireDocker=true` 동반). 새 IT 를 만드는 모듈은 `acceptance/required-integration-tests.txt` 에 한 줄을 추가한다(Plan §4.1 N17).
 - 전체: `.\gradlew.bat build --no-daemon`, 비한정 `.\gradlew.bat integrationTest -Paigw.requireDocker=true --no-daemon`
 - 빌드 기반(U2 이후): `.\gradlew.bat check --no-daemon`(`verifyDependencyMatrix`), `.\gradlew.bat verifyBuildLogicResolutionMode --no-daemon`, lockfile 갱신 `.\gradlew.bat resolveAndLockAll --write-locks --no-daemon`
+- 통합 시험은 push 전에 로컬 Docker로 실행한다. chart 렌더는 CI `helm-validate`에서만 실행하며 로컬 Helm 설치·렌더를 요구하지 않는다. 앱 hook은 verify+enabled 조건의 로컬 Gradle 시험 전용이며 배포 차트에서 켜지 않는다.
 - 문서만 바꾼 작업에는 전체 build 를 관성적으로 돌리지 않는다. 실행하지 않은 검증을 통과했다고 보고하지 않는다.
 
 ## 6. DB 와 migration

@@ -1,0 +1,9 @@
+ai:
+  gateway:
+    systems:
+      A: {backendUrl: "http://a.ns-a.svc:8081", repositories: []}
+      B: {backendUrl: "http://b.ns-b.svc", repositories: []}
+      C: {backendUrl: "https://c.ns-c.svc", repositories: []}
+      D: {documents: [{bucket: documents, prefix: d/}], repositories: []}
+    llm: {baseUrl: "http://192.0.2.77:11434/v1"}
+    documents: {s3Endpoint: "http://192.0.2.203:8333"}

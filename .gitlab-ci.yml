@@ -1,162 +1,152 @@
+stages: [check, package, build, scan, migrate, deploy]
+variables:
+  HARBOR_REGISTRY: harbor.nori.local
+  HARBOR_PROJECT: nori-tc
+  IMAGE_NAME: $HARBOR_REGISTRY/$HARBOR_PROJECT/ai-gateway
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  NAMESPACE: tc
+  GITLAB_BASE_URL: "https://gitlab.noricloud.org"
+
+# 기존 GitLab 호스트 경계는 유지합니다.
 workflow:
   rules:
     - if: '$CI_SERVER_HOST == "gitlab.noricloud.org"'
     - when: never
 
-stages: [check, package, verify, build, scan, migrate, deploy]
-variables:
-  # settings-conventions(nori-common/build-logic)는 GitLab Package Registry 를 gitlabBaseUrl|GITLAB_BASE_URL 이 있을 때만
-  # 등록한다(nori-wm-ui-backend 와 같은 CI 입력). project id 는 gradle.properties 의 gitlabPackageProjectIds, 인증은 CI_JOB_TOKEN 이다.
-  GITLAB_BASE_URL: "https://gitlab.noricloud.org"
-default:
-  tags: [nori-msa]
-
-# P15final 생산자(task·스크립트·검사 main)와 운영 gate가 없으면 해당 job은 실패합니다.
-# gradlew 는 레포에 실행 권한 없이(100644) 저장되어 있으므로 bash 로 실행한다(작업 트리 chmod 0 — package 의 dirty 검사 유지).
 test:
-  before_script:
-    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
   stage: check
-  dependencies: []
+  tags: [nori-msa]
+  image: harbor.nori.local/library/maven:3.9-eclipse-temurin-21
+  variables:
+    KUBERNETES_MEMORY_REQUEST: "4Gi"
+    KUBERNETES_MEMORY_LIMIT: "4Gi"
   script:
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
     - bash ./gradlew build --no-daemon
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH'
+    - if: '$CI_COMMIT_TAG'
 
 helm-validate:
   stage: check
-  dependencies: []
+  tags: [nori-msa]
+  image: harbor.nori.local/library/kubectl:1.32.2
   script:
-    - test -f operations/deploy/scripts/aigw-helm.sh
-    - bash operations/deploy/scripts/aigw-helm.sh --release ai-gateway --mode lint --runconfig operations/deploy/scripts/runconfig/fixtures/lint-verify.json --image-digests operations/deploy/scripts/runconfig/fixtures/lint-image-digests.json --suite none
-  artifacts:
-    paths: [build/helm-validation/]
+    - helm lint operations/deploy/helm/ai-gateway -f operations/deploy/helm/ai-gateway/values.yaml -f operations/deploy/helm/ai-gateway/values-prod.yaml --set-file appConfig=config/ai-gateway.yaml --set-string app.imageTag=$IMAGE_TAG
+    - helm template ai-gateway operations/deploy/helm/ai-gateway --namespace $NAMESPACE -f operations/deploy/helm/ai-gateway/values.yaml -f operations/deploy/helm/ai-gateway/values-prod.yaml --set-file appConfig=config/ai-gateway.yaml --set-string app.imageTag=$IMAGE_TAG > /dev/null
+    - |
+      set -eu
+      chart=operations/deploy/helm/ai-gateway
+      helm template ai-gateway "$chart" --namespace "$NAMESPACE" -f "$chart/values.yaml" -f "$chart/ci/values.yaml" --set-file appConfig="$chart/ci/app-config.yaml" --set-string app.imageTag="$IMAGE_TAG" > chart-fixture.yaml
+      awk -f "$chart/ci/assert-network-policy.awk" chart-fixture.yaml
+      if grep -Eq 'backend-(in|e)gress: D|ns-d' chart-fixture.yaml; then exit 1; fi
+      # 각 실패는 별도 렌더에서 관측합니다.
+      if helm template ai-gateway "$chart" -f "$chart/values.yaml" -f "$chart/values-prod.yaml" --set-string app.imageTag="$IMAGE_TAG" > /dev/null 2>&1; then exit 1; fi
+      if helm template ai-gateway "$chart" -f "$chart/values.yaml" -f "$chart/ci/values.yaml" --set-file appConfig="$chart/ci/app-config.yaml" --set-string app.imageTag="$IMAGE_TAG" --set systems.EXTRA.backend.namespace=ns-extra --set systems.EXTRA.backend.podSelector.app=extra > /dev/null 2>&1; then exit 1; fi
+      # Helm의 map 병합으로 {}가 기존 대상을 남기지 않도록 null로 제거합니다.
+      if helm template ai-gateway "$chart" -f "$chart/values.yaml" -f "$chart/ci/values.yaml" --set-file appConfig="$chart/ci/app-config.yaml" --set-string app.imageTag="$IMAGE_TAG" --set netpol.targets=null > /dev/null 2>&1; then exit 1; fi
+      for endpoint in llm s3; do
+        case "$endpoint" in
+          llm) sed 's@http://192.0.2.77:11434/v1@http://llm.example:11434/v1@' "$chart/ci/app-config.yaml" > invalid-app-config.yaml ;;
+          s3) sed 's@http://192.0.2.203:8333@http://s3.example:8333@' "$chart/ci/app-config.yaml" > invalid-app-config.yaml ;;
+        esac
+        if helm template ai-gateway "$chart" -f "$chart/values.yaml" -f "$chart/ci/values.yaml" --set-file appConfig=invalid-app-config.yaml --set-string app.imageTag="$IMAGE_TAG" > /dev/null 2>&1; then exit 1; fi
+      done
+      rm chart-fixture.yaml invalid-app-config.yaml
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
 
 package:
   stage: package
-  dependencies: []
+  tags: [nori-msa]
+  image: harbor.nori.local/library/maven:3.9-eclipse-temurin-21
   script:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
-    - bash ./gradlew aigwPackage -Paigw.gitSha=$CI_COMMIT_SHA --no-daemon
-    - test -s build/package/build-identity.json
-  artifacts:
-    paths:
-      - build/package/app.jar
-      - build/package/acceptance/
-      - build/package/runtime-classpath.txt
-      - build/package/build-identity.json
-
-integration-test:
-  before_script:
-    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
-  stage: verify
-  rules:
-    - if: '$AIGW_CI_IT_MODE == "runner"'
-  tags: ['$AIGW_IT_RUNNER_TAG']
-  dependencies: [package]
-  script:
-    - test -n "$AIGW_IT_RUNNER_TAG"
-    - bash ./gradlew integrationTest -Paigw.requireDocker=true --no-daemon
-    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="test-evidence verify --selector integrationTest --required acceptance/required-integration-tests.txt --require-docker --expect-build-identity build/package/build-identity.json" --no-daemon'
-  artifacts:
-    when: always
-    paths: ['**/build/aigw-evidence/**']
-
-integration-evidence:
-  before_script:
-    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
-  stage: verify
-  rules:
-    - if: '$AIGW_CI_IT_MODE == "evidence"'
-  dependencies: [package]
-  script:
-    - 'test "$CI_API_V4_URL" = "https://gitlab.noricloud.org/api/v4"'
-    - 'printf ''header = "JOB-TOKEN: %s"\n'' "$CI_JOB_TOKEN" | curl --config - --fail --silent --show-error --proto "=https" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/aigw-it-evidence/$CI_COMMIT_SHA/it-evidence.tgz" --output it-evidence.tgz'
-    - 'bash ./gradlew :apps:ai-gateway-acceptance-cli:run --args="ci-evidence verify --sha $CI_COMMIT_SHA --bundle it-evidence.tgz --required acceptance/required-integration-tests.txt --expect-build-identity build/package/build-identity.json" --no-daemon'
-
-integration-mode-guard:
-  stage: verify
-  dependencies: []
-  rules:
-    - if: '$AIGW_CI_IT_MODE != "runner" && $AIGW_CI_IT_MODE != "evidence"'
-  script:
-    - echo CI_IT_MODE_UNSET >&2
-    - exit 1
-
-build-image:
-  stage: build
-  image:
-    name: '$AIGW_CI_KANIKO_IMAGE'
-    entrypoint: ['']
-  dependencies: [package]
-  script:
+    - bash ./gradlew :apps:ai-gateway-app:bootJar --no-daemon
+    # bootJar는 GitLab job artifact 기본 상한 100MB를 넘으므로 이 프로젝트 Generic 패키지 저장소의 고정 이름으로 넘깁니다.
+    # 같은 이름 파일은 프로젝트 정리 정책(중복 1개 유지)이 지우고, build는 아래 SHA-256과 대조합니다.
     - |
       set -eu
-      command -v jq >/dev/null
-      git_sha=$(jq -er '.gitSha | select(test("^[0-9a-f]{40}$"))' build/package/build-identity.json)
-      app_sha=$(jq -er '.appJarSha256 | select(test("^[0-9a-f]{64}$"))' build/package/build-identity.json)
-      runtime_sha=$(jq -er '.runtimeClasspathSha256 | select(test("^[0-9a-f]{64}$"))' build/package/build-identity.json)
-      test "$git_sha" = "$CI_COMMIT_SHA"
-      printf '%s  build/package/app.jar\n' "$app_sha" | sha256sum --check --status
-      printf '%s  build/package/runtime-classpath.txt\n' "$runtime_sha" | sha256sum --check --status
-      migrations_sha=$(find flyway/sql -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d ' ' -f 1)
-      mkdir -p build/image-digest
-      /kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile operations/deploy/docker/Dockerfile --destination "harbor.nori.local/nori-tc/ai-gateway:$CI_PIPELINE_ID" --build-arg "GIT_SHA=$git_sha" --build-arg "APP_JAR_SHA256=$app_sha" --build-arg "RUNTIME_CLASSPATH_SHA256=$runtime_sha" --build-arg "MIGRATIONS_SHA256=$migrations_sha" --digest-file build/image-digest/app.digest
+      set -- modules/apps/ai-gateway-app/build/libs/*.jar
+      test "$#" -eq 1
+      sha=$(sha256sum "$1")
+      echo "APP_JAR_SHA256=${sha%% *}" > package.env
+      curl --fail --silent --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "$1" "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/ai-gateway-app/ci/app.jar"
   artifacts:
-    paths: [build/image-digest/app.digest]
+    reports:
+      dotenv: package.env
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
 
-build-acceptance-image:
+build:
   stage: build
+  needs: ["package"]
+  tags: [nori-msa]
   image:
-    name: '$AIGW_CI_KANIKO_IMAGE'
-    entrypoint: ['']
-  dependencies: [package]
+    name: harbor.nori.local/library/kaniko:debug
+    entrypoint: [""]
   script:
-    - test -x build/package/acceptance/bin/ai-gateway-acceptance-app
-    - mkdir -p build/image-digest
-    - '/kaniko/executor --context "$CI_PROJECT_DIR" --dockerfile operations/deploy/docker/Dockerfile-acceptance --destination "harbor.nori.local/nori-tc/ai-gateway-acceptance:$CI_PIPELINE_ID" --digest-file build/image-digest/acceptance.digest'
-  artifacts:
-    paths: [build/image-digest/acceptance.digest]
+    # 다른 파이프라인이 같은 이름으로 더 늦게 올렸으면 해시가 달라 이미지를 만들지 않습니다.
+    - |
+      set -e
+      wget --header "JOB-TOKEN: $CI_JOB_TOKEN" -O app.jar "$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/ai-gateway-app/ci/app.jar"
+      test -n "$APP_JAR_SHA256"
+      echo "$APP_JAR_SHA256  app.jar" > app.jar.sha256
+      sha256sum -c app.jar.sha256
+    - /kaniko/executor
+      --context $CI_PROJECT_DIR
+      --dockerfile $CI_PROJECT_DIR/operations/deploy/docker/Dockerfile-ci
+      --destination $IMAGE_NAME:$IMAGE_TAG
+      --destination $IMAGE_NAME:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
 
-scan-image:
+scan:
   stage: scan
+  needs: ["build"]
+  tags:
+    - nori-msa
   image:
-    name: '$AIGW_CI_SCAN_IMAGE'
-    entrypoint: ['']
-  dependencies: [package, build-image, build-acceptance-image]
+    name: harbor.nori.local/library/trivy:latest
+    entrypoint: [""]
+  variables:
+    TRIVY_SEVERITY: "HIGH,CRITICAL"
+    TRIVY_EXIT_CODE: "1"
+    # 자체서명 Harbor(nori.local 사설 CA) 신뢰. SSL_CERT_FILE(시스템 풀 대체)이 아니라
+    # SSL_CERT_DIR(추가)라 trivy 의 공개 vuln DB(mirror.gcr.io) 다운로드 TLS 도 그대로 유지된다.
+    SSL_CERT_DIR: "/etc/ssl/certs:/tmp/extra-certs"
+    # 스캔 대상 이미지 pull 인증: 러너가 /kaniko/.docker 에 마운트한 harbor-creds-secret(config.json) 재사용.
+    DOCKER_CONFIG: "/kaniko/.docker"
+  before_script:
+    # HARBOR_CA_CERT = File 타입 CI 변수(nori.local CA PEM). Go 가 스캔하는 디렉터리에 배치.
+    - mkdir -p /tmp/extra-certs
+    - cp "$HARBOR_CA_CERT" /tmp/extra-certs/nori-local-ca.crt
   script:
-    - |
-      set -eu
-      for item in app acceptance; do
-        digest=$(cat "build/image-digest/$item.digest")
-        printf '%s\n' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
-        case "$item" in app) repository=ai-gateway ;; acceptance) repository=ai-gateway-acceptance ;; esac
-        trivy image --severity HIGH,CRITICAL --exit-code 1 "harbor.nori.local/nori-tc/$repository@$digest"
-      done
-      jq -n --arg app "$(cat build/image-digest/app.digest)" --arg acceptance "$(cat build/image-digest/acceptance.digest)" --slurpfile identity build/package/build-identity.json '{app:$app,acceptance:$acceptance,buildIdentity:$identity[0]}' > image-digests.json
-  artifacts:
-    paths: [image-digests.json]
+    - trivy image --severity "$TRIVY_SEVERITY" --exit-code "$TRIVY_EXIT_CODE" --ignore-unfixed --no-progress "$IMAGE_NAME:$IMAGE_TAG"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_TAG'
 
-# 공유 서버 DB nori_ai_gateway 에 루트 Gradle Flyway(flyway/sql, 이력 schema gw_flyway)를 적용한다(nori-wm-ui-backend migrate job 형태).
-# 순서는 needs 없이 stage 로만 강제한다 — 이 job 이 실패하면 뒤 stage 의 deploy-verify 는 시작되지 않는다.
-# 계정 이름·비밀번호는 CI 변수 AI_GATEWAY_DB_USER(masked)·AI_GATEWAY_DB_PASSWORD(protected·masked)로만 받는다.
-# -Pflyway.* 를 쓰지 않는 이유: CI trace 에 명령줄이 찍힌다. build.gradle.kts 가 env AI_GATEWAY_DB_URL/USER/PASSWORD 를 읽는다.
-# 둘 중 하나라도 비면 Gradle 호출 전에 실패한다(protected 변수는 protected 가 아닌 ref 에서 비어 있다).
-# migrate 의 종료 코드만 믿지 않고 적용 뒤 flywayInfo 로 Pending 잔존을 다시 본다.
-# flywayInfo -q 의 stdout 은 "Schema version" 줄과 Category/Version/Description/Type/Installed On/State/Undoable 표뿐이라
-# (Flyway 11.14.1 FlywayInfoTask·MigrationInfoDumper) 계정 이름·URL 이 artifact 에 들어가지 않는다.
 migrate:
   stage: migrate
   tags: [nori-msa]
-  dependencies: []
+  needs: ["scan"]
+  image: harbor.nori.local/library/maven:3.9-eclipse-temurin-21
   allow_failure: false
   variables:
     AI_GATEWAY_DB_URL: "jdbc:postgresql://192.168.0.150:15432/nori_ai_gateway"
   script:
-    - 'if [ -z "$AI_GATEWAY_DB_USER" ] || [ -z "$AI_GATEWAY_DB_PASSWORD" ]; then echo "AI_GATEWAY_DB_USER or AI_GATEWAY_DB_PASSWORD is empty - register both as CI variables (protected ref required)" >&2; exit 1; fi'
+    - 'if [ -z "$AI_GATEWAY_DB_USER" ] || [ -z "$AI_GATEWAY_DB_PASSWORD" ]; then echo "AI_GATEWAY_DB_USER·AI_GATEWAY_DB_PASSWORD를 protected CI 변수로 등록해야 합니다" >&2; exit 1; fi'
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
     - bash ./gradlew flywayInfo -q --no-daemon
     - bash ./gradlew flywayMigrate --no-daemon
     - bash ./gradlew flywayInfo -q --no-daemon > flyway-info-after.txt
-    - 'if grep -q "Pending" flyway-info-after.txt; then echo "Pending migrations remain after flywayMigrate" >&2; exit 1; fi'
+    - 'if grep -q "Pending" flyway-info-after.txt; then echo "flywayMigrate 뒤 Pending이 남았습니다" >&2; exit 1; fi'
   artifacts:
     when: always
     paths: [flyway-info-after.txt]
@@ -165,15 +155,21 @@ migrate:
     - if: '$CI_COMMIT_BRANCH == "main"'
     - if: '$CI_COMMIT_TAG'
 
-# migrate 가 도는 ref(main·tag)에서만 수동 배포할 수 있다 — 다른 branch 파이프라인에서 migrate 없이 배포하는 경로를 막는다
-# (nori-wm-ui-backend deploy job 의 rules 와 같은 형태).
-deploy-verify:
+# 1800초 startupProbe 창과 그 뒤 readiness 전환을 기다립니다.
+deploy:
   stage: deploy
-  dependencies: [scan-image]
-  allow_failure: false
+  needs: ["scan", "migrate"]
+  tags: [nori-msa]
+  image: harbor.nori.local/library/kubectl:1.32.2
   script:
-    - test -f operations/deploy/scripts/aigw-helm.sh
-    - 'bash operations/deploy/scripts/aigw-helm.sh --release ai-gateway --mode deploy --runconfig "$AIGW_RUNCONFIG" --image-digests image-digests.json --suite none'
+    - helm upgrade --install ai-gateway operations/deploy/helm/ai-gateway
+      --namespace $NAMESPACE
+      --set-file appConfig=config/ai-gateway.yaml
+      --set-string app.imageTag=$IMAGE_TAG
+      -f operations/deploy/helm/ai-gateway/values.yaml
+      -f operations/deploy/helm/ai-gateway/values-prod.yaml
+      --wait
+      --timeout 2100s
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual

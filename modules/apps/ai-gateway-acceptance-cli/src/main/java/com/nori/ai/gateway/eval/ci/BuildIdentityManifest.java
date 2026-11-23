@@ -8,7 +8,7 @@ import java.nio.file.*;
 import java.util.*;
 
 /**
- * 같은 파이프라인 {@code package} job 이 만든 {@code build/package/build-identity.json} 과 시험 task 요약의 빌드 신원 대조.
+ * 호출자가 명시한 빌드 신원 파일과 시험 task 요약의 빌드 신원을 대조합니다.
  * {@code test-evidence verify --expect-build-identity}(runner 모드)와 {@code ci-evidence verify}(evidence 모드)가 같은 판정을 쓴다.
  */
 public final class BuildIdentityManifest {

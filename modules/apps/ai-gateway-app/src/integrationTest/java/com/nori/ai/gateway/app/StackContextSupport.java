@@ -46,6 +46,22 @@ public abstract class StackContextSupport {
             "ai.gateway.systems[TC].actor-jwks-file",securityDirectory.resolve("jwks.json").toString(),"ai.gateway.systems[TC].issuer","tc-ui-backend",
             "ai.gateway.systems[TC].review-permission","AI_REVIEW");
     }
+    // 기존 IT는 Source 부재 또는 자체 로컬 대역을 검사합니다. 운영 선언 시험만 명시적으로 켭니다.
+    protected boolean productionSourceClients() { return false; }
+    @org.springframework.boot.test.context.TestConfiguration(proxyBeanMethods = false)
+    public static class LocalSourceIsolation {
+        @org.springframework.context.annotation.Bean
+        static org.springframework.beans.factory.config.BeanFactoryPostProcessor isolateMonitoringClients(org.springframework.core.env.Environment environment) {
+            return beans -> {
+                if (environment.getProperty("aigw.test.production-source-clients", Boolean.class, false)) return;
+                var registry = (org.springframework.beans.factory.support.BeanDefinitionRegistry) beans;
+                for (String name : List.of("lokiSourceHttpClient", "lokiLogConnector", "lokiProbeFactory", "tempoSourceHttpClient", "tempoTraceConnector", "sourceReadAccess", "sourceObservability")) {
+                    if (registry.containsBeanDefinition(name)) registry.removeBeanDefinition(name);
+                }
+            };
+        }
+    }
+    protected String[] activeProfiles() { return new String[]{"verify"}; }
     protected WebApplicationType applicationType() { return WebApplicationType.NONE; }
     protected Map<String,Object> extraApplicationProperties() { return Map.of(); }
 
@@ -65,6 +81,7 @@ public abstract class StackContextSupport {
             "ai.gateway.inference.mode","disabled"));
         properties.putAll(Map.of("spring.datasource.url",database.jdbcUrl(),"spring.datasource.username",database.user(),"spring.datasource.password",database.passwordFor(database.user())));
         properties.putAll(extraApplicationProperties());
+        properties.put("aigw.test.production-source-clients", productionSourceClients());
         if (applicationType() == WebApplicationType.SERVLET) { properties.put("server.address","127.0.0.1"); properties.put("server.port",0); }
         var arguments = new java.util.ArrayList<>(List.of(
                 "--spring.flyway.enabled=false",
@@ -80,9 +97,9 @@ public abstract class StackContextSupport {
         properties.forEach((key, value) -> { if (key.startsWith("ai.gateway.otlp.")) otlp.put(key, value); });
         otlp.forEach((key, value) -> arguments.add("--" + key + "=" + value));
         context = new SpringApplicationBuilder(AiGatewayApplication.class)
-            .sources(com.nori.ai.gateway.app.job.P09TestPorts.class).sources(additionalSources)
+            .sources(com.nori.ai.gateway.app.job.P09TestPorts.class, LocalSourceIsolation.class).sources(additionalSources)
             .properties(properties)
-            .web(applicationType()).profiles("verify").run(arguments.toArray(String[]::new));
+            .web(applicationType()).profiles(activeProfiles()).run(arguments.toArray(String[]::new));
     }
 
     /** 접수 서비스를 직접 부르는 시험이 인입 filter와 같은 앱 OpenTelemetry Bean의 실제 SDK 서버 span 안에서 호출하게 한다. */

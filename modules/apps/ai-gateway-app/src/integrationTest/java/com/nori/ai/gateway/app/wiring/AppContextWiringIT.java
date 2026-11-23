@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.*;
 @org.junit.jupiter.api.Tag("stage-F1")
 @org.junit.jupiter.api.Tag("label-MOCK_API")
 class AppContextWiringIT extends StackContextSupport {
+    @Override protected boolean productionSourceClients() { return true; }
     static final class BoundaryClock extends java.time.Clock {
         volatile java.time.Instant now=java.time.Instant.parse("2040-01-01T00:00:00Z");
         public java.time.ZoneId getZone(){return java.time.ZoneOffset.UTC;}
@@ -267,16 +268,22 @@ class AppContextWiringIT extends StackContextSupport {
         com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory.class, com.nori.ai.gateway.app.config.SourceConnectorConfiguration.ProbeWindowInput.class,
         com.nori.ai.gateway.app.job.DirectSourceToolExecutor.GitExecutionScopes.class);
 
-    @Test void productionSourceDeclarationRegistersNoSourceBeanAndOnlyTheActualRetentionReader() throws Exception {
+    @Test void productionSourceDeclarationRegistersMonitoringClientsWithoutRetentionProbeIo() throws Exception {
         var declared = java.nio.file.Path.of(System.getProperty("aigw.rootDir"), "modules/apps/ai-gateway-app/src/main/resources/config/sources/shared-v1.json");
         byte[] before = java.nio.file.Files.readAllBytes(declared);
         start();
-        for (Class<?> type : SOURCE_BEANS) assertThat(context.getBeansOfType(type)).as(type.getName()).isEmpty();
+        for (Class<?> type : SOURCE_BEANS) {
+            int expected = type == com.nori.ai.gateway.integration.source.SourceHttpClient.class ? 2 :
+                List.of(com.nori.ai.gateway.integration.loki.LokiLogConnector.class, com.nori.ai.gateway.integration.tempo.TempoTraceConnector.class,
+                    com.nori.ai.gateway.integration.source.SourceReadAccess.class, com.nori.ai.gateway.integration.source.SourceObservability.class,
+                    com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory.class).contains(type) ? 1 : 0;
+            assertThat(context.getBeansOfType(type)).as(type.getName()).hasSize(expected);
+        }
         assertThat(context.getBeansOfType(com.nori.ai.gateway.core.port.SourceRetentionReader.class).values()).singleElement()
             .isInstanceOf(com.nori.ai.gateway.persistence.retention.SourceRetentionReaderAdapter.class);
         var snapshot = context.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.SourceSnapshot.class);
-        assertThat(snapshot.loki().serviceTargetVerified()).isFalse();
-        assertThat(snapshot.tempo().baseUrl()).isEmpty();
+        assertThat(snapshot.loki().serviceTargetVerified()).isTrue();
+        assertThat(snapshot.tempo().baseUrl()).contains(java.net.URI.create("http://tempo.monitoring.svc:3200"));
         assertThat(snapshot.gitlab().baseUrl()).isEmpty();
         assertThat(snapshot.gitlab().tokenPath()).isEmpty();
         assertThat(snapshot.repositories()).isEmpty();
@@ -286,7 +293,7 @@ class AppContextWiringIT extends StackContextSupport {
         while (!scheduler.started() && System.nanoTime() < deadline) Thread.sleep(20);
         assertThat(scheduler.started()).isTrue();
         Thread.sleep(1500);
-        // factory·확인 범위 입력이 없으므로 탐침 생성·측정·저장은 없습니다(Gate 미확정 NOT_RUN).
+        // 확인 범위 입력이 없으므로 탐침 생성·측정·저장은 없습니다.
         assertThat(context.getBean(org.springframework.jdbc.core.simple.JdbcClient.class).sql("SELECT count(*) FROM gw.source_retention_probe").query(Integer.class).single()).isZero();
         assertThat(java.nio.file.Files.readAllBytes(declared)).isEqualTo(before);
     }

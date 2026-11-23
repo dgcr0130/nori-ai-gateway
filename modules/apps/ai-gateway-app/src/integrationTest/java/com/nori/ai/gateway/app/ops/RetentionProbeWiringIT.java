@@ -72,7 +72,7 @@ class RetentionProbeWiringIT extends P09QueueSupport {
     static class ProbeInputs {
         @Bean LocalLoki localLoki() throws java.io.IOException { return new LocalLoki(); }
         @Bean Windows probeWindows() { return new Windows(); }
-        @Bean SourceConnectorConfiguration.LokiProbeFactory lokiProbeFactory(LocalLoki loki, MeterRegistry meters, OpenTelemetry openTelemetry) {
+        @Bean SourceConnectorConfiguration.LokiProbeFactory testLokiProbeFactory(LocalLoki loki, MeterRegistry meters, OpenTelemetry openTelemetry) {
             var observability = new SourceConnectorConfiguration.FactoryConfiguration().sourceObservability(meters, openTelemetry);
             return new SourceConnectorConfiguration.LokiProbeFactory(new SourceHttpClient(loki.base(), "loki", observability));
         }

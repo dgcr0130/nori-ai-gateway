@@ -1,0 +1,9 @@
+{{- include "aigw.guard" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-app-config
+  namespace: {{ .Values.global.namespace }}
+data:
+  ai-gateway.yaml: |
+{{ .Values.appConfig | indent 4 }}

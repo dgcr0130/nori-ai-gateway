@@ -1,15 +1,36 @@
-profile: prod
-testHooks:
-  enabled: false
-inference:
-  enabled: true
-knowledgeSource:
-  read:
-    enabled: false
-ingest:
-  enabled: false
-  fixtureCatalog:
-    enabled: false
-acceptance:
-  enabled: false
-  suite: none
+app:
+  profile: prod
+  replicaCount: 1
+systems:
+  TC:
+    backend:
+      namespace: tc
+      podSelector: {app: tc-ui-backend}
+# 2026-11-17·2026-11-23 확인된 주소와 Pod 라벨입니다.
+netpol:
+  targets:
+    db: {cidr: 192.168.0.150/32, port: 15432}
+    dns:
+      namespace: kube-system
+      podSelector: {k8s-app: kube-dns}
+      port: 53
+      protocols: [UDP, TCP]
+    loki:
+      namespace: monitoring
+      podSelector:
+        app.kubernetes.io/component: single-binary
+        app.kubernetes.io/instance: loki
+        app.kubernetes.io/name: loki
+      port: 3100
+    tempo:
+      namespace: monitoring
+      podSelector:
+        app.kubernetes.io/instance: tempo
+        app.kubernetes.io/name: tempo
+      port: 3200
+    otlp:
+      namespace: monitoring
+      podSelector:
+        app.kubernetes.io/instance: alloy-gateway
+        app.kubernetes.io/name: alloy
+      port: 4318

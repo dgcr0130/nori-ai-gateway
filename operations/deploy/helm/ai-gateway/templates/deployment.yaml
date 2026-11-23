@@ -1,43 +1,40 @@
 {{- include "aigw.guard" . -}}
-{{- $config := .Values.configSecret.name -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}
+  namespace: {{ .Values.global.namespace }}
   labels:
     {{- include "aigw.labels" . | nindent 4 }}
 spec:
-  replicas: 1
+  replicas: {{ .Values.app.replicaCount }}
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      app: {{ .Values.app.name }}
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         {{- include "aigw.labels" . | nindent 8 }}
       annotations:
-        {{- if .Values.ingest.fixtureCatalog.enabled }}
-        checksum/fixture-catalog: {{ .Values.fixtureCatalog.content | sha256sum }}
-        {{- end }}
-        {{- if eq .Values.profile "verify" }}
-        checksum/egress-probe: {{ .Values.egressProbe.targets | toJson | sha256sum }}
-        {{- end }}
+        checksum/app-config: {{ .Values.appConfig | sha256sum }}
     spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 3000
-        runAsGroup: 2000
-        fsGroup: 2000
+        runAsUser: {{ .Values.common.userId }}
+        runAsGroup: {{ .Values.common.groupId }}
+        fsGroup: {{ .Values.common.groupId }}
         seccompProfile:
           type: RuntimeDefault
+      imagePullSecrets:
+        - name: {{ .Values.global.imagePullSecret }}
       containers:
         - name: gateway
-          image: {{ include "aigw.image" . | quote }}
-          imagePullPolicy: IfNotPresent
+          image: "{{ .Values.global.registry }}/{{ .Values.common.projectName }}/{{ .Values.app.name }}:{{ .Values.app.imageTag }}"
+          imagePullPolicy: {{ .Values.app.imagePullPolicy }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -45,28 +42,30 @@ spec:
               drop: [ALL]
           ports:
             - name: http
-              containerPort: 8080
-          livenessProbe:
+              containerPort: {{ .Values.app.containerPort }}
+          {{- range $name := list "liveness" "readiness" "startup" }}
+          {{ $name }}Probe:
             httpGet:
-              path: /actuator/health/liveness
+              path: {{ (index $.Values.probes $name).path }}
               port: http
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: http
+            initialDelaySeconds: {{ (index $.Values.probes $name).initialDelaySeconds }}
+            periodSeconds: {{ (index $.Values.probes $name).periodSeconds }}
+            failureThreshold: {{ (index $.Values.probes $name).failureThreshold }}
+            timeoutSeconds: {{ (index $.Values.probes $name).timeoutSeconds }}
+          {{- end }}
           env:
             - name: SPRING_PROFILES_ACTIVE
-              value: {{ .Values.profile | quote }}
-            # DB 계정 값은 Secret 의 두 키에만 두고, /app/config/ai-gateway-db.properties 의 placeholder 가 이 env 를 읽는다.
+              value: {{ .Values.app.profile | quote }}
             {{- range $key := list "AI_GATEWAY_DB_USER" "AI_GATEWAY_DB_PASSWORD" }}
             - name: {{ $key }}
               valueFrom:
                 secretKeyRef:
-                  name: {{ $config }}
+                  name: {{ $.Values.configSecret.name }}
                   key: {{ $key }}
             {{- end }}
+            # 실제 필수 소비자인 CapacityProfile과 추론 빈 조건에 고정 운영값을 줍니다.
             - name: AI_GATEWAY_INFERENCE_MODE
-              value: {{ ternary "enabled" "disabled" .Values.inference.enabled | quote }}
+              value: enabled
             - name: AI_GATEWAY_CAPACITY_MAX_RUNNING_JOBS
               value: "1"
             - name: AI_GATEWAY_CAPACITY_GENERATION_CONCURRENCY
@@ -77,94 +76,19 @@ spec:
               value: 60s
             - name: AI_GATEWAY_CAPACITY_JOB_LIFETIME_LIMIT
               value: 180s
-            - name: AI_GATEWAY_KNOWLEDGE_SOURCE_READ_ENABLED
-              value: {{ .Values.knowledgeSource.read.enabled | quote }}
-            - name: AI_GATEWAY_INGEST_ENABLED
-              value: {{ .Values.ingest.enabled | quote }}
-            - name: AI_GATEWAY_INGEST_FIXTURE_CATALOG_ENABLED
-              value: {{ .Values.ingest.fixtureCatalog.enabled | quote }}
-            - name: AI_GATEWAY_TEST_HOOKS_ENABLED
-              value: {{ .Values.testHooks.enabled | quote }}
-            - name: AI_GATEWAY_SANITIZE_VERIFY_RULE_SET
-              value: {{ .Values.sanitize.verifyRuleSet | quote }}
-            - name: AI_GATEWAY_SECURITY_SERVICE_TOKENS_FILE
-              value: /app/config/service-tokens.json
-            - name: AI_GATEWAY_SECURITY_ACTOR_JWKS_FILE
-              value: /app/config/jwks.json
             - name: DJL_CACHE_DIR
               value: /tmp/djl
-            {{- if .Values.inference.enabled }}
-            - name: AI_GATEWAY_INFERENCE_BASEURL
-              value: {{ .Values.inference.baseUrl | quote }}
-            {{- end }}
-            {{- if .Values.knowledgeSource.read.enabled }}
-            - name: AI_GATEWAY_SEAWEED_S3_ENDPOINT
-              value: {{ .Values.seaweed.s3Endpoint | quote }}
-            - name: AI_GATEWAY_SEAWEED_CREDENTIALS_PATH
-              value: /app/config
-            {{- end }}
-            {{- if .Values.ingest.enabled }}
-            - name: AI_GATEWAY_KAFKA_BOOTSTRAP_SERVERS
-              value: {{ .Values.kafka.bootstrapServers | quote }}
-            - name: AI_GATEWAY_KAFKA_TOPIC
-              value: {{ .Values.kafka.topic | quote }}
-            - name: AI_GATEWAY_KAFKA_GROUP_ID
-              value: {{ .Values.kafka.groupId | quote }}
-            {{- end }}
-            {{- if .Values.ingest.fixtureCatalog.enabled }}
-            - name: AI_GATEWAY_INGEST_FIXTURE_CATALOG_PATH
-              value: /run/aigw/fixture/catalog.yaml
-            - name: AI_GATEWAY_INGEST_FIXTURE_CATALOG_PREFIX
-              value: {{ .Values.fixtureCatalog.prefix | quote }}
-            {{- end }}
-            {{- if .Values.testHooks.enabled }}
-            - name: AI_GATEWAY_TEST_HOOKS_TOKEN_SHA256_FILE
-              value: /app/config/hook-token-sha256
-            - name: AI_GATEWAY_TCMOCK_STATE_DIR
-              value: /work/mock
-            - name: AI_GATEWAY_TEST_HOOKS_EGRESS_TARGETS_FILE
-              value: /run/aigw/egress/targets.json
-            {{- if .Values.testHooks.clock.mode }}
-            - name: AI_GATEWAY_TEST_HOOKS_CLOCK_MODE
-              value: {{ .Values.testHooks.clock.mode | quote }}
-            - name: AI_GATEWAY_TEST_HOOKS_CLOCK_INITIAL
-              value: {{ .Values.testHooks.clock.initial | quote }}
-            {{- end }}
-            {{- end }}
           volumeMounts:
             - {name: tmp, mountPath: /tmp}
             - {name: config, mountPath: /app/config, readOnly: true}
-            {{- if .Values.ingest.fixtureCatalog.enabled }}
-            - {name: fixture, mountPath: /run/aigw/fixture, readOnly: true}
-            {{- end }}
-            {{- if .Values.testHooks.enabled }}
-            - {name: egress, mountPath: /run/aigw/egress, readOnly: true}
-            - {name: mock, mountPath: /work/mock}
-            {{- end }}
       volumes:
         - name: tmp
           emptyDir: {medium: Memory, sizeLimit: 64Mi}
-        # 그 행에 필요한 키만 투영한다(키가 없으면 Pod 가 뜨지 않는다). GitLab 읽기 = token, SeaweedFS 읽기 = access-key·secret-key.
-        {{- $keys := list "ai-gateway-db.properties" "service-tokens.json" "jwks.json" "token" -}}
-        {{- if .Values.knowledgeSource.read.enabled }}{{- $keys = concat $keys (list "access-key" "secret-key") -}}{{ end -}}
-        {{- if .Values.testHooks.enabled }}{{- $keys = append $keys "hook-token-sha256" -}}{{ end }}
         - name: config
-          secret:
-            secretName: {{ $config }}
+          projected:
             defaultMode: 0440
-            items:
-              {{- range $keys }}
-              - {key: {{ . }}, path: {{ . }}}
-              {{- end }}
-        {{- if .Values.ingest.fixtureCatalog.enabled }}
-        - name: fixture
-          configMap:
-            name: {{ .Release.Name }}-fixture-catalog
-        {{- end }}
-        {{- if .Values.testHooks.enabled }}
-        - name: mock
-          emptyDir: {medium: Memory, sizeLimit: 64Mi}
-        - name: egress
-          configMap:
-            name: {{ .Release.Name }}-egress-probe
-        {{- end }}
+            sources:
+              - secret:
+                  name: {{ .Values.configSecret.name }}
+              - configMap:
+                  name: {{ .Release.Name }}-app-config

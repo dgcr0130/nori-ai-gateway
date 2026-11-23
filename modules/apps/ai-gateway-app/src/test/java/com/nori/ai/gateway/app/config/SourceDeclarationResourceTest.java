@@ -3,16 +3,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import static org.assertj.core.api.Assertions.*;
 class SourceDeclarationResourceTest {
- @Test void packagedSharedDeclarationLoadsWithoutSystemSpecificLocationsOrLiveProviders()throws Exception {
+ @Test void packagedSharedDeclarationLoadsConfirmedMonitoringAddressesWithoutSystemSpecificLocations()throws Exception {
   var resource=new ClassPathResource(SourceConnectorConfiguration.RESOURCE);assertThat(resource.exists()).isTrue();
   String text=resource.getContentAsString(java.nio.charset.StandardCharsets.UTF_8);var snapshot=SourceConnectorConfiguration.SourceSnapshot.parse(text);
-  assertThat(snapshot.loki().serviceTargetVerified()).isFalse();assertThat(snapshot.tempo().serviceTargetVerified()).isFalse();assertThat(snapshot.gitlab().serviceTargetVerified()).isFalse();assertThat(snapshot.repositories()).isEmpty();assertThat(text).doesNotContain("tc-gateway","namespace","ownerSystem");
+  assertThat(snapshot.loki().serviceTargetVerified()).isTrue();assertThat(snapshot.tempo().serviceTargetVerified()).isTrue();assertThat(snapshot.loki().baseUrl()).contains(java.net.URI.create("http://loki.monitoring.svc:3100"));assertThat(snapshot.tempo().baseUrl()).contains(java.net.URI.create("http://tempo.monitoring.svc:3200"));assertThat(snapshot.gitlab().serviceTargetVerified()).isFalse();assertThat(snapshot.repositories()).isEmpty();assertThat(text).doesNotContain("tc-gateway","namespace","ownerSystem");
  }
- @Test void actualRegistrarLoadsPackagedResourceAndDoesNotStartUnverifiedSourceClients(){
+ @Test void actualRegistrarCreatesConfirmedSourceClientsWithoutCallingTheirEndpoints(){
   new org.springframework.boot.test.context.runner.ApplicationContextRunner().withUserConfiguration(SourceConnectorConfiguration.class)
    .withBean(org.springframework.jdbc.core.simple.JdbcClient.class,()->org.mockito.Mockito.mock(org.springframework.jdbc.core.simple.JdbcClient.class))
    .withBean(org.springframework.transaction.support.TransactionTemplate.class,()->org.mockito.Mockito.mock(org.springframework.transaction.support.TransactionTemplate.class))
-   .run(context->{assertThat(context).hasNotFailed().hasSingleBean(SourceConnectorConfiguration.SourceSnapshot.class);assertThat(context.getBeansOfType(com.nori.ai.gateway.integration.source.SourceHttpClient.class)).isEmpty();});
+   .withBean(GatewaySystemsProperties.class,()->com.nori.ai.gateway.app.SystemConfigFixtures.systems())
+   .withBean(java.time.Clock.class,java.time.Clock::systemUTC)
+   .withBean(com.nori.ai.gateway.core.authz.SourceAuthorizationStep.class,()->new com.nori.ai.gateway.core.authz.SourceAuthorizationStep(new com.nori.ai.gateway.core.authz.SourcePermissionMap(java.util.Map.of())))
+   .withBean(io.micrometer.core.instrument.MeterRegistry.class,io.micrometer.core.instrument.simple.SimpleMeterRegistry::new)
+   .withBean(io.opentelemetry.api.OpenTelemetry.class,io.opentelemetry.api.OpenTelemetry::noop)
+   .run(context->{assertThat(context).hasNotFailed().hasSingleBean(SourceConnectorConfiguration.SourceSnapshot.class);assertThat(context.getBeansOfType(com.nori.ai.gateway.integration.source.SourceHttpClient.class)).hasSize(2);});
  }
  @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
  @Test void readyGitFactoryAutowiresTheConfiguredScopesAndNeverAdoptsTransportRepositoryRanges()throws Exception {

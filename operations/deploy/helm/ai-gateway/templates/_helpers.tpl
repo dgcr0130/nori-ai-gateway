@@ -1,86 +1,55 @@
 {{- define "aigw.labels" -}}
-app: {{ .Release.Name }}
+app: {{ .Values.app.name }}
 app.kubernetes.io/name: ai-gateway
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{- define "aigw.image" -}}
-{{ .Values.image.repository }}@sha256:{{ .Values.image.digest }}
+{{- /* URL 포트는 설정 원문에서만 계산합니다. */ -}}
+{{- define "aigw.endpoint" -}}
+{{- $url := required "주소가 필요합니다" .url -}}
+{{- if not (regexMatch "^https?://[^/:@?#[:space:]]+(:[0-9]+)?(/[^?#[:space:]]*)?$" $url) }}{{ fail "HTTP 주소 형식이 잘못되었습니다" }}{{ end -}}
+{{- $authority := regexReplaceAll "^https?://" (regexFind "^https?://[^/]+" $url) "" -}}
+{{- $parts := splitList ":" $authority -}}
+{{- $host := first $parts -}}
+{{- $port := ternary 443 80 (hasPrefix "https://" $url) -}}
+{{- if eq (len $parts) 2 -}}
+  {{- $port = int (last $parts) -}}
+{{- else if .explicit -}}
+  {{- fail "명시적 포트가 필요합니다" -}}
+{{- end -}}
+{{- if or (lt (int $port) 1) (gt (int $port) 65535) }}{{ fail "포트 범위가 잘못되었습니다" }}{{ end -}}
+{{- if .ipv4 -}}
+  {{- if not (regexMatch "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$" $host) }}{{ fail "IPv4 숫자 주소가 필요합니다" }}{{ end -}}
+  {{- range splitList "." $host -}}{{- if or (gt (int .) 255) (gt (len .) 3) }}{{ fail "IPv4 주소가 잘못되었습니다" }}{{ end -}}{{- end -}}
+{{- end -}}
+{{- dict "host" $host "port" $port | toJson -}}
 {{- end -}}
 
 {{- define "aigw.guard" -}}
-{{- $v := .Values -}}
-{{- if ne .Release.Name "ai-gateway" }}{{ fail "RENDER_INVALID_RELEASE" }}{{ end -}}
-{{- if ne .Release.Namespace "tc" }}{{ fail "RENDER_INVALID_NAMESPACE" }}{{ end -}}
-{{- if or (ne (int $v.replicaCount) 1) (ne (int $v.capacity.maxRunningJobs) 1) (ne (int $v.capacity.generationConcurrency) 1) }}{{ fail "용량 확장 게이트 전 초기 프로필만 허용" }}{{ end -}}
-{{- if not (regexMatch "^[a-f0-9]{64}$" $v.image.digest) }}{{ fail "APP_IMAGE_DIGEST_REQUIRED" }}{{ end -}}
-{{- if or (ne (int $v.capacity.queuedDepth) 4) (ne $v.capacity.queueWaitLimit "60s") (ne $v.capacity.jobLifetimeLimit "180s") }}{{ fail "CAPACITY_PROFILE_CONFLICT" }}{{ end -}}
-{{- if and $v.ingest.enabled (not $v.knowledgeSource.read.enabled) }}{{ fail "INGEST_REQUIRES_SOURCE_READ" }}{{ end -}}
-{{- if and (eq $v.sanitize.verifyRuleSet "mask-v1r") (or (ne $v.profile "verify") (ne $v.acceptance.suite "F3-RULEVER")) }}{{ fail "VERIFY_RULE_SET_SUITE_ONLY" }}{{ end -}}
-{{- if eq $v.profile "prod" -}}
-  {{- fail "PRODUCTION_RENDER_BLOCKED: tcAdapter http 구현은 F5a" -}}
-{{- else if not $v.testHooks.enabled }}{{ fail "VERIFY_HOOKS_REQUIRED" }}{{ end -}}
-{{- if and (not $v.inference.enabled) (not (and (eq $v.profile "verify") $v.testHooks.enabled)) }}{{ fail "DISABLED_INFERENCE_VERIFY_HOOKS_REQUIRED" }}{{ end -}}
-{{- /* 앱 자격·DB 설정은 운영자가 만드는 파일 Secret 하나(ai-gateway-config)에서만 받는다. 차트는 만들지 않는다(Plan U6 ①). */ -}}
-{{- if or $v.configSecret.create (ne $v.configSecret.name "ai-gateway-config") }}{{ fail "CONFIG_SECRET_REFERENCE_ONLY" }}{{ end -}}
-{{- if eq $v.profile "verify" -}}
-  {{- $allowed := 0 -}}{{- $blocked := 0 -}}
-  {{- range $v.egressProbe.targets -}}
-    {{- if eq .expect "ALLOWED" }}{{- $allowed = add1 $allowed -}}{{- else if eq .expect "BLOCKED" }}{{- $blocked = add1 $blocked -}}{{ end -}}
+{{- $config := required "appConfig가 필요합니다" .Values.appConfig | fromYaml -}}
+{{- $gateway := required "ai.gateway 설정이 필요합니다" (dig "ai" "gateway" dict $config) -}}
+{{- $_ := required "이미지 tag가 필요합니다" .Values.app.imageTag -}}
+{{- $backends := list -}}
+{{- $gitlab := false -}}
+{{- range $id, $system := (default dict $gateway.systems) -}}
+  {{- if $system.backendUrl -}}
+    {{- $backends = append $backends $id -}}
+    {{- $_ := include "aigw.endpoint" (dict "url" $system.backendUrl "explicit" false "ipv4" false) -}}
   {{- end -}}
-  {{- if or (lt (int $allowed) 2) (lt (int $blocked) 2) }}{{ fail "EGRESS_PROBE_TARGETS_REQUIRED" }}{{ end -}}
+  {{- if $system.repositories }}{{ $gitlab = true }}{{ end -}}
 {{- end -}}
-{{- if $v.inference.enabled -}}
-  {{- /* 추론 서버 기존 endpoint 직접 호출(SPEC §26.1 임차 원칙): scheme://host:port 만 받고 경로·끝 "/"·"/v1" 은 거부한다. */ -}}
-  {{- $_ := required "INFERENCE_BASE_URL_REQUIRED" $v.inference.baseUrl -}}
-  {{- if not (regexMatch "^https?://[^/@?#:[:space:]]+:[0-9]{1,5}$" $v.inference.baseUrl) }}{{ fail "INFERENCE_BASE_URL_INVALID" }}{{ end -}}
-  {{- if le (int $v.inference.port) 0 }}{{ fail "INFERENCE_PORT_REQUIRED" }}{{ end -}}
-  {{- if ne (int (regexReplaceAll "^.*:([0-9]+)$" $v.inference.baseUrl "${1}")) (int $v.inference.port) }}{{ fail "INFERENCE_PORT_CONFLICT" }}{{ end -}}
+{{- if ne (toJson (sortAlpha $backends)) (toJson (keys .Values.systems | sortAlpha)) }}{{ fail "backend 시스템과 selector 키 집합이 다릅니다" }}{{ end -}}
+{{- range $id, $system := .Values.systems -}}
+  {{- $_ := required "backend namespace가 필요합니다" $system.backend.namespace -}}
+  {{- $_ := required "backend podSelector가 필요합니다" $system.backend.podSelector -}}
 {{- end -}}
-{{- if $v.knowledgeSource.read.enabled -}}
-  {{- $_ := required "SEAWEED_ENDPOINT_REQUIRED" $v.seaweed.s3Endpoint -}}
+{{- $targets := required "netpol.targets가 필요합니다" .Values.netpol.targets -}}
+{{- range $key := list "db" "dns" "loki" "tempo" "otlp" -}}
+  {{- $_ := required (printf "공용 대상이 필요합니다: %s" $key) (index $targets $key) -}}
 {{- end -}}
-{{- if $v.ingest.enabled -}}
-  {{- range $key := list "bootstrapServers" "topic" "groupId" }}{{- $_ := required (printf "KAFKA_REQUIRED:%s" $key) (index $v.kafka $key) -}}{{ end -}}
-{{- end -}}
-{{- if $v.ingest.fixtureCatalog.enabled -}}
-  {{- if ne $v.profile "verify" }}{{ fail "FIXTURE_CATALOG_VERIFY_ONLY" }}{{ end -}}
-  {{- $_ := required "FIXTURE_CATALOG_REQUIRED" $v.fixtureCatalog.content -}}
-  {{- $_ := required "FIXTURE_PREFIX_REQUIRED" $v.fixtureCatalog.prefix -}}
-{{- end -}}
-{{- $targets := list "dns" "loki" "tempo" "alloy" "gitlab" -}}
-{{- if $v.inference.enabled }}{{- $targets = append $targets "inference" -}}{{ end -}}
-{{- if $v.knowledgeSource.read.enabled }}{{- $targets = append $targets "seaweed" -}}{{ end -}}
-{{- if $v.ingest.enabled }}{{- $targets = append $targets "kafka" -}}{{ end -}}
-{{- range $key := $targets -}}
-  {{- $target := required (printf "NETPOL_TARGET_REQUIRED:%s" $key) (index $v.netpol.targets $key) -}}
-  {{- $_ := required (printf "NETPOL_APPROVAL_REQUIRED:%s" $key) $target.approvalRef -}}
-  {{- if eq $key "inference" }}{{- if ne (int $target.port) (int $v.inference.port) }}{{ fail "INFERENCE_PORT_CONFLICT" }}{{ end -}}{{ end -}}
-{{- end -}}
-{{- if $v.acceptance.enabled -}}
-  {{- if or (ne $v.profile "verify") (eq $v.acceptance.suite "none") }}{{ fail "ACCEPTANCE_VERIFY_SUITE_REQUIRED" }}{{ end -}}
-  {{- if not (regexMatch "^[a-f0-9]{64}$" $v.acceptance.image.digest) }}{{ fail "ACCEPTANCE_IMAGE_DIGEST_REQUIRED" }}{{ end -}}
-  {{- $_ := required "ACCEPTANCE_PARENT_REQUIRED" $v.acceptance.parentRunId -}}
-  {{- range $key := list "acceptanceSigner" "acceptanceClient" }}{{- $_ := required (printf "ACCEPTANCE_REF_REQUIRED:%s" $key) (index $v.credentialsRef $key) -}}{{ end -}}
-  {{- range $key := list "loki" "tempo" "metrics" "approvalRef" }}{{- $_ := required (printf "READBACK_REQUIRED:%s" $key) (index $v.acceptance.readback $key) -}}{{ end -}}
-  {{- $metrics := required "NETPOL_TARGET_REQUIRED:metrics" (index $v.netpol.targets "metrics") -}}
-  {{- $_ := required "NETPOL_APPROVAL_REQUIRED:metrics" $metrics.approvalRef -}}
-  {{- $s := $v.acceptance.suite -}}
-  {{- $f1 := has $s (list "F1" "F1-RUBRIC") -}}
-  {{- $f2 := has $s (list "F2" "F2-OUTAGE" "F2-RUBRIC" "F3-PROBE") -}}
-  {{- $f3 := has $s (list "F3" "F3-ACL" "F3-RULEVER" "F4" "F4-RUBRIC" "F4-OUTAGE" "F4-CLOCK" "F4-PERF") -}}
-  {{- if or (and $f1 (or $v.inference.enabled $v.knowledgeSource.read.enabled $v.ingest.enabled $v.ingest.fixtureCatalog.enabled)) (and $f2 (or (not $v.inference.enabled) $v.knowledgeSource.read.enabled $v.ingest.enabled $v.ingest.fixtureCatalog.enabled)) (and $f3 (or (not $v.inference.enabled) (not $v.knowledgeSource.read.enabled) (not $v.ingest.enabled) (not $v.ingest.fixtureCatalog.enabled))) }}{{ fail "SUITE_FLAGS_CONFLICT" }}{{ end -}}
-  {{- if and (not $f1) (not $f2) (not $f3) }}{{ fail "SUITE_UNSUPPORTED" }}{{ end -}}
-  {{- if hasSuffix "-OUTAGE" $s -}}
-    {{- if not (has $v.acceptance.outagePhase (list "STOPPED" "LOADING")) }}{{ fail "OUTAGE_PHASE_REQUIRED" }}{{ end -}}
-  {{- else if $v.acceptance.outagePhase }}{{ fail "OUTAGE_PHASE_FORBIDDEN" }}{{ end -}}
-  {{- if hasSuffix "-RUBRIC" $s }}{{- $_ := required "RUBRIC_TARGETS_REQUIRED" $v.acceptance.rubricTargets -}}{{ end -}}
-  {{- if eq (include "aigw.fixtureWriter" .) "true" }}{{- $_ := required "FIXTURE_WRITER_REF_REQUIRED" $v.credentialsRef.acceptanceFixtureWriter -}}{{ end -}}
-{{- end -}}
-{{- end -}}
-
-{{- define "aigw.fixtureWriter" -}}
-{{- has .Values.acceptance.suite (list "F3" "F3-ACL" "F3-RULEVER" "F4" "F4-PERF") -}}
+{{- if and $gitlab (not $targets.gitlab) }}{{ fail "등록 저장소의 GitLab 대상이 필요합니다" }}{{ end -}}
+{{- $_ := include "aigw.endpoint" (dict "url" $gateway.llm.baseUrl "explicit" true "ipv4" true) -}}
+{{- $_ := include "aigw.endpoint" (dict "url" $gateway.documents.s3Endpoint "explicit" true "ipv4" true) -}}
 {{- end -}}
 
 {{- define "aigw.peer" -}}
@@ -95,17 +64,4 @@ app.kubernetes.io/instance: {{ .Release.Name }}
     matchLabels:
       {{- toYaml .podSelector | nindent 6 }}
 {{- end }}
-{{- end -}}
-
-{{- /* DB 대상(Plan §11.3 2026-11-10): 공유 서버 192.168.0.150:15432(ipBlock). */ -}}
-{{- define "aigw.dbHost" -}}
-192.168.0.150
-{{- end -}}
-
-{{- define "aigw.dbEgress" -}}
-- to:
-    - ipBlock:
-        cidr: 192.168.0.150/32
-  ports:
-    - {protocol: TCP, port: 15432}
 {{- end -}}
