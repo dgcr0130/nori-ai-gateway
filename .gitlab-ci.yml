@@ -17,9 +17,10 @@ test:
   stage: check
   tags: [nori-msa]
   image: harbor.nori.local/library/maven:3.9-eclipse-temurin-21
+  # 4Gi에서 OOMKilled(exit 137). 힙 상한(데몬 1g·test 1g)을 둔 로컬 build의 java RSS 합 최대가 3,975MB였다.
   variables:
-    KUBERNETES_MEMORY_REQUEST: "4Gi"
-    KUBERNETES_MEMORY_LIMIT: "4Gi"
+    KUBERNETES_MEMORY_REQUEST: "5Gi"
+    KUBERNETES_MEMORY_LIMIT: "5Gi"
   script:
     - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.noricloud.org/norisystem/nori-tc/nori-common.git ../nori-common
     - bash ./gradlew build --no-daemon

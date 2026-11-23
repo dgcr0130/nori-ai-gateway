@@ -116,6 +116,8 @@ subprojects {
             providers.gradleProperty("includeTags").orNull?.split(',')?.filter { it.isNotBlank() }?.let { includeTags(*it.toTypedArray()) }
         }
         filter.isFailOnNoMatchingTests = true
+        // CI 컨테이너에서 도는 단위 test만 힙을 묶는다. integrationTest는 로컬 Docker 전용이다.
+        if (name == "test") maxHeapSize = "1g"
         systemProperty("junit.platform.reporting.open.xml.enabled", "true")
         systemProperty("aigw.rootDir", rootDir.absolutePath)
         if (project.path == ":apps:ai-gateway-acceptance-cli") systemProperty("aigw.evalClasspath", project.extensions.getByType<SourceSetContainer>()["main"].runtimeClasspath.asPath)
