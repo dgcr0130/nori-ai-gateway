@@ -71,6 +71,52 @@
         },
         "containerPort": {
           "const": 8080
+        },
+        "resources": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requests": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "memory": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+                },
+                "cpu": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*m?$"
+                }
+              },
+              "required": [
+                "memory",
+                "cpu"
+              ]
+            },
+            "limits": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "memory": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(Mi|Gi)$"
+                },
+                "cpu": {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*m?$"
+                }
+              },
+              "required": [
+                "memory",
+                "cpu"
+              ]
+            }
+          },
+          "required": [
+            "requests",
+            "limits"
+          ]
         }
       },
       "required": [
@@ -79,7 +125,8 @@
         "imagePullPolicy",
         "replicaCount",
         "profile",
-        "containerPort"
+        "containerPort",
+        "resources"
       ]
     },
     "service": {

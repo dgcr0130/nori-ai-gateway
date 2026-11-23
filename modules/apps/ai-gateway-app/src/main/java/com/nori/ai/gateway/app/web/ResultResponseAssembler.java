@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.web;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
 import com.nori.ai.gateway.persistence.repository.*;
@@ -44,12 +46,13 @@ public final class ResultResponseAssembler {
                 allowed=evaluator.evaluate(scope.perm(),deps,states)==ResultAccessEvaluator.Decision.ALLOW
                     && deps.knowledgeDocuments().stream().allMatch(key->key.ownerSystem().equals(scope.boundSystem().name()))
                     && referencesMatch(json.readTree(value.payload()),scope.boundSystem());
-            } catch(RuntimeException failure) { allowed=false; }
+            } catch(RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ResultResponseAssembler.class.getName()),"RESULT_RESPONSE_ASSEMBLER_FAILED",failure); allowed=false; }
             if(allowed) {
                 var payload=new LinkedHashMap<String,Object>();payload.put("status",value.status());payload.put("errorCode",value.errorCode());payload.put("payload",json.readTree(value.payload()));
                 payload.put("clarification",value.clarification()==null?null:json.readTree(value.clarification()));response.put("result",payload);
             } else response.put("resultAccess","DENIED");
         } else response.put("result",null);
+        body(System.getLogger(getClass().getName()),INFO,"RESULT_ASSEMBLED",json.writeValueAsString(response),"jobId",jobId,"status",job.status(),"allowed",allowed);
         return new Access(scope,job,conversation,response,allowed);
     }
     public void assertLive(Access access) { conversations.find(access.scope(),access.conversation().id()).orElseThrow(UniformNotFound::new); }

@@ -77,6 +77,7 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
         activate(scope,bundle,null);
     }
     @Override public void activate(VerifiedSystemScope scope,Bundle bundle,Set<UUID> preparedAnswerIds) {
+        var removed=new ArrayList<Map<String,String>>();
         tx.executeWithoutResult(status->{
             sql(scope,"SELECT pg_advisory_xact_lock(hashtextextended(:system,806008))").query((rs,n)->true).single();
             var current=new HashSet<>(sql(scope,"SELECT id FROM kn.verified_answer WHERE system_id=:system AND active FOR UPDATE").query(UUID.class).list());
@@ -84,6 +85,8 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
             var state=sql(scope,"SELECT state FROM kn.index_set WHERE system_id=:system AND id=:id AND embedding_model=:model AND embedding_dimension=:dimension AND config_sha256=:sha FOR UPDATE")
                 .param("id",bundle.id()).param("model",bundle.embeddingModel()).param("dimension",bundle.dimension()).param("sha",bundle.configSha256()).query(String.class).single();
             if(!state.equals("BUILDING")) throw new IllegalStateException("준비 중인 색인 묶음이 아닙니다");
+            removed.addAll(sql(scope,"SELECT d.bucket,d.object_key,d.revision FROM kn.document d JOIN kn.index_set old ON old.system_id=d.system_id AND old.id=d.index_set_id AND old.state='ACTIVE' WHERE d.system_id=:system AND NOT EXISTS (SELECT 1 FROM kn.document fresh WHERE fresh.system_id=d.system_id AND fresh.index_set_id=:id AND fresh.bucket=d.bucket AND fresh.object_key=d.object_key)")
+                .param("id",bundle.id()).query((rs,n)->Map.of("bucket",rs.getString(1),"objectKey",rs.getString(2),"revision",rs.getString(3))).list());
             sql(scope,"UPDATE kn.index_set SET state='INACTIVE' WHERE system_id=:system AND state='ACTIVE'").update();
             sql(scope,"UPDATE kn.verified_answer SET active=false WHERE system_id=:system AND active").update();
             for(var answer:bundle.answers()) {
@@ -106,6 +109,7 @@ public final class DocumentIndexRepository implements DocumentIndexStore {
                 """).param("id",bundle.id()).update();
             if(sql(scope,"UPDATE kn.index_set SET state='ACTIVE' WHERE system_id=:system AND id=:id AND state='BUILDING'").param("id",bundle.id()).update()!=1) throw new IllegalStateException("색인 묶음을 활성화할 수 없습니다");
         });
+        for(var value:removed)com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"DOCUMENT_SYNC_OBJECT","system",scope.boundSystem(),"bucket",value.get("bucket"),"objectKey",value.get("objectKey"),"revision",value.get("revision"),"operation","DELETED");
     }
     @Override public Optional<String> currentRevision(VerifiedSystemScope scope,String bucket,String objectKey) {
         return sql(scope,"SELECT d.revision FROM kn.document d JOIN kn.index_set s ON s.system_id=d.system_id AND s.id=d.index_set_id WHERE d.system_id=:system AND s.state='ACTIVE' AND d.bucket=:bucket AND d.object_key=:key AND d.extraction_issues='[]'::jsonb")

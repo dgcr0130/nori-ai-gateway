@@ -29,7 +29,7 @@ final class ClassificationTimeSource {
         var matcher = ABSOLUTE.matcher(literal);
         while (matcher.find()) {
             try { if (time.equals(parser.parseTime(matcher.group().replace(' ', 'T'), zone))) return true; }
-            catch (DateTimeException | IllegalArgumentException invalid) { /* 잘못된 입력 날짜를 출처로 인정하지 않습니다. */ }
+            catch (DateTimeException | IllegalArgumentException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationTimeSource.class.getName()),"CLASSIFICATION_TIME_SOURCE_FAILED",invalid); /* 잘못된 입력 날짜를 출처로 인정하지 않습니다. */ }
         }
         return false;
     }

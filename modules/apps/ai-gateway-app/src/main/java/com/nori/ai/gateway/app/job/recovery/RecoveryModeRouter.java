@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job.recovery;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.RecoveryProperties;
 import com.nori.ai.gateway.persistence.queue.recovery.*;
 import java.time.Clock;
@@ -20,6 +22,7 @@ public final class RecoveryModeRouter implements ReadinessPrecondition {
         if(epoch.isEmpty())mode=emptiness.isEmpty()&&!properties.restoreMode()?Mode.INITIALIZE_NEW:Mode.REJECT_EPOCH_MISSING;
         else if(!current.equals(epoch.get().dbSystemIdentifier()))mode=Mode.RESTORE;
         else mode=properties.restoreMode()&&epoch.get().restoreCompletedAt()==null?Mode.REJECT_LIVE_DB:Mode.NORMAL;
+        event(System.getLogger(getClass().getName()),INFO,"RECOVERY_MODE_SELECTED","mode",mode);
         switch(mode){
             case REJECT_EPOCH_MISSING->throw new IllegalStateException("RECOVERY_EPOCH_MISSING");
             case REJECT_LIVE_DB->throw new IllegalStateException("RESTORE_TARGET_IS_LIVE_DB");

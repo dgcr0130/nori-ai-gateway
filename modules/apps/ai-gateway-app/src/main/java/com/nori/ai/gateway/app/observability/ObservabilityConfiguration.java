@@ -37,6 +37,7 @@ import org.springframework.context.annotation.Import;
 public class ObservabilityConfiguration {
     static final String SERVICE_NAME = "ai-gateway";
 
+    @Bean StartupDiagnosticLogger startupDiagnosticLogger(com.nori.ai.gateway.app.config.GatewaySystemsProperties systems,com.nori.ai.gateway.app.config.CapacityProfile capacity,org.springframework.core.env.Environment environment,com.nori.ai.gateway.app.config.SourceConnectorConfiguration.SourceSnapshot sources) {return new StartupDiagnosticLogger(systems,capacity,environment,sources);}
     @Bean MeterFilter metricsCatalogFilter(com.nori.ai.gateway.core.registry.CapabilityRegistry registry,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems) { return MetricsCatalog.filter(registry,systems.systems().keySet()); }
     @Bean ObservationFilter allowlistObservationFilter() { return new AllowlistObservationFilter(); }
     @Bean AuditRecorder auditRecorder(com.nori.ai.gateway.persistence.audit.AuditWriter writer, io.micrometer.core.instrument.MeterRegistry meters) { return new AuditRecorder(writer, meters); }

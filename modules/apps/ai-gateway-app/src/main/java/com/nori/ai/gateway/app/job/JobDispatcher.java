@@ -34,9 +34,9 @@ public final class JobDispatcher implements AutoCloseable {
         this.capacity=capacity;this.clock=clock;this.slots=slots;this.pauses=pauses;this.publisher=publisher;
     }
     @EventListener public void start(ReadinessGate.RecoveryCompleted event){if(!started){started=true;scheduler.scheduleWithFixedDelay(this::dispatchSafely,0,250,TimeUnit.MILLISECONDS);}}
-    @EventListener public void wake(JobAdmissionService.AdmissionCommitted event){if(started)scheduler.execute(()->{publisher.publishQueued(event.jobId());dispatchSafely();});}
-    @EventListener public void finished(JobEventPublisher.TerminalCommitted event){slots.release(event.jobId());if(started)scheduler.execute(this::dispatchSafely);}
-    private void dispatchSafely(){try{dispatch();}catch(RuntimeException failed){failure=failed;gate.down();}}
+    @EventListener public void wake(JobAdmissionService.AdmissionCommitted event){if(started)scheduler.execute(com.nori.ai.gateway.app.observability.LogContext.capture(()->{publisher.publishQueued(event.jobId());dispatchSafely();}));}
+    @EventListener public void finished(JobEventPublisher.TerminalCommitted event){slots.release(event.jobId());if(started)scheduler.execute(com.nori.ai.gateway.app.observability.LogContext.capture(this::dispatchSafely));}
+    private void dispatchSafely(){try{dispatch();}catch(RuntimeException failed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobDispatcher.class.getName()),System.Logger.Level.ERROR,"JOB_DISPATCHER_FAILED",failed);failure=failed;gate.down();}}
     private void dispatch(){
         if(!gate.ready()||!inference.ready()||pauses.map(p->p.held(PausePointRegistry.Point.DISPATCH_HOLD)).orElse(false))return;
         var selected=transactions.execute(tx->{
@@ -47,8 +47,13 @@ public final class JobDispatcher implements AutoCloseable {
             if(job.isPresent()&&!queue.start(job.get().jobId(),clock.instant()))return Optional.<JobScopeRecord>empty();return job;
         });
         if(selected!=null)selected.ifPresent(job->{
+            try(var logContext=com.nori.ai.gateway.app.observability.LogContext.open(org.slf4j.MDC.getCopyOfContextMap())) {
+            if(!job.jobId().equals(org.slf4j.MDC.get("jobId"))){org.slf4j.MDC.remove("requestId");org.slf4j.MDC.remove("traceId");}
+            org.slf4j.MDC.put("jobId",job.jobId());org.slf4j.MDC.put("ownerSystem",job.ownerSystem().name());org.slf4j.MDC.put("conversationId",job.conversationId());
+            com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"JOB_DISPATCHED","jobId",job.jobId(),"waitMs",java.time.Duration.between(job.createdAt(),clock.instant()).toMillis(),"running",slots.activeCount()+1);
             publisher.publishQueued(job.jobId());publisher.publishStarted(job.jobId());
-            var token=slots.claim(job.jobId());token.deadline(job.createdAt().plus(capacity.jobLifetimeLimit()),clock);workers.execute(()->worker.run(job,token));
+            var token=slots.claim(job.jobId());token.deadline(job.createdAt().plus(capacity.jobLifetimeLimit()),clock);workers.execute(com.nori.ai.gateway.app.observability.LogContext.capture(()->worker.run(job,token)));
+            }
         });
     }
     public boolean started(){return started;}

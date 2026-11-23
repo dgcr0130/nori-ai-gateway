@@ -14,7 +14,7 @@ public final class DeploymentEvidenceResolver {
     public DeploymentEvidenceResolver(ObjectProvider<GitLabPipelineLineageReader> reader){this.reader=reader;}
     public Resolution resolve(SourceReadAccess.Request request,String service,String version,List<GitLabSourcePolicy.LineageEntry> entries) {
         if(version==null||!version.matches("[1-9][0-9]*"))return unknown();
-        final long pipeline;try{pipeline=Long.parseLong(version);}catch(NumberFormatException invalid){return unknown();}
+        final long pipeline;try{pipeline=Long.parseLong(version);}catch(NumberFormatException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(DeploymentEvidenceResolver.class.getName()),"DEPLOYMENT_EVIDENCE_RESOLVER_FAILED",invalid);return unknown();}
         var selected=entries.stream().filter(entry->entry.service().equals(service)).toList();if(selected.size()!=1)return unknown();
         var actual=reader.getIfAvailable();if(actual==null)return unknown();
         var lineage=actual.siblingCommits(request,selected.getFirst(),pipeline);

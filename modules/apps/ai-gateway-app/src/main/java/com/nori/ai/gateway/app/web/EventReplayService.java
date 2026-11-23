@@ -9,7 +9,7 @@ public final class EventReplayService {
     public EventReplayService(JobEventRepository events) { this.events=events; }
     public long cursor(VerifiedSystemScope scope,String jobId,String lastEventId) {
         if(lastEventId==null)return 0;
-        final long id;try{id=Long.parseLong(lastEventId);}catch(NumberFormatException invalid){throw new UniformNotFound();}
+        final long id;try{id=Long.parseLong(lastEventId);}catch(NumberFormatException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(EventReplayService.class.getName()),"EVENT_REPLAY_SERVICE_FAILED",invalid);throw new UniformNotFound();}
         if(id<=0||events.findAfter(scope,jobId,0).stream().noneMatch(event->event.id()==id))throw new UniformNotFound();return id;
     }
     public List<JobEventRepository.Event> after(VerifiedSystemScope scope,String jobId,long cursor) { return events.findAfter(scope,jobId,cursor); }

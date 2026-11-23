@@ -37,7 +37,7 @@ public class HfTokenizerCounter implements AutoCloseable {
         var settings = configuration.tokenCounting();
         final byte[] bytes;
         try { bytes = Files.readAllBytes(Path.of(settings.tokenizerFile())); }
-        catch (IOException failure) { throw new IllegalStateException("TOKENIZER_FILE_UNREADABLE"); }
+        catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HfTokenizerCounter.class.getName()),"HF_TOKENIZER_COUNTER_FAILED",failure); throw new IllegalStateException("TOKENIZER_FILE_UNREADABLE"); }
         if (!sha256(bytes).equalsIgnoreCase(settings.sha256())) throw new IllegalStateException("TOKENIZER_SHA_MISMATCH");
         tokenizer = load(bytes);
     }
@@ -81,7 +81,7 @@ public class HfTokenizerCounter implements AutoCloseable {
             var urls = Collections.list(loader.getResources(resource));
             if (urls.size() != 1) throw new IllegalStateException(urls.isEmpty() ? "TOKENIZER_RESOURCE_MISSING" : "TOKENIZER_RESOURCE_AMBIGUOUS");
             try (InputStream in = urls.getFirst().openStream()) { return in.readAllBytes(); }
-        } catch (IOException failure) { throw new IllegalStateException("TOKENIZER_RESOURCE_UNREADABLE", failure); }
+        } catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HfTokenizerCounter.class.getName()),"HF_TOKENIZER_COUNTER_FAILED",failure); throw new IllegalStateException("TOKENIZER_RESOURCE_UNREADABLE", failure); }
     }
 
     /** 검증한 바이트만 비공개 임시 디렉터리의 tokenizer.json 으로 쓰고 SDK 의 로컬 파일 로드로 읽은 뒤 지운다. */
@@ -92,18 +92,18 @@ public class HfTokenizerCounter implements AutoCloseable {
             file = Files.write(directory.resolve("tokenizer.json"), bytes);
             if (!sha256(Files.readAllBytes(file)).equals(sha256(bytes))) throw new IllegalStateException("TOKENIZER_COPY_MISMATCH");
             return HuggingFaceTokenizer.newInstance(file, OPTIONS);
-        } catch (IOException failure) {
+        } catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HfTokenizerCounter.class.getName()),"HF_TOKENIZER_COUNTER_FAILED",failure);
             throw new IllegalStateException("TOKENIZER_LOAD_FAILED", failure);
         } finally {
             try {
                 if (file != null) Files.deleteIfExists(file);
                 if (directory != null) Files.deleteIfExists(directory);
-            } catch (IOException failure) { throw new IllegalStateException("TOKENIZER_TEMP_CLEANUP_FAILED", failure); }
+            } catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HfTokenizerCounter.class.getName()),"HF_TOKENIZER_COUNTER_FAILED",failure); throw new IllegalStateException("TOKENIZER_TEMP_CLEANUP_FAILED", failure); }
         }
     }
 
     static String sha256(byte[] bytes) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); }
-        catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException("SHA-256 을 사용할 수 없습니다", impossible); }
+        catch (NoSuchAlgorithmException impossible) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HfTokenizerCounter.class.getName()),"HF_TOKENIZER_COUNTER_FAILED",impossible); throw new IllegalStateException("SHA-256 을 사용할 수 없습니다", impossible); }
     }
 }

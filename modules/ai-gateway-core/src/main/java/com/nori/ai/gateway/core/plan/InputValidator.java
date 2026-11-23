@@ -25,7 +25,7 @@ public final class InputValidator {
         try {
             Instant from = instant(args.get("from"), timezone), to = instant(args.get("to"), timezone);
             if (from != null && to != null && !from.isBefore(to)) return invalid();
-        } catch (DateTimeException | IllegalArgumentException e) { return invalid(); }
+        } catch (DateTimeException | IllegalArgumentException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(InputValidator.class.getName()),"INPUT_VALIDATOR_FAILED",e); return invalid(); }
         return null;
     }
     public Instant parseTime(String value, ZoneId timezone) {

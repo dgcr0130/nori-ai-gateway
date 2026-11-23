@@ -171,7 +171,10 @@ class IngressAuthIT extends StackContextSupport {
         }
         var payloads = java.util.regex.Pattern.compile("[A-Za-z0-9_-]+\\.([A-Za-z0-9_-]+)\\.[A-Za-z0-9_-]+").matcher(response + serialized + logs);
         while (payloads.find()) {
-            String decoded = new String(Base64.getUrlDecoder().decode(payloads.group(1)),StandardCharsets.UTF_8);
+            final byte[] payload;
+            // 상세 로그의 IP·버전처럼 길이를 4로 나눈 나머지가 1인 조각은 base64url이 될 수 없어 JWS payload가 아닙니다.
+            try { payload = Base64.getUrlDecoder().decode(payloads.group(1)); } catch (IllegalArgumentException notBase64Url) { continue; }
+            String decoded = new String(payload,StandardCharsets.UTF_8);
             for (String secret : secrets) assertThat(decoded.contains(secret)).as("JWS 디코드 payload 잔류 건수").isFalse();
         }
     }
@@ -415,7 +418,7 @@ class IngressAuthIT extends StackContextSupport {
                 assertThat(isolated.application().getBean(IngressTerminalFixture.Counters.class).downstream()).isZero();
                 for (String table : List.of("gw.conversation","gw.message","gw.job","gw.audit_event")) assertThat(isolated.application().getBean(JdbcClient.class).sql("SELECT count(*) FROM " + table).query(Integer.class).single()).as(table).isZero();
                 assertThat(failures.count()).isEqualTo(before + 1);
-                assertThat(captured.list.stream().filter(event -> event.getLoggerName().equals("com.nori.ai.gateway.app.observability.AuditRecorder")).map(event -> event.getMessage()).toList()).containsExactly("AUDIT_WRITE_FAILED");
+                assertThat(captured.list.stream().filter(event -> event.getLoggerName().equals("com.nori.ai.gateway.app.observability.AuditRecorder")).map(event -> event.getMessage()).filter(message->message.equals("AUDIT_WRITE_FAILED")).toList()).containsExactly("AUDIT_WRITE_FAILED");
                 assertThat(captured.list.stream().filter(event -> "AUDIT_WRITE_FAILED".equals(event.getMessage()))).allSatisfy(event -> { assertThat(event.getArgumentArray()).isNullOrEmpty(); assertThat(event.getThrowableProxy()).isNull(); });
             } finally { root.detachAppender(captured); captured.stop(); }
         }

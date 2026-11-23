@@ -57,7 +57,7 @@ public final class QRefContext {
     private static String decode(String literal) {
         final JsonNode node;
         try { node = STRICT.readTree(literal); }
-        catch (RuntimeException invalid) { throw new Rejected(ErrorCode.PLAN_INVALID); }
+        catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(QRefContext.class.getName()),"Q_REF_CONTEXT_FAILED",invalid); throw new Rejected(ErrorCode.PLAN_INVALID); }
         if (node == null || !node.isString()) throw new Rejected(ErrorCode.PLAN_INVALID);
         return node.asString();
     }

@@ -23,7 +23,7 @@ public final class BodySystemFieldGuard {
         JsonNode json = null;
         if (body.length > 0) {
             try { json = JSON.readTree(body); }
-            catch (RuntimeException failure) { if(feedback)throw com.nori.ai.gateway.core.feedback.FeedbackFailure.invalid();throw new ActorAssertionVerifier.Rejected(com.nori.ai.gateway.persistence.audit.auth.AuthRejectionReason.ACTOR_ASSERTION_MISSING); }
+            catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(BodySystemFieldGuard.class.getName()),System.Logger.Level.WARNING,"BODY_SYSTEM_FIELD_GUARD_FAILED",failure); if(feedback)throw com.nori.ai.gateway.core.feedback.FeedbackFailure.invalid();throw new ActorAssertionVerifier.Rejected(com.nori.ai.gateway.persistence.audit.auth.AuthRejectionReason.ACTOR_ASSERTION_MISSING); }
         }
         return new ReplayableRequest(request,body,json);
     }

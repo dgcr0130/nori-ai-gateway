@@ -24,7 +24,7 @@ public final class SentenceEvidenceCheck {
     GroundedAnswer check(String output,List<EvidenceUnit> units,java.util.function.Consumer<LlmDiagnostic> diagnostic,
             java.util.function.Predicate<JsonNode> selectedSentence) {
         final JsonNode root;
-        try { root=SchemaContracts.parse(output);STRICT.readTree(output); }catch(RuntimeException invalid){diagnostic.accept(LlmDiagnostic.SENTENCE_JSON);return GroundedAnswer.noEvidence();}
+        try { root=SchemaContracts.parse(output);STRICT.readTree(output); }catch(RuntimeException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SentenceEvidenceCheck.class.getName()),"SENTENCE_EVIDENCE_CHECK_FAILED",invalid);diagnostic.accept(LlmDiagnostic.SENTENCE_JSON);return GroundedAnswer.noEvidence();}
         if(!root.isObject()||root.size()!=1||!root.path("sentences").isArray()||root.path("sentences").size()>20){diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE);return GroundedAnswer.noEvidence();}
         if(root.path("sentences").isEmpty()){diagnostic.accept(LlmDiagnostic.SENTENCE_EMPTY);return GroundedAnswer.noEvidence();}
         var kept=new ArrayList<GroundedAnswer.Sentence>();var cited=new TreeSet<Integer>();var states=new HashSet<String>();

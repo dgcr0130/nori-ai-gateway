@@ -71,5 +71,5 @@ final class WorkflowContent {
         return new ResultBlock(masked.type(),masked.dataRef(),content);
     }
     private static String string(JsonNode node,String field){return node.path(field).isString()?node.get(field).asString():null;}
-    private static boolean fitsLong(String digits){try{Long.parseLong(digits);return true;}catch(NumberFormatException overflow){return false;}}
+    private static boolean fitsLong(String digits){try{Long.parseLong(digits);return true;}catch(NumberFormatException overflow){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowContent.class.getName()),"WORKFLOW_CONTENT_FAILED",overflow);return false;}}
 }

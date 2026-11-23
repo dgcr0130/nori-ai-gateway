@@ -39,7 +39,7 @@ public record GatewaySystemsProperties(Map<String, SystemConfig> systems) {
                         var resolved=resolve(SchemaContracts.JSON.convertValue(systems,new tools.jackson.core.type.TypeReference<Map<String,Object>>() {}),environment);
                         var values=CONFIG_JSON.convertValue(resolved,new tools.jackson.core.type.TypeReference<Map<String,SystemConfig>>() {});
                         return new GatewaySystemsProperties(values);
-                    } catch(java.io.IOException failure) { throw invalid(); }
+                    } catch(java.io.IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GatewaySystemsProperties.class.getName()),"GATEWAY_SYSTEMS_PROPERTIES_FAILED",failure); throw invalid(); }
                 }
             }
         }

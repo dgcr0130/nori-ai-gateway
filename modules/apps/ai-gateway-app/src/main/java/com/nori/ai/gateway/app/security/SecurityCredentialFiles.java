@@ -49,7 +49,7 @@ public final class SecurityCredentialFiles {
                 }
             }
             tokens = List.copyOf(loadedTokens); keys = Map.copyOf(loadedKeys); issuers = Map.copyOf(loadedIssuers);
-        } catch (Exception failure) {
+        } catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(SecurityCredentialFiles.class.getName()),"SECURITY_CREDENTIAL_FILES_FAILED",failure);
             // 파서가 읽은 자격 값을 예외 원인으로 공개하지 않습니다.
             throw new IllegalStateException("인입 인증 자격 파일이 잘못되었습니다");
         }
@@ -86,7 +86,7 @@ public final class SecurityCredentialFiles {
         if (token == null || token.isEmpty()) return Optional.empty();
         final byte[] digest;
         try { digest = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8)); }
-        catch (java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException("서비스 인증을 처리할 수 없습니다"); }
+        catch (java.security.NoSuchAlgorithmException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(SecurityCredentialFiles.class.getName()),"SECURITY_CREDENTIAL_FILES_FAILED",failure); throw new IllegalStateException("서비스 인증을 처리할 수 없습니다"); }
         OwnerSystem owner = null;
         for (var binding : tokens) if (MessageDigest.isEqual(digest,binding.digest())) owner = binding.owner();
         return owner == null ? Optional.empty() : Optional.of(new VerifiedServiceIdentity(owner,"service:" + owner.name()));

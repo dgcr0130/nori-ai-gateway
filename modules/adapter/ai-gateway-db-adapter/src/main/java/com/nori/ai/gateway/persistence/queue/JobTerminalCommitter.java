@@ -154,6 +154,6 @@ public final class JobTerminalCommitter {
     }
     private String encode(Object value) {
         try { return json.writeValueAsString(value); }
-        catch (RuntimeException failure) { throw new IllegalArgumentException("종결 자료를 직렬화할 수 없습니다"); }
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobTerminalCommitter.class.getName()),"JOB_TERMINAL_COMMITTER_FAILED",failure); throw new IllegalArgumentException("종결 자료를 직렬화할 수 없습니다"); }
     }
 }

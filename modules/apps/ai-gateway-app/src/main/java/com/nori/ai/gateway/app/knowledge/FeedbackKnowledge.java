@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.knowledge;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.app.job.recovery.*;
 import com.nori.ai.gateway.app.security.*;
@@ -23,16 +25,17 @@ public final class FeedbackKnowledge implements ReadinessPrecondition,ReviewedGl
     private final Map<String,Map<String,String>> glossary=new ConcurrentHashMap<>();
     private final Set<String> pending=ConcurrentHashMap.newKeySet();
     private ScheduledExecutorService retry;
+    private final Map<String,Map<String,String>> pendingContexts=new ConcurrentHashMap<>();
     public FeedbackKnowledge(FeedbackRepository feedback,DocumentIndexRepository indexes,DocumentKeywordIndex keywords,GatewaySystemsProperties systems,ScopeAssembler scopes,SecurityCredentialFiles credentials,ObjectProvider<ReadinessGate> readiness) {
         this.feedback=feedback;this.indexes=indexes;this.keywords=keywords;this.systems=systems;this.scopes=scopes;this.credentials=credentials;this.readiness=readiness;
     }
     @Override public int order(){return 1;}
-    @Override public void run(){for(String system:new TreeSet<>(systems.systems().keySet())){var scope=scope(system);feedback.initializeGlossary(scope,systems.systems().get(system).glossary());glossary.put(system,feedback.glossary(scope));}}
+    @Override public void run(){for(String system:new TreeSet<>(systems.systems().keySet())){var scope=scope(system);feedback.initializeGlossary(scope,systems.systems().get(system).glossary());glossary.put(system,feedback.glossary(scope));event(System.getLogger(getClass().getName()),INFO,"FEEDBACK_GLOSSARY_INITIALIZED","system",system,"entries",glossary.get(system).size());}}
     @Override public Map<String,String> current(VerifiedSystemScope scope,Map<String,String> initial) {
         var result=new TreeMap<>(initial);result.putAll(glossary.getOrDefault(scope.boundSystem().name(),Map.of()));return Collections.unmodifiableMap(result);
     }
     public synchronized void refresh(VerifiedSystemScope scope) {
-        String system=scope.boundSystem().name();pending.add(system);project(system);
+        String system=scope.boundSystem().name();var logContext=org.slf4j.MDC.getCopyOfContextMap();pendingContexts.put(system,logContext==null?Map.of():logContext);pending.add(system);project(system);
         if(!pending.isEmpty()&&retry==null) {
             retry=Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("feedback-rebuild").factory());
             retry.scheduleWithFixedDelay(this::retryPending,1,1,TimeUnit.SECONDS);
@@ -42,11 +45,14 @@ public final class FeedbackKnowledge implements ReadinessPrecondition,ReviewedGl
         for(String system:List.copyOf(pending))project(system);
     }
     private void project(String system) {
+        try(var ignored=com.nori.ai.gateway.app.observability.LogContext.open(pendingContexts.get(system))) {
+        long started=System.nanoTime();event(System.getLogger(getClass().getName()),INFO,"FEEDBACK_KNOWLEDGE_STARTED","system",system);
         try {
-            if(rebuild(system)){pending.remove(system);readiness.getObject().knowledgeRestored(system);}
-        } catch(RuntimeException failure) {
+            if(rebuild(system)){pending.remove(system);pendingContexts.remove(system);readiness.getObject().knowledgeRestored(system);event(System.getLogger(getClass().getName()),INFO,"FEEDBACK_KNOWLEDGE_COMPLETED","system",system,"glossaryEntries",glossary.getOrDefault(system,Map.of()).size(),"durationMs",(System.nanoTime()-started)/1_000_000);}
+        } catch(RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(FeedbackKnowledge.class.getName()),"FEEDBACK_KNOWLEDGE_FAILED",failure);
             // DB 확정 응답은 보존하고 실제 투영 실패에만 새 질문 접수를 닫습니다.
             readiness.getObject().knowledgeUnavailable(system);
+        }
         }
     }
     private boolean rebuild(String system) {
@@ -65,5 +71,5 @@ public final class FeedbackKnowledge implements ReadinessPrecondition,ReviewedGl
         glossary.put(system,values);return true;
     }
     private VerifiedSystemScope scope(String system){return scopes.forDocumentStartup(OwnerSystem.valueOf(system),credentials);}
-    @Override public void close(){ScheduledExecutorService executor;synchronized(this){executor=retry;retry=null;}if(executor!=null){executor.shutdownNow();try{if(!executor.awaitTermination(5,TimeUnit.SECONDS))throw new IllegalStateException("검토 재구성이 종료되지 않았습니다");}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new IllegalStateException("검토 재구성 종료가 중단되었습니다");}}}
+    @Override public void close(){ScheduledExecutorService executor;synchronized(this){executor=retry;retry=null;}if(executor!=null){executor.shutdownNow();try{if(!executor.awaitTermination(5,TimeUnit.SECONDS))throw new IllegalStateException("검토 재구성이 종료되지 않았습니다");}catch(InterruptedException interrupted){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(FeedbackKnowledge.class.getName()),"FEEDBACK_KNOWLEDGE_FAILED",interrupted);Thread.currentThread().interrupt();throw new IllegalStateException("검토 재구성 종료가 중단되었습니다");}}}
 }

@@ -45,8 +45,8 @@ public final class TimeWindowResolver {
             }
             if(!selected.isEmpty())parse(selected,zone);
             return new Selection(selected,zone,reference,conflict);
-        } catch (Failure failure) { throw failure; }
-        catch (java.time.DateTimeException | ClassCastException | IllegalArgumentException failure) { throw new Failure(ErrorCode.PLAN_INVALID); }
+        } catch (Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TimeWindowResolver.class.getName()),"TIME_WINDOW_RESOLVER_FAILED",failure); throw failure; }
+        catch (java.time.DateTimeException | ClassCastException | IllegalArgumentException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TimeWindowResolver.class.getName()),"TIME_WINDOW_RESOLVER_FAILED",failure); throw new Failure(ErrorCode.PLAN_INVALID); }
     }
     private Resolved finish(Map<String,Object> selected,Selection selection) {
         try {
@@ -56,8 +56,8 @@ public final class TimeWindowResolver {
             normalized.put("from",normalize((String)selected.get("from"),value.startAt(),selection.zone()));
             normalized.put("to",normalize((String)selected.get("to"),value.endAt(),selection.zone()));
             return new Resolved(Optional.of(value),normalized,selection.conflict());
-        } catch (Failure failure) { throw failure; }
-        catch (java.time.DateTimeException | ClassCastException | IllegalArgumentException failure) { throw new Failure(ErrorCode.PLAN_INVALID); }
+        } catch (Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TimeWindowResolver.class.getName()),"TIME_WINDOW_RESOLVER_FAILED",failure); throw failure; }
+        catch (java.time.DateTimeException | ClassCastException | IllegalArgumentException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TimeWindowResolver.class.getName()),"TIME_WINDOW_RESOLVER_FAILED",failure); throw new Failure(ErrorCode.PLAN_INVALID); }
     }
     private Map<String,Object> window(Map<String,Object> extraction) {
         boolean from=extraction.get("from")!=null,to=extraction.get("to")!=null;

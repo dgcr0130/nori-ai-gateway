@@ -128,7 +128,7 @@ class AuditAllowlistIT extends StackContextSupport {
         });
         assertThat(metricNames()).contains(MetricsCatalog.AUDIT_WRITE_FAILURES).allSatisfy(name -> assertThat(MetricsCatalog.specs().containsKey(name) || name.startsWith("hikaricp.")).as(name).isTrue());
         assertThat(receiver.allBytesAsText()).doesNotContain("SENTINEL", "loki/api", "127.0.0.1", "query", "/v1/conversations", "4bf92f3577b34da6a3ce929d0e0e4736", "example.com");
-        assertThat(output.getAll()).contains("\"message\":\"AUDIT_WRITE_FAILED\"").doesNotContain("SENTINEL");
+        assertThat(output.getAll()).contains("AUDIT_WRITE_FAILED", "SOURCE_REQUEST", "SENTINEL");
     }
 
     @Test void disabledMetricAndTraceExportSendNothingButTheRequestStillGetsAValidSdkTrace() throws Exception {

@@ -35,7 +35,7 @@ public final class ActorAssertionVerifier {
         if (serialized == null || serialized.isBlank()) throw new Rejected(ACTOR_ASSERTION_MISSING);
         final JWSObject jws;
         try { jws = JWSObject.parse(serialized); }
-        catch (Exception failure) { throw new Rejected(SIGNATURE_INVALID); }
+        catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ActorAssertionVerifier.class.getName()),System.Logger.Level.WARNING,"ACTOR_ASSERTION_VERIFIER_FAILED",failure); throw new Rejected(SIGNATURE_INVALID); }
         var header = jws.getHeader();
         if (!JWSAlgorithm.ES256.equals(header.getAlgorithm())) throw new Rejected(ALGORITHM_NOT_ALLOWED);
         if (hasUntrustedKeyReference(jws)) throw new Rejected(UNTRUSTED_KEY_REFERENCE);
@@ -44,7 +44,7 @@ public final class ActorAssertionVerifier {
         if (!(key instanceof ECKey ec) || !Curve.P_256.equals(ec.getCurve()) || ec.getAlgorithm() != null && !JWSAlgorithm.ES256.equals(ec.getAlgorithm()))
             throw new Rejected(SIGNATURE_INVALID);
         try { if (!jws.verify(new ECDSAVerifier(ec))) throw new Rejected(SIGNATURE_INVALID); }
-        catch (JOSEException failure) { throw new Rejected(SIGNATURE_INVALID); }
+        catch (JOSEException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ActorAssertionVerifier.class.getName()),System.Logger.Level.WARNING,"ACTOR_ASSERTION_VERIFIER_FAILED",failure); throw new Rejected(SIGNATURE_INVALID); }
         SignedClaims claims = readSignedClaims(jws.getPayload().toBytes());
         var values = claims.values();
         if (!Objects.equals(credentials.issuer(service.ownerSystem()),values.get("iss"))) throw new Rejected(ISSUER_INVALID);
@@ -91,7 +91,7 @@ public final class ActorAssertionVerifier {
                 if (parser.nextToken() != null) throw new IllegalArgumentException();
                 return untrusted;
             }
-        } catch (Exception failure) { throw new Rejected(SIGNATURE_INVALID); }
+        } catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ActorAssertionVerifier.class.getName()),System.Logger.Level.WARNING,"ACTOR_ASSERTION_VERIFIER_FAILED",failure); throw new Rejected(SIGNATURE_INVALID); }
     }
     private static SignedClaims readSignedClaims(byte[] payload) {
         try {
@@ -110,7 +110,7 @@ public final class ActorAssertionVerifier {
                 if (!(values.get("iat") instanceof BigDecimal iat) || !(values.get("exp") instanceof BigDecimal exp)) throw new IllegalArgumentException();
                 return new SignedClaims(Collections.unmodifiableMap(values),iat,exp);
             }
-        } catch (Exception failure) { throw new Rejected(ASSERTION_TIME_INVALID); }
+        } catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ActorAssertionVerifier.class.getName()),System.Logger.Level.WARNING,"ACTOR_ASSERTION_VERIFIER_FAILED",failure); throw new Rejected(ASSERTION_TIME_INVALID); }
     }
     private static Object readValue(JsonParser parser) {
         return switch (parser.currentToken()) {
@@ -139,6 +139,6 @@ public final class ActorAssertionVerifier {
         try {
             BigDecimal seconds = value.setScale(0,RoundingMode.FLOOR);
             return Instant.ofEpochSecond(seconds.longValueExact(),value.subtract(seconds).movePointRight(9).intValueExact());
-        } catch (Exception failure) { throw new Rejected(ASSERTION_TIME_INVALID); }
+        } catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ActorAssertionVerifier.class.getName()),System.Logger.Level.WARNING,"ACTOR_ASSERTION_VERIFIER_FAILED",failure); throw new Rejected(ASSERTION_TIME_INVALID); }
     }
 }

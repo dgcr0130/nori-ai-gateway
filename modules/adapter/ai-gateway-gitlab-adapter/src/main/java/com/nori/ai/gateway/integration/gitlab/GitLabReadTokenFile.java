@@ -14,7 +14,7 @@ public final class GitLabReadTokenFile {
             String token = Files.readString(file).strip();
             if (token.isBlank() || !token.matches("[\\x21-\\x7e]+")) throw new SourceHttpClient.Failure(false, false);
             return token;
-        } catch (IOException | SecurityException failure) { throw new SourceHttpClient.Failure(false, false); }
+        } catch (IOException | SecurityException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(GitLabReadTokenFile.class.getName()),"GIT_LAB_READ_TOKEN_FILE_FAILED",failure); throw new SourceHttpClient.Failure(false, false); }
     }
     @Override public String toString() { return "GitLabReadTokenFile[보호됨]"; }
 }

@@ -27,7 +27,7 @@ public final class SchemaVersionGuard implements ApplicationRunner, Ordered {
         try {
             return latestVersion(Arrays.stream(new PathMatchingResourcePatternResolver().getResources("classpath*:db/migration/gateway/V*__*.sql"))
                 .map(org.springframework.core.io.Resource::getFilename).toList());
-        } catch (IOException failure) { throw new IllegalStateException("마이그레이션 버전을 읽을 수 없습니다", failure); }
+        } catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaVersionGuard.class.getName()),"SCHEMA_VERSION_GUARD_FAILED",failure); throw new IllegalStateException("마이그레이션 버전을 읽을 수 없습니다", failure); }
     }
     static MigrationVersion latestVersion(java.util.List<String> names) {
         return names.stream().map(VERSION::matcher).filter(java.util.regex.Matcher::matches)

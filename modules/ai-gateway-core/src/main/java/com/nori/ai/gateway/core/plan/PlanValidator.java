@@ -125,7 +125,7 @@ public final class PlanValidator {
             Map<String,CapabilityManifest> manifests = new LinkedHashMap<>();
             for (PlanStep step : plan.plan()) manifests.put(step.stepId(),registry.find(scope,step.capabilityId()).or(() -> registry.find(step.capabilityId())).orElseThrow());
             return new Prepared(plan,scope,resolver,manifests,clock);
-        } catch (WorkflowResourceResolver.ReadFailure failure) { return new ReadRejected(failure.status()); }
+        } catch (WorkflowResourceResolver.ReadFailure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(PlanValidator.class.getName()),"PLAN_VALIDATOR_FAILED",failure); return new ReadRejected(failure.status()); }
     }
     public static final class Prepared implements Preparation {
         private final Object identity = new Object();
@@ -183,7 +183,7 @@ public final class PlanValidator {
         }
         private static String digest(Object value) {
             try { byte[] json=SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(value)).getBytes(java.nio.charset.StandardCharsets.UTF_8); return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(json)); }
-            catch (java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException("실행 결속을 만들 수 없습니다",failure); }
+            catch (java.security.NoSuchAlgorithmException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(PlanValidator.class.getName()),"PLAN_VALIDATOR_FAILED",failure); throw new IllegalStateException("실행 결속을 만들 수 없습니다",failure); }
         }
         @Override public String toString() { return "Prepared[보호됨]"; }
     }

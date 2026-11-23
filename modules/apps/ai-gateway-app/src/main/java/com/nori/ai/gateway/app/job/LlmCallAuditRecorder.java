@@ -28,6 +28,7 @@ public final class LlmCallAuditRecorder implements LlmCallAudit {
         if (prompt == null) throw new IllegalArgumentException("Prompt 버전이 등록되지 않은 호출 유형입니다: " + attempt.callType());
         var call = new AuditEvent.LlmCall(attempt.callType(), attempt.sent(), attempt.inputTokens(), attempt.maxTokens(), attempt.promptTokens(), attempt.completionTokens(),
             attempt.reduction(), model, prompt);
+        com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"LLM_CALL_AUDITED","jobId",attempt.jobId(),"conversationId",attempt.conversationId(),"purpose",attempt.callType(),"model",model,"prompt",prompt,"sent",attempt.sent(),"status",attempt.status(),"errorCode",attempt.errorCode(),"inputTokens",attempt.inputTokens(),"maxTokens",attempt.maxTokens(),"promptTokens",attempt.promptTokens(),"completionTokens",attempt.completionTokens(),"durationMs",attempt.latencyMs(),"reduction",attempt.reduction());
         audit.writeForJob(AuditEvent.llmCall(attempt.scope(), attempt.conversationId(), attempt.jobId(), attempt.status(), attempt.errorCode(), attempt.latencyMs(), call));
     }
 }

@@ -9,6 +9,6 @@ public record OwnedReference(OwnerSystem ownerSystem, String ref) {
             return uri.getScheme() != null && expected.name().equals(uri.getRawAuthority())
                 && uri.getRawQuery() == null && uri.getRawFragment() == null && uri.getRawPath() != null
                 && uri.getRawPath().startsWith("/") && !uri.getRawPath().contains("..");
-        } catch (IllegalArgumentException e) { return false; }
+        } catch (IllegalArgumentException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(OwnedReference.class.getName()),"OWNED_REFERENCE_FAILED",e); return false; }
     }
 }

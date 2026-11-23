@@ -63,7 +63,9 @@ public final class WorkflowExecutor {
     private Optional<WorkflowOutcome> runSteps(JobContext job,WorkflowExecutionPlan plan,PlanValidator.Prepared prepared,List<WorkflowExecutionPlan.ExecutionStep> executions,WorkflowResourceResolver resolver,RunState state) {
         var stages=state.stages();var ui=state.ui();var evidence=state.evidence();var refs=state.refs();var actualIds=state.actualIds();var deps=state.deps();var bindings=state.bindings();var calls=state.calls();var traces=state.traces();
         for(var execution:executions) {
+            long logStarted=System.nanoTime();
             var definition=execution.definition();
+            com.nori.ai.gateway.core.logging.DiagnosticLog.body(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"WORKFLOW_STEP_STARTED",SchemaContracts.JSON.writeValueAsString(execution.toolStep()),"jobId",job.jobId(),"stepId",definition.stepId());
             PlanStep step=execution.toolStep();
             var manifest=prepared.manifest(step.stepId());
             var invalid=new InputValidator().validate(manifest,step.arguments(),resolver.timezone(job.scope()));
@@ -93,10 +95,10 @@ public final class WorkflowExecutor {
                         if(!(decision instanceof SourceAuthorizationStep.StepGrant grant)){result=failure(manifest,decision instanceof SourceAuthorizationStep.StepUnavailable?ResultStatus.SOURCE_UNAVAILABLE:ResultStatus.DENIED);invoked=null;}
                         else {expiry.assertLive(job.cancellation());invoked=dispatcher.dispatchCurrent(prepared,attempt,job.scope(),grant,executionContext(job,plan,prepared,attempt,resolver,bindings,trace::set));}
                     }
-                } catch(WorkflowResourceResolver.ReadFailure failure){result=failure(manifest,failure.status());invoked=null;}
+                } catch(WorkflowResourceResolver.ReadFailure failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutor.class.getName()),"WORKFLOW_EXECUTOR_FAILED",failure);result=failure(manifest,failure.status());invoked=null;}
                 if(invoked==null)recorder.blocked(job,manifest.capabilityId(),result.status(),Optional.empty());
                 if(invoked instanceof ToolDispatcher.Threw threw) {
-                    try{recorder.record(job,threw.invocation());}catch(RuntimeException|Error storage){threw.suppress(storage);}threw.rethrow();
+                    try{recorder.record(job,threw.invocation());}catch(RuntimeException|Error storage){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutor.class.getName()),"WORKFLOW_EXECUTOR_FAILED",storage);threw.suppress(storage);}threw.rethrow();
                 }
                 if(invoked instanceof ToolDispatcher.Returned returned) {
                     returned.invocation().ifPresentOrElse(record->{if(!actualIds.add(record.id()))throw new IllegalStateException("실행 식별자가 중복되었습니다");recorder.record(job,record);refs.add(record.id());},
@@ -107,6 +109,7 @@ public final class WorkflowExecutor {
             if(result==null)throw new IllegalStateException("단계 결과가 없습니다");
             boolean observed=result.observedAt()!=null&&Set.of(ResultStatus.SUCCESS,ResultStatus.EMPTY,ResultStatus.PARTIAL,ResultStatus.STALE,ResultStatus.CONFLICT).contains(result.status());
             int count=0;for(var block:result.blocks())if(block.content()!=null&&block.content().path("items").isArray())count+=block.content().get("items").size();
+            com.nori.ai.gateway.core.logging.DiagnosticLog.body(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"WORKFLOW_STEP_COMPLETED",SchemaContracts.JSON.writeValueAsString(result),"jobId",job.jobId(),"stepId",step.stepId(),"capability",manifest.capabilityId(),"status",result.status(),"cacheHit",hit,"durationMs",(System.nanoTime()-logStarted)/1_000_000);
             stages.add(new WorkflowOutcome.Stage(step.stepId(),result,observed,count));
             ui.addAll(blocks.build(manifest,result));evidence.addAll(result.evidence());
             if(observed)deps.record(manifest.sourceAllowlistRef(),manifest.requiredPermission());

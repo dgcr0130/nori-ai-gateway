@@ -42,6 +42,6 @@ public final class SourceReadAccess {
         if (decision instanceof SourceAuthorizationStep.Granted) return ResultStatus.SUCCESS;
         return decision instanceof SourceAuthorizationStep.SourceUnavailable ? ResultStatus.SOURCE_UNAVAILABLE : ResultStatus.DENIED;
     }
-    private void guard(Request request){try{request.beforeRead().run();}catch(RuntimeException stopped){throw new GuardStopped(stopped);}}
+    private void guard(Request request){try{request.beforeRead().run();}catch(RuntimeException stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceReadAccess.class.getName()),"SOURCE_READ_ACCESS_FAILED",stopped);throw new GuardStopped(stopped);}}
     public void require(Request request,String expectedRef){ResultStatus status=check(request,expectedRef);if(status!=ResultStatus.SUCCESS)throw new Rejected(status);}
 }

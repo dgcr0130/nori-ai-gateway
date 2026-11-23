@@ -17,8 +17,7 @@ public interface LlmCallObserver {
 
     /** 원문·질문·근거·토큰값을 기록하지 않는 내부 debug 관측입니다. */
     default void diagnostic(String jobId, CallType type, LlmDiagnostic reason) {
-        System.getLogger(LlmCallObserver.class.getName()).log(System.Logger.Level.DEBUG,
-            "LLM_DIAGNOSTIC job={0} type={1} reason={2}", jobId, type, reason);
+        com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(LlmCallObserver.class.getName()),System.Logger.Level.WARNING,"LLM_DIAGNOSTIC","jobId",jobId,"purpose",type,"reason",reason);
     }
 
     interface Scope extends AutoCloseable { @Override void close(); }

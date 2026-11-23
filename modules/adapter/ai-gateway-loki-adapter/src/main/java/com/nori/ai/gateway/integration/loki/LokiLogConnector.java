@@ -35,8 +35,8 @@ public final class LokiLogConnector {
     }
     public LogResult search(SourceReadAccess.Request request, LogQuery query) {
         try{return searchGuarded(request,query);}
-        catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
-        catch(SourceReadAccess.Rejected rejected){return result(rejected.status());}
+        catch(SourceReadAccess.GuardStopped stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",stopped);throw stopped.rethrow();}
+        catch(SourceReadAccess.Rejected rejected){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",rejected);return result(rejected.status());}
     }
     private LogResult searchGuarded(SourceReadAccess.Request request,LogQuery query) {
         Objects.requireNonNull(query);
@@ -65,8 +65,8 @@ public final class LokiLogConnector {
             if (appWindows.isEmpty()) return new LogResult(ResultStatus.OUT_OF_RETENTION, List.of(), List.of(window), Set.of(), 0);
             Instant earliest = appWindows.values().stream().map(TimeWindow::startAt).min(Comparator.naturalOrder()).orElseThrow();
             window = new TimeWindow(earliest, window.endAt());
-        } catch (SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded) { throw guarded; }
-        catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE); }
+        } catch (SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",guarded); throw guarded; }
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",failure); return result(ResultStatus.SOURCE_UNAVAILABLE); }
         int rejected = 0;
         Instant end = window.endAt();
         while (end.isAfter(window.startAt())) {
@@ -98,12 +98,12 @@ public final class LokiLogConnector {
                         Instant retainedOldest=items.getLast().occurredAt();
                         if(appStart.isBefore(retainedOldest))missing.add(new TimeWindow(appStart,retainedOldest));
                     }
-                } catch (SourceHttpClient.Failure failure) {
+                } catch (SourceHttpClient.Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",failure);
                     if (!failure.deadline()) return result(ResultStatus.SOURCE_UNAVAILABLE);
                     missing.add(new TimeWindow(window.startAt(), end));
                     return finish(items, missing, warnings, rejected);
-                } catch (SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded) { throw guarded; }
-        catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE); }
+                } catch (SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",guarded); throw guarded; }
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(LokiLogConnector.class.getName()),"LOKI_LOG_CONNECTOR_FAILED",failure); return result(ResultStatus.SOURCE_UNAVAILABLE); }
             }
             end = start;
         }

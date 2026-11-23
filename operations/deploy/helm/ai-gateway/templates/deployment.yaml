@@ -43,6 +43,13 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.app.containerPort }}
+          resources:
+            limits:
+              memory: {{ .Values.app.resources.limits.memory | quote }}
+              cpu: {{ .Values.app.resources.limits.cpu | quote }}
+            requests:
+              memory: {{ .Values.app.resources.requests.memory | quote }}
+              cpu: {{ .Values.app.resources.requests.cpu | quote }}
           {{- range $name := list "liveness" "readiness" "startup" }}
           {{ $name }}Probe:
             httpGet:

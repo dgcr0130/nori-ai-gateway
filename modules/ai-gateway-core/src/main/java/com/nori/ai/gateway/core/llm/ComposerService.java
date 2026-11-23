@@ -128,7 +128,7 @@ public final class ComposerService {
         try {
             String evidence = input.selectedData().orElseGet(()->ClassificationService.canonical(SchemaContracts.JSON.readTree(data).path("data")));
             if (answers.count(evidence) > evidenceTokens) return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED, 0, reduction.steps());
-        } catch (IllegalArgumentException uncountable) { return failed(ComposerOutcome.LLM_UNAVAILABLE, 0, reduction.steps()); }
+        } catch (IllegalArgumentException uncountable) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ComposerService.class.getName()),"COMPOSER_SERVICE_FAILED",uncountable); return failed(ComposerOutcome.LLM_UNAVAILABLE, 0, reduction.steps()); }
         List<ChatMessage> messages = reduction.messages();
         StructuredOutput output=null;
         int calls = 0;
@@ -168,7 +168,7 @@ public final class ComposerService {
     /** 검색 선택과 실제 작성에 같은 직렬화·계수기를 사용합니다. 실패하면 단위를 절삭하거나 제약을 버리지 않습니다. */
     public boolean fitsGrounded(JobContext job,List<com.nori.ai.gateway.core.workflow.EvidenceUnit> units,Optional<ClassificationService.HistoryPair> history) {
         try {var prepared=grounded(job,job.requestInput().maskedQuestion(),units,history);return fits(prepared);}
-        catch(IllegalArgumentException invalid){return false;}
+        catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ComposerService.class.getName()),"COMPOSER_SERVICE_FAILED",invalid);return false;}
     }
     private boolean fits(Grounded value) {return value.reduction().withinBudget()&&answers.count(value.data())<=evidenceTokens&&answers.count(value.selector().decisionOutput().schema())<=evidenceTokens;}
     private Grounded grounded(JobContext job,String question,List<com.nori.ai.gateway.core.workflow.EvidenceUnit> units,Optional<ClassificationService.HistoryPair> history) {
@@ -189,11 +189,11 @@ public final class ComposerService {
             var units=SchemaContracts.JSON.convertValue(values,new tools.jackson.core.type.TypeReference<List<com.nori.ai.gateway.core.workflow.EvidenceUnit>>(){});
             if(!com.nori.ai.gateway.core.evidence.EvidenceJson.write(root).equals(com.nori.ai.gateway.core.workflow.EvidenceSelection.json(units)))throw new IllegalArgumentException();
             prepared=grounded(job,input.question(),units,input.matchedHistory());
-        }catch(IllegalArgumentException invalid){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.COMPOSE_SELECTION);return noEvidence(0,List.of());}
+        }catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ComposerService.class.getName()),"COMPOSER_SERVICE_FAILED",invalid);observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.COMPOSE_SELECTION);return noEvidence(0,List.of());}
         try {
             if(answers.count(prepared.selector().decisionOutput().schema())>evidenceTokens){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.OUTPUT_CONSTRAINT_BUDGET);return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED,0,prepared.reduction().steps());}
             if(!fits(prepared))return failed(ComposerOutcome.INPUT_BUDGET_EXCEEDED,0,prepared.reduction().steps());
-        }catch(IllegalArgumentException uncountable){return failed(ComposerOutcome.LLM_UNAVAILABLE,0,prepared.reduction().steps());}
+        }catch(IllegalArgumentException uncountable){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ComposerService.class.getName()),"COMPOSER_SERVICE_FAILED",uncountable);return failed(ComposerOutcome.LLM_UNAVAILABLE,0,prepared.reduction().steps());}
         if(prepared.selector().candidates().isEmpty()){observer.diagnostic(job.jobId(),CallType.COMPOSER,LlmDiagnostic.COMPOSE_SELECTION);return noEvidence(0,prepared.reduction().steps());}
         expiry.assertLive(job.cancellation());InferenceClient.ChatOutcome outcome;
         try(var observed=observer.open(job.jobId(),CallType.COMPOSER,prepared.reduction().messages())) {

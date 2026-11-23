@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.integration.system;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.core.job.CancellationToken;
 import com.nori.ai.gateway.core.plan.InputValidator;
 import com.nori.ai.gateway.core.port.SystemQueryPort;
@@ -69,7 +71,7 @@ public final class HttpSystemQueryAdapter implements SystemQueryPort {
                 arguments.put(key, new InputValidator().parseTime(arguments.get(key).asString(), request.timezone()).toString());
             if (request.targets().size() > 16 || request.targets().stream().anyMatch(value -> !text(value.type(),256) || !text(value.ref(),256)))
                 return failure(ResultStatus.FAILED,"PLAN_INVALID");
-        } catch (RuntimeException invalid) { return failure(ResultStatus.FAILED,"PLAN_INVALID"); }
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",invalid,"jobId",request.scope().requestId()); return failure(ResultStatus.FAILED,"PLAN_INVALID"); }
         Instant deadline = now.plus(remaining);
         var body = SchemaContracts.JSON.createObjectNode().put("version","1").put("systemId",request.scope().boundSystem().name())
             .put("jobId",request.scope().requestId()).put("toolId",request.tool().toolId()).put("subject",request.scope().sub())
@@ -82,7 +84,7 @@ public final class HttpSystemQueryAdapter implements SystemQueryPort {
         try {
             token = Files.readString(endpoint.gatewayTokenFile(),StandardCharsets.UTF_8).strip();
             if (token.isEmpty() || !token.matches("[A-Za-z0-9._~+/-]+=*")) return failure(ResultStatus.FAILED,"CONTRACT_INVALID");
-        } catch (java.io.IOException unavailable) { return failure(ResultStatus.SOURCE_UNAVAILABLE,"SOURCE_UNAVAILABLE"); }
+        } catch (java.io.IOException unavailable) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",unavailable,"jobId",request.scope().requestId()); return failure(ResultStatus.SOURCE_UNAVAILABLE,"SOURCE_UNAVAILABLE"); }
         Duration left = Duration.between(clock.instant(),deadline);
         if (left.isNegative() || left.isZero() || request.cancellation().reason().isPresent()) return failure(ResultStatus.TIMEOUT,"TIMEOUT");
         try (var client = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).followRedirects(HttpClient.Redirect.NEVER)
@@ -91,6 +93,10 @@ public final class HttpSystemQueryAdapter implements SystemQueryPort {
                 .header("Content-Type","application/json").header("Authorization","Bearer " + token)
                 .header("X-Request-Id",request.scope().requestId()).header("X-Actor-Subject",request.scope().sub())
                 .header("X-Delegation-Id",request.delegationId()).POST(HttpRequest.BodyPublishers.ofByteArray(bytes)).build();
+            long logStarted=System.nanoTime();
+            var loggedBody=body.deepCopy();loggedBody.put("delegationId","[MASKED]");
+            var loggedHeaders=new LinkedHashMap<>(httpRequest.headers().map());loggedHeaders.replaceAll((name,values)->name.equalsIgnoreCase("X-Delegation-Id")?List.of("[MASKED]"):values);
+            body(System.getLogger(getClass().getName()),INFO,"SYSTEM_REQUEST",SchemaContracts.JSON.writeValueAsString(loggedBody),"jobId",request.scope().requestId(),"system",request.scope().boundSystem(),"method",httpRequest.method(),"url",httpRequest.uri(),"headers",headers(loggedHeaders));
             var future = client.sendAsync(httpRequest, info -> new BoundedBody());
             var inFlight = new CancellationToken.InFlightCall() {
                 @Override public void abort() { future.cancel(true); client.shutdownNow(); }
@@ -99,6 +105,7 @@ public final class HttpSystemQueryAdapter implements SystemQueryPort {
             request.cancellation().register(inFlight);
             try {
                 var response = future.get(left.toNanos(),TimeUnit.NANOSECONDS);
+                body(System.getLogger(getClass().getName()),response.statusCode()>=200&&response.statusCode()<300?INFO:WARNING,"SYSTEM_RESPONSE",new String(response.body(),StandardCharsets.UTF_8),"jobId",request.scope().requestId(),"system",request.scope().boundSystem(),"url",httpRequest.uri(),"status",response.statusCode(),"contentType",response.headers().firstValue("Content-Type").orElse(null),"durationMs",(System.nanoTime()-logStarted)/1_000_000);
                 if (request.cancellation().reason().isPresent() || !clock.instant().isBefore(deadline)) return failure(ResultStatus.TIMEOUT,"TIMEOUT");
                 try {
                     String json = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
@@ -106,27 +113,27 @@ public final class HttpSystemQueryAdapter implements SystemQueryPort {
                     JsonNode parsed = STRICT_JSON.readTree(json);
                     // JSON 문자열의 Unicode 불변식도 공용 계약과 같게 검사합니다.
                     return decode(request,response.statusCode(),SchemaContracts.parse(SchemaContracts.JSON.writeValueAsString(parsed)));
-                } catch (RuntimeException | java.nio.charset.CharacterCodingException invalid) { return failure(ResultStatus.FAILED,"CONTRACT_INVALID"); }
-            } catch (TimeoutException timeout) {
+                } catch (RuntimeException | java.nio.charset.CharacterCodingException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",invalid,"jobId",request.scope().requestId()); return failure(ResultStatus.FAILED,"CONTRACT_INVALID"); }
+            } catch (TimeoutException timeout) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",timeout,"jobId",request.scope().requestId());
                 inFlight.abort(); return failure(ResultStatus.TIMEOUT,"TIMEOUT");
-            } catch (ExecutionException failed) {
+            } catch (ExecutionException failed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",failed,"jobId",request.scope().requestId());
                 Throwable cause = failed.getCause();
                 if (cause instanceof BodyLimit) return failure(ResultStatus.FAILED,"CONTRACT_INVALID");
                 if (cause instanceof HttpTimeoutException) return failure(ResultStatus.TIMEOUT,"TIMEOUT");
                 return failure(ResultStatus.SOURCE_UNAVAILABLE,"SOURCE_UNAVAILABLE");
-            } catch (InterruptedException interrupted) {
+            } catch (InterruptedException interrupted) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",interrupted,"jobId",request.scope().requestId());
                 inFlight.abort(); Thread.currentThread().interrupt(); return failure(ResultStatus.TIMEOUT,"TIMEOUT");
-            } catch (CancellationException cancelled) { return failure(ResultStatus.TIMEOUT,"TIMEOUT"); }
+            } catch (CancellationException cancelled) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",cancelled,"jobId",request.scope().requestId()); return failure(ResultStatus.TIMEOUT,"TIMEOUT"); }
             finally {
                 client.shutdownNow();
                 // 실제 transport 종료를 확인할 때까지 token의 in-flight 등록을 보존합니다.
                 boolean interrupted = Thread.interrupted();
                 for (;;) try { if (client.awaitTermination(Duration.ofSeconds(1))) break; }
-                    catch (InterruptedException again) { interrupted = true; }
+                    catch (InterruptedException again) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",again,"jobId",request.scope().requestId()); interrupted = true; }
                 request.cancellation().completed(inFlight);
                 if (interrupted) Thread.currentThread().interrupt();
             }
-        } catch (RuntimeException invalid) { return failure(ResultStatus.SOURCE_UNAVAILABLE,"SOURCE_UNAVAILABLE"); }
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(HttpSystemQueryAdapter.class.getName()),"HTTP_SYSTEM_QUERY_ADAPTER_FAILED",invalid,"jobId",request.scope().requestId()); return failure(ResultStatus.SOURCE_UNAVAILABLE,"SOURCE_UNAVAILABLE"); }
     }
 
     private Response decode(Request request, int http, JsonNode node) {

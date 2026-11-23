@@ -23,7 +23,7 @@ public final class EvidenceAssembler {
             for(var item:content.get("items")) {
             if(!item.isObject())throw invalidKnowledge();
             String owner=metadata(item,"ownerSystem"),ref=metadata(item,"sourceRef"),chunk=metadata(item,"chunkId"),revision=metadata(item,"revision");
-            OwnerSystem system;try{system=OwnerSystem.valueOf(owner);}catch(IllegalArgumentException invalid){throw invalidKnowledge();}
+            OwnerSystem system;try{system=OwnerSystem.valueOf(owner);}catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(EvidenceAssembler.class.getName()),"EVIDENCE_ASSEMBLER_FAILED",invalid);throw invalidKnowledge();}
             if(!java.util.Objects.equals(system,manifest.ownerSystem())||!java.util.Objects.equals(system,scope.boundSystem())||!new OwnedReference(system,ref).belongsTo(system))throw invalidKnowledge();
             var hit=new KnowledgeHit(new EvidenceSourceRef(system,ref,chunk,revision),new ResultSourceDeps.DocKey(system.name(),ref,revision));
             String key=system.name()+"\u0000"+chunk;var previous=hits.putIfAbsent(key,hit);

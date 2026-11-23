@@ -69,13 +69,20 @@ public final class JobAdmissionService {
         this.messages=messages;this.jobs=jobs;this.events=events;this.sanitizer=sanitizer;this.hooks=hooks;this.pauses=pauses;this.publisher=publisher;this.recovery=recovery;this.audit=Objects.requireNonNull(audit);
     }
     public Accepted accept(VerifiedSystemScope scope,AdmissionRequest request){
+        try(var logContext=com.nori.ai.gateway.app.observability.LogContext.open(org.slf4j.MDC.getCopyOfContextMap())) {
+            try {boolean[] replayed={false};var accepted=acceptLogged(scope,request,replayed);org.slf4j.MDC.put("jobId",accepted.jobId());org.slf4j.MDC.put("conversationId",accepted.conversationId());
+                com.nori.ai.gateway.core.logging.DiagnosticLog.body(System.getLogger(getClass().getName()),System.Logger.Level.INFO,replayed[0]?"JOB_ADMISSION_REPLAYED":"JOB_ADMITTED",json.writeValueAsString(Map.of("question",request.question(),"requestFields",request.requestFields())),"path",request.path(),"system",scope.boundSystem(),"actor",scope.actorRef(),"conversationId",accepted.conversationId(),"newConversation",!replayed[0]&&request.conversationId()==null,"jobId",accepted.jobId(),"messageId",accepted.messageId(),"queuePosition",accepted.queuePosition(),"idempotencyKey",request.idempotencyKey());return accepted;
+            }catch(Rejected failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobAdmissionService.class.getName()),"JOB_ADMISSION_SERVICE_FAILED",failure);com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.WARNING,"JOB_ADMISSION_REJECTED","path",request.path(),"status",failure.status(),"errorCode",failure.error(),"reason",failure.getMessage());throw failure;}
+        }
+    }
+    private Accepted acceptLogged(VerifiedSystemScope scope,AdmissionRequest request,boolean[] replayed){
         if(TransactionSynchronizationManager.isActualTransactionActive())throw new IllegalStateException("접수는 독립 트랜잭션이어야 합니다");
-        String digest=digest(request);var fast=lookup.find(scope,request.idempotencyKey(),digest);if(fast.isPresent())return fast.get();
+        String digest=digest(request);var fast=lookup.find(scope,request.idempotencyKey(),digest);if(fast.isPresent()){replayed[0]=true;return fast.get();}
         pause(PausePointRegistry.Point.ADMISSION_FAST_MISS,scope.actorRef().value()+":"+request.idempotencyKey());
         try{return transactions.execute(tx->{
             control.lockControl();
             // READ COMMITTED의 새 문장 snapshot으로 직전 커밋을 먼저 확인합니다.
-            var existing=lookup.find(scope,request.idempotencyKey(),digest);if(existing.isPresent())return existing.get();
+            var existing=lookup.find(scope,request.idempotencyKey(),digest);if(existing.isPresent()){replayed[0]=true;return existing.get();}
             if(!recovery.admissionReady())throw new Rejected(503,"INFERENCE_UNAVAILABLE",60);
             var inferenceBlock=inferenceBlock();if(inferenceBlock.isPresent())throw new Rejected(503,inferenceBlock.get().name(),60);
             int queued=queue.count("QUEUED");if(queued>=capacity.queuedDepth())throw new Rejected(503,"QUEUE_FULL",60);
@@ -84,6 +91,7 @@ public final class JobAdmissionService {
             if(conversation==null){conversation=UUID.randomUUID().toString();if(!conversations.insert(scope,conversation))throw new IllegalStateException("대화를 저장할 수 없습니다");}
             else if(!conversations.lock(scope,conversation))throw new Rejected(404,null,0);
             String jobId=UUID.randomUUID().toString(),messageId=UUID.randomUUID().toString();
+            org.slf4j.MDC.put("jobId",jobId);org.slf4j.MDC.put("conversationId",conversation);
             if(hooks.flatMap(h->h.armed(scope.sub(),request.idempotencyKey())).map(TestHookRegistry.Scenario::failSanitizer).orElse(false))throw new IllegalStateException("마스킹 적용을 확인할 수 없습니다");
             var sanitized=sanitizer.sanitize(request.question());
             if(!messages.insert(scope,conversation,new MessageRepository.Message(messageId,"user",sanitized.text(),json.writeValueAsString(request.requestFields().getOrDefault("resourceRefs",List.of())),"[]",null,null)))throw new Rejected(404,null,0);
@@ -97,10 +105,11 @@ public final class JobAdmissionService {
                 @Override public void afterCommit(){hooks.ifPresent(TestHookRegistry::admissionCommitted);pause(PausePointRegistry.Point.ADMISSION_AFTER_COMMIT,jobId);publisher.publishEvent(new AdmissionCommitted(jobId));}
             });
             return new Accepted(jobId,conversation,messageId,queued+1);
-        });}catch(DuplicateKeyException duplicate){
+        });}catch(DuplicateKeyException duplicate){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobAdmissionService.class.getName()),"JOB_ADMISSION_SERVICE_FAILED",duplicate);
+            com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.WARNING,"JOB_ADMISSION_UNIQUE_FALLBACK","idempotencyKey",request.idempotencyKey());
             uniqueFallbacks.incrementAndGet();
             // 최후 방어는 실패 tx가 완전히 rollback된 뒤에만 재조회합니다.
-            return lookup.find(scope,request.idempotencyKey(),digest).orElseThrow(()->duplicate);
+            replayed[0]=true;return lookup.find(scope,request.idempotencyKey(),digest).orElseThrow(()->duplicate);
         }
     }
     /** 추론 활성 시 readiness 상태 이름의 errorCode, 비활성 단계는 기존 INFERENCE_UNAVAILABLE 이다(SPEC §14.6 닫힌 네 값). */
@@ -110,10 +119,10 @@ public final class JobAdmissionService {
     }
     private void pause(PausePointRegistry.Point point,String key){
         if(pauses.isEmpty())return;
-        try{pauses.get().hit(point,key);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new IllegalStateException("접수 대기가 중단되었습니다");}
+        try{pauses.get().hit(point,key);}catch(InterruptedException interrupted){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobAdmissionService.class.getName()),"JOB_ADMISSION_SERVICE_FAILED",interrupted);Thread.currentThread().interrupt();throw new IllegalStateException("접수 대기가 중단되었습니다");}
     }
     private String digest(AdmissionRequest request){
         try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(json.writeValueAsBytes(Arrays.asList(request.path(),request.conversationId(),request.question().strip().replaceAll("\\s+"," "),request.requestFields()))));}
-        catch(RuntimeException|NoSuchAlgorithmException failure){throw new IllegalArgumentException("접수 내용을 확인할 수 없습니다");}
+        catch(RuntimeException|NoSuchAlgorithmException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobAdmissionService.class.getName()),"JOB_ADMISSION_SERVICE_FAILED",failure);throw new IllegalArgumentException("접수 내용을 확인할 수 없습니다");}
     }
 }

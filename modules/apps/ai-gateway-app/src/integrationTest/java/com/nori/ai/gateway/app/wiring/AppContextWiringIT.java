@@ -153,8 +153,11 @@ class AppContextWiringIT extends StackContextSupport {
                 com.nori.ai.gateway.app.security.SecurityCredentialFiles.class,com.nori.ai.gateway.app.security.ActorAssertionVerifier.class,
                 com.nori.ai.gateway.app.security.ScopeAssembler.class,com.nori.ai.gateway.app.security.RouteClassifier.class,
                 com.nori.ai.gateway.app.security.BodySystemFieldGuard.class,com.nori.ai.gateway.app.security.AuthRejectionAuditor.class,
-                com.nori.ai.gateway.persistence.audit.auth.AuthRejectionAppendRepository.class,
-                org.springframework.boot.web.servlet.FilterRegistrationBean.class)) assertThat(context.getBeansOfType(type)).hasSize(1);
+                com.nori.ai.gateway.persistence.audit.auth.AuthRejectionAppendRepository.class)) assertThat(context.getBeansOfType(type)).hasSize(1);
+        // 필터 등록은 HTTP 진단 필터와 서비스 인증 필터 각 1개이며 진단 필터가 먼저 실행됩니다.
+        var filters = context.getBeansOfType(org.springframework.boot.web.servlet.FilterRegistrationBean.class);
+        assertThat(filters.keySet()).containsExactlyInAnyOrder("httpDiagnosticFilterRegistration","serviceTokenAuthFilterRegistration");
+        assertThat(filters.get("httpDiagnosticFilterRegistration").getOrder()).isLessThan(filters.get("serviceTokenAuthFilterRegistration").getOrder());
         var clock = context.getBean(java.time.Clock.class);
         for (Class<?> type : List.of(com.nori.ai.gateway.app.security.ActorAssertionVerifier.class,com.nori.ai.gateway.persistence.audit.auth.AuthRejectionAppendRepository.class)) {
             assertThat(org.springframework.test.util.ReflectionTestUtils.getField(context.getBean(type),"clock")).isSameAs(clock);

@@ -54,7 +54,7 @@ public class ProductionSafetyGuard {
             JsonNode keys = JsonMapper.builder().build().readTree(Files.readString(Path.of(file))).path("keys");
             if (!keys.isArray()) return Optional.of("ACTOR_JWKS_UNREADABLE");
             for (JsonNode key : keys) if (key.path("kid").asString("").startsWith("test-")) return Optional.of("TEST_SIGNER_KEY_TRUSTED");
-        } catch (RuntimeException | java.io.IOException failure) { return Optional.of("ACTOR_JWKS_UNREADABLE"); }
+        } catch (RuntimeException | java.io.IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(ProductionSafetyGuard.class.getName()),"PRODUCTION_SAFETY_GUARD_FAILED",failure); return Optional.of("ACTOR_JWKS_UNREADABLE"); }
         }
         return Optional.empty();
     }

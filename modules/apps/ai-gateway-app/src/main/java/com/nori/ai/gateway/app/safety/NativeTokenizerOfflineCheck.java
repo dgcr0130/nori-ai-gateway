@@ -35,10 +35,10 @@ public final class NativeTokenizerOfflineCheck {
         try {
             run();
             System.out.println("NATIVE_TOKENIZER_OFFLINE_CHECK_OK");
-        } catch (CheckFailure failure) {
+        } catch (CheckFailure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",failure);
             System.err.println("NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED:" + failure.getMessage());
             System.exit(1);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",failure);
             // SDK 예외 메시지에는 파일 경로가 들어 있으므로 유형만 남긴다.
             System.err.println("NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED:NATIVE_LOAD:" + failure.getClass().getSimpleName());
             System.exit(1);
@@ -56,7 +56,7 @@ public final class NativeTokenizerOfflineCheck {
         try {
             directory = Files.createTempDirectory(Path.of(System.getProperty("java.io.tmpdir")), "aigw-tokenizers-",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
-        } catch (IOException | UnsupportedOperationException failure) { throw new CheckFailure("TEMP_DIRECTORY"); }
+        } catch (IOException | UnsupportedOperationException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",failure); throw new CheckFailure("TEMP_DIRECTORY"); }
         boolean checked = false;
         try {
             Path library = extract(NativeTokenizerOfflineCheck.class.getClassLoader(), RESOURCE, directory);
@@ -68,7 +68,7 @@ public final class NativeTokenizerOfflineCheck {
         } finally {
             boolean removed;
             try { Files.deleteIfExists(directory.resolve(LIBRARY_FILE)); Files.deleteIfExists(directory); removed = true; }
-            catch (IOException failure) { removed = false; }
+            catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",failure); removed = false; }
             // 앞선 실패 사유를 정리 실패로 덮지 않는다.
             if (checked && !removed) throw new CheckFailure("CLEANUP");
         }
@@ -94,11 +94,11 @@ public final class NativeTokenizerOfflineCheck {
             try (InputStream in = new DigestInputStream(Files.newInputStream(target), copied)) { in.transferTo(java.io.OutputStream.nullOutputStream()); }
             if (!expected.equals(HexFormat.of().formatHex(copied.digest()))) throw new CheckFailure("HASH_MISMATCH");
             return target;
-        } catch (IOException failure) { throw new CheckFailure("EXTRACT"); }
+        } catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",failure); throw new CheckFailure("EXTRACT"); }
     }
 
     private static MessageDigest sha256() {
         try { return MessageDigest.getInstance("SHA-256"); }
-        catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException("SHA-256 을 사용할 수 없습니다"); }
+        catch (NoSuchAlgorithmException impossible) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(NativeTokenizerOfflineCheck.class.getName()),"NATIVE_TOKENIZER_OFFLINE_CHECK_FAILED",impossible); throw new IllegalStateException("SHA-256 을 사용할 수 없습니다"); }
     }
 }

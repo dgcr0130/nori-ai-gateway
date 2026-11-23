@@ -11,6 +11,6 @@ public final class AuditQueryController {
     @GetMapping("/v1/audit/jobs/{jobId}") public Object find(HttpServletRequest request,@PathVariable String jobId) {
         var scope=ApiRequestInput.scope(request);var access=responses.assemble(scope,jobId);
         if(!access.allowed()){responses.assertLive(access);return access.response();}
-        var result=audit.find(scope,jobId);responses.assertLive(access);return result;
+        var result=audit.find(scope,jobId);responses.assertLive(access);com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"AUDIT_QUERIED","jobId",jobId);return result;
     }
 }

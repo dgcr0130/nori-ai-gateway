@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.integration.inference;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nori.ai.gateway.core.budget.CallType;
@@ -38,7 +40,9 @@ public final class OpenAiReadinessProbe implements AutoCloseable {
         http = builder.build();
     }
 
+    List<String> modelNames() {return List.of(endpoint.settings().generationModel(),endpoint.settings().embeddingModel());}
     public Observation probe() {
+        long logStarted=System.nanoTime();event(System.getLogger(getClass().getName()),INFO,"LLM_READINESS_REQUEST","endpoint",endpoint.readinessUri(),"generationModel",endpoint.settings().generationModel(),"embeddingModel",endpoint.settings().embeddingModel());
         try {
             var observation = http.get().uri(endpoint.readinessUri()).exchange((request, response) -> {
                 if (!response.getStatusCode().is2xxSuccessful()) return error();
@@ -46,17 +50,18 @@ public final class OpenAiReadinessProbe implements AutoCloseable {
                 if (bytes.length > 1024 * 1024) return error();
                 // 응답 본문의 파싱 실패가 전송 예외로 감싸져 무응답으로 분류되지 않게 합니다.
                 try { return models(mapper.readTree(bytes)); }
-                catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { return error(); }
+                catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(OpenAiReadinessProbe.class.getName()),"OPEN_AI_READINESS_PROBE_FAILED",invalid); return error(); }
             });
             if (observation.state() != State.READY) return observation;
             var outcome = inference.chat(CallType.CLASSIFY, List.of(new ChatMessage(ChatMessage.Role.USER, "응답")),
                 endpoint.settings().policy().budget(CallType.CLASSIFY).requestMaxTokens());
             if (!(outcome instanceof InferenceClient.Completed completed) || com.nori.ai.gateway.core.llm.AnswerCheck.failure(completed, endpoint.settings().policy().budget(CallType.CLASSIFY), tokenizer::countText) != null) return error();
             var vectors = inference.embed(List.of("준비 확인"));
+            event(System.getLogger(getClass().getName()),INFO,"LLM_READINESS_COMPLETED","state",State.READY,"dimension",vectors.getFirst().length,"durationMs",(System.nanoTime()-logStarted)/1_000_000);
             return new Observation(State.READY, Reason.NONE, vectors.getFirst().length);
-        } catch (org.springframework.web.client.RestClientException unavailable) {
+        } catch (org.springframework.web.client.RestClientException unavailable) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(OpenAiReadinessProbe.class.getName()),"OPEN_AI_READINESS_PROBE_FAILED",unavailable);
             return new Observation(State.INFERENCE_UNAVAILABLE, Reason.NO_RESPONSE, null);
-        } catch (Exception invalid) { return error(); }
+        } catch (Exception invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(OpenAiReadinessProbe.class.getName()),"OPEN_AI_READINESS_PROBE_FAILED",invalid); return error(); }
     }
 
     private Observation models(JsonNode root) {

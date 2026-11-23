@@ -77,7 +77,7 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
         assertThat(scripts().scriptedCalls(failed.jobId(), CallType.COMPOSER)).isOne();
         assertThat(payload(failed.jobId()).path("blocks")).isNotEmpty();
         assertThat(allStored(failed.jobId())).doesNotContain(THINK_MARK, "think>");
-        assertThat(output.getAll()).doesNotContain(THINK_MARK);
+        assertThat(output.getAll()).contains("LLM_CHAT_RESPONSE", THINK_MARK);
         var recovered = admitScripted("think-once", "사용 가능한 기능 안내", Map.of(), List.of(classify(wire("GQ", null, null, null, null)), compose("<think>" + THINK_MARK), compose("사용 가능한 기능을 안내합니다.")), Optional.empty(), null);
         assertThat(terminal(recovered)).isEqualTo("SUCCEEDED");
         assertThat(payload(recovered.jobId()).path("answer").asString()).isEqualTo("사용 가능한 기능을 안내합니다.");

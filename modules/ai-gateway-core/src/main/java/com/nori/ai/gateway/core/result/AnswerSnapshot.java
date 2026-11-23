@@ -35,7 +35,7 @@ public record AnswerSnapshot(String questionMasked,JsonNode answer,JsonNode evid
     public String contentSha256(){return sha(SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(Map.of("questionMasked",questionMasked,"answer",answer,"evidence",evidence,"configSha256",configSha256))));}
     public static String sha(String text) {
         try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}
-        catch(NoSuchAlgorithmException impossible){throw new IllegalStateException("본문 해시를 계산할 수 없습니다");}
+        catch(NoSuchAlgorithmException impossible){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(AnswerSnapshot.class.getName()),"ANSWER_SNAPSHOT_FAILED",impossible);throw new IllegalStateException("본문 해시를 계산할 수 없습니다");}
     }
     @Override public String toString(){return "AnswerSnapshot[보호됨]";}
 }

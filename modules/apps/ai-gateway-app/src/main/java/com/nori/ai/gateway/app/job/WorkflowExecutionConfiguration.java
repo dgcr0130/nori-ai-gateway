@@ -65,6 +65,6 @@ public class WorkflowExecutionConfiguration {
         try(var input=WorkflowExecutionConfiguration.class.getClassLoader().getResourceAsStream(path)){
             if(input==null)throw new IllegalStateException("프롬프트 자원이 없습니다: "+path);
             return new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
-        }catch(java.io.IOException failure){throw new IllegalStateException("프롬프트 자원을 읽을 수 없습니다: "+path,failure);}
+        }catch(java.io.IOException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionConfiguration.class.getName()),"WORKFLOW_EXECUTION_CONFIGURATION_FAILED",failure);throw new IllegalStateException("프롬프트 자원을 읽을 수 없습니다: "+path,failure);}
     }
 }

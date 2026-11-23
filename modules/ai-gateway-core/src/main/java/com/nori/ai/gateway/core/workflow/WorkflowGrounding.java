@@ -69,7 +69,7 @@ public final class WorkflowGrounding {
                     var collected=new HashSet<UUID>();for(var hit:RankFusion.fuse(List.of(found),settings.rrfK()))collected.add(hit.hit().child().id());
                     for(var answer:verified)for(var hit:answer.parents())collected.add(hit.child().id());
                     int count=collected.size();stages.add(documentStage(job,round,count==0?ResultStatus.EMPTY:ResultStatus.SUCCESS,count));
-                }catch(InferenceClient.EmbeddingFailed unavailable) {
+                }catch(InferenceClient.EmbeddingFailed unavailable) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowGrounding.class.getName()),"WORKFLOW_GROUNDING_FAILED",unavailable);
                     stages.add(documentStage(job,round,ResultStatus.SOURCE_UNAVAILABLE,0));break;
                 }
                 history=currentHistory(job);selected=select(job,rounds,source.units(),history);
@@ -112,7 +112,7 @@ public final class WorkflowGrounding {
         try {
             var history=matchedHistory(job,targets(job),units,available);var selector=EvidenceCandidateSelection.prepare(units);
             return selection.fitsTransmission(selector.transmittedData(job.requestInput().maskedQuestion(),units,language,history),selector.output().schema())&&transmission.fits(job,units,history);
-        }catch(IllegalArgumentException invalid){return false;}
+        }catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowGrounding.class.getName()),"WORKFLOW_GROUNDING_FAILED",invalid);return false;}
     }
     private EvidenceSelection.Selected select(JobContext job,List<DocumentSearch.Round> rounds,List<EvidenceUnit> sources,List<CitedHistoryContext.Pair> available) {
         return selection.select(rounds,sources,settings,units->fits(job,units,available));

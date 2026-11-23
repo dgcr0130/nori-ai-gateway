@@ -14,7 +14,11 @@ public class IngressSecurityConfiguration {
     @Bean com.nori.ai.gateway.app.config.GatewaySystemsProperties gatewaySystemsProperties(Environment environment) {
         try {
             return com.nori.ai.gateway.app.config.GatewaySystemsProperties.load(environment);
-        } catch (RuntimeException failure) { throw new IllegalStateException("시스템 설정이 잘못되었습니다"); }
+        } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(IngressSecurityConfiguration.class.getName()),"INGRESS_SECURITY_CONFIGURATION_FAILED",failure); throw new IllegalStateException("시스템 설정이 잘못되었습니다"); }
+    }
+    @Bean FilterRegistrationBean<com.nori.ai.gateway.app.observability.HttpDiagnosticFilter> httpDiagnosticFilterRegistration() {
+        var registration=new FilterRegistrationBean<>(new com.nori.ai.gateway.app.observability.HttpDiagnosticFilter());
+        registration.setName("httpDiagnosticFilter");registration.addUrlPatterns("/*");registration.setDispatcherTypes(DispatcherType.REQUEST);registration.setAsyncSupported(true);registration.setOrder(Ordered.HIGHEST_PRECEDENCE);return registration;
     }
     @Bean SecurityCredentialFiles securityCredentialFiles(com.nori.ai.gateway.app.config.GatewaySystemsProperties properties) {
         return new SecurityCredentialFiles(properties);
@@ -29,7 +33,7 @@ public class IngressSecurityConfiguration {
             io.opentelemetry.api.OpenTelemetry openTelemetry) {
         var registration = new FilterRegistrationBean<>(new ServiceTokenAuthFilter(credentials,verifier,scopes,bodies,auditor,audit,openTelemetry));
         registration.setName("serviceTokenAuthFilter"); registration.addUrlPatterns("/v1/*");
-        registration.setDispatcherTypes(DispatcherType.REQUEST); registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        registration.setDispatcherTypes(DispatcherType.REQUEST); registration.setOrder(Ordered.HIGHEST_PRECEDENCE+1);registration.setAsyncSupported(true);
         return registration;
     }
 }

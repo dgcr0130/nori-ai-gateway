@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job.recovery;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.CapacityProfile;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.core.job.TerminalSpec;
@@ -14,11 +16,12 @@ public final class StartupRecoveryRunner {
         this.jobs=jobs;this.terminal=terminal;this.events=events;this.caches=caches;this.clock=clock;this.systems=systems;this.capacity=capacity;
     }
     public void run(){
-        for(var job:jobs.nonterminal()){
+        long logStarted=System.nanoTime();int count=0;
+        for(var job:jobs.nonterminal()){count++;event(System.getLogger(getClass().getName()),WARNING,"STARTUP_JOB_RECOVERY","jobId",job.jobId(),"status",job.status());
             if(job.status().equals("RUNNING"))terminal.commit(job.jobId(),TerminalSpec.forCause(TerminalSpec.Cause.WORKER_INTERRUPTED));
             else if(!systems.systems().containsKey(job.ownerSystem().name()))terminal.commit(job.jobId(),TerminalSpec.forCause(TerminalSpec.Cause.START_GATE_DENIED));
             else if(clock.instant().isAfter(job.createdAt().plus(capacity.queueWaitLimit())))terminal.commit(job.jobId(),TerminalSpec.forCause(TerminalSpec.Cause.QUEUE_TIMEOUT));
         }
-        events.republishTerminal();caches.deleteAllCacheEntries();
+        events.republishTerminal();caches.deleteAllCacheEntries();event(System.getLogger(getClass().getName()),INFO,"STARTUP_RECOVERY_COMPLETED","jobs",count,"durationMs",(System.nanoTime()-logStarted)/1_000_000);
     }
 }

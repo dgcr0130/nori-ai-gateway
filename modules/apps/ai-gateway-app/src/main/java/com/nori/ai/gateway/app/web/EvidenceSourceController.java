@@ -13,6 +13,7 @@ public final class EvidenceSourceController {
     @GetMapping("/v1/analyses/{jobId}/evidence/{evidenceId}/source") public Object source(HttpServletRequest request,@PathVariable String jobId,@PathVariable String evidenceId) {
         var scope=ApiRequestInput.scope(request);var access=responses.assemble(scope,jobId);
         if(!access.allowed()) {responses.assertLive(access);return access.response();}
+        com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"EVIDENCE_SOURCE_REQUESTED","jobId",jobId,"evidenceId",evidenceId);
         var entry=evidence.find(scope,jobId,evidenceId).orElseThrow(UniformNotFound::new);
         if(entry.sourceRef().startsWith("system://")&&!new com.nori.ai.gateway.core.scope.OwnedReference(scope.boundSystem(),entry.sourceRef()).belongsTo(scope.boundSystem()))throw new UniformNotFound();
         var saved=evidence.findAnswerBody(scope,jobId,evidenceId);

@@ -15,7 +15,7 @@ public class DocumentConfiguration {
         try {
             return new S3DocumentObjectStore(sources.isEmpty()?null:URI.create(environment.getRequiredProperty("ai.gateway.documents.s3Endpoint")),
                 path(environment,"accessKeyFile"),path(environment,"secretKeyFile"),sources);
-        } catch(RuntimeException invalid) { throw new IllegalStateException("DOCUMENT_CONFIGURATION_INVALID"); }
+        } catch(RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(DocumentConfiguration.class.getName()),"DOCUMENT_CONFIGURATION_FAILED",invalid); throw new IllegalStateException("DOCUMENT_CONFIGURATION_INVALID"); }
     }
     private static Path path(Environment environment,String name) { String value=environment.getProperty("ai.gateway.documents."+name);return value==null?null:Path.of(value); }
     @Bean com.nori.ai.gateway.app.knowledge.DocumentStartupRunner documentStartupRunner(GatewaySystemsProperties systems,

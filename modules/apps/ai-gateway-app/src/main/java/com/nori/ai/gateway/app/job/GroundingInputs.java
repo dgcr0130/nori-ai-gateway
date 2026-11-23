@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.core.job.JobContext;
 import com.nori.ai.gateway.core.registry.*;
@@ -92,8 +94,9 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
                 }
                 if(!local.stream().allMatch(u->job.scope().perm().containsAll(u.permissions())))throw invalid();
                 local.sort(GroundingInputs::compare);units.addAll(local);
-            }catch(IllegalArgumentException|java.time.DateTimeException malformed){invalid.add(stage.stepId());}
+            }catch(IllegalArgumentException|java.time.DateTimeException malformed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GroundingInputs.class.getName()),"GROUNDING_INPUTS_FAILED",malformed);invalid.add(stage.stepId());}
         }
+        body(System.getLogger(getClass().getName()),INFO,"GROUNDING_INPUT",SchemaContracts.JSON.writeValueAsString(units),"jobId",job.jobId(),"invalidSteps",invalid);
         return new WorkflowGrounding.SourceUnits(units,invalid);
     }
     private EvidenceUnit unit(WorkflowOutcome.Stage stage,String type,JsonNode location,String body,List<String> permissions) {

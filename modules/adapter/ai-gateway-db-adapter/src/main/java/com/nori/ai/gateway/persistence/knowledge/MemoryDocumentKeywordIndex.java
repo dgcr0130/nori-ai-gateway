@@ -30,7 +30,7 @@ public final class MemoryDocumentKeywordIndex implements DocumentKeywordIndex, S
                     hits.put(child.id(),new DocumentSearch.Hit(parent,child,doc.permissions()));
         }
         @Override public void close() { if(!installed)dispose(); }
-        void dispose() { try { reader.close();directory.close();analyzer.close(); } catch(IOException failure) { throw new IllegalStateException("메모리 색인을 정리할 수 없습니다"); } }
+        void dispose() { try { reader.close();directory.close();analyzer.close(); } catch(IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MemoryDocumentKeywordIndex.class.getName()),"MEMORY_DOCUMENT_KEYWORD_INDEX_FAILED",failure); throw new IllegalStateException("메모리 색인을 정리할 수 없습니다"); } }
     }
     @Override public Prepared prepare(VerifiedSystemScope scope,DocumentCorpus.Bundle bundle) {
         var directory=new ByteBuffersDirectory();var analyzer=new KoreanAnalyzer();
@@ -44,8 +44,8 @@ public final class MemoryDocumentKeywordIndex implements DocumentKeywordIndex, S
                 for(var answer:bundle.answers())writer.addDocument(row(scope,bundle.id(),answer.id(),answer.permissions(),answer.questionMasked(),"VERIFIED_ANSWER"));
             }
             return new MemorySet(scope.boundSystem().name(),bundle,directory,DirectoryReader.open(directory),analyzer);
-        } catch(IOException|RuntimeException failure) {
-            try { directory.close(); } catch(IOException cleanup) { throw new IllegalStateException("문서 색인 정리에 실패했습니다"); }
+        } catch(IOException|RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MemoryDocumentKeywordIndex.class.getName()),"MEMORY_DOCUMENT_KEYWORD_INDEX_FAILED",failure);
+            try { directory.close(); } catch(IOException cleanup) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MemoryDocumentKeywordIndex.class.getName()),"MEMORY_DOCUMENT_KEYWORD_INDEX_FAILED",cleanup); throw new IllegalStateException("문서 색인 정리에 실패했습니다"); }
             finally { analyzer.close(); }
             throw new IllegalStateException("문서 색인 구성에 실패했습니다");
         }
@@ -97,7 +97,7 @@ public final class MemoryDocumentKeywordIndex implements DocumentKeywordIndex, S
                     .sorted(Comparator.<DocumentSearch.Hit>comparingDouble(h->scores.get(h.child().id())).reversed().thenComparing(RankFusion.ORDER))
                     .limit(settings.keywordCandidates()).forEach(keyword::add);
             }
-        } catch(IOException failure) { throw new IllegalStateException("문서 키워드 검색에 실패했습니다"); }
+        } catch(IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MemoryDocumentKeywordIndex.class.getName()),"MEMORY_DOCUMENT_KEYWORD_INDEX_FAILED",failure); throw new IllegalStateException("문서 키워드 검색에 실패했습니다"); }
         record Candidate(DocumentCorpus.Answer answer,boolean exact,double cosine,List<DocumentSearch.Hit> parents) {}
         var verified=new ArrayList<Candidate>();
         for(var answer:current.answers()) {
@@ -133,7 +133,7 @@ public final class MemoryDocumentKeywordIndex implements DocumentKeywordIndex, S
             tokenizer.setReader(new java.io.StringReader(SearchText.normalize(text)));
             var term=tokenizer.addAttribute(CharTermAttribute.class);var pos=tokenizer.addAttribute(PartOfSpeechAttribute.class);
             tokenizer.reset();while(tokenizer.incrementToken())terms.add(new SearchLanguage.Term(term.toString(),pos.getLeftPOS().name()));tokenizer.end();
-        }catch(IOException failure){throw new IllegalStateException("질문 형태소 분석에 실패했습니다");}
+        }catch(IOException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MemoryDocumentKeywordIndex.class.getName()),"MEMORY_DOCUMENT_KEYWORD_INDEX_FAILED",failure);throw new IllegalStateException("질문 형태소 분석에 실패했습니다");}
         return List.copyOf(terms);
     }
     public synchronized Optional<UUID> activeBundle(VerifiedSystemScope scope) { return Optional.ofNullable(active.get(scope.boundSystem().name())).map(value->value.bundleId); }

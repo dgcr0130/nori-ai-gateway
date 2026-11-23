@@ -88,7 +88,7 @@ public class SourceConnectorConfiguration {
             JsonNode root;
             GitLabSourcePolicy policy;
             try { root = SchemaContracts.parse(json); policy = GitLabSourcePolicy.denyAll(); }
-            catch (IllegalArgumentException failure) { throw invalid(); }
+            catch (IllegalArgumentException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",failure); throw invalid(); }
             List<GitLabSourcePolicy.Repository> repositories = new ArrayList<>();
             List<GitLabSourcePolicy.LineageEntry> lineage = new ArrayList<>();
             try {
@@ -97,7 +97,7 @@ public class SourceConnectorConfiguration {
                 for (JsonNode entry : root.path("gitlab").path("deployLineage")) lineage.add(new GitLabSourcePolicy.LineageEntry(entry.path("service").asString(),
                     entry.path("execProjectId").asLong(), entry.path("packageJobName").asString(), entry.path("sourceRepo").asString(),
                     entry.path("siblingProjectId").asLong(), entry.path("method").asString(), entry.path("approvalRef").asString()));
-            } catch (RuntimeException failure) { throw invalid(); }
+            } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",failure); throw invalid(); }
             policy = new GitLabSourcePolicy(repositories,lineage);
             return new SourceSnapshot(node(root.path("loki"), "loki", false), node(root.path("tempo"), "tempo", false),
                 node(root.path("gitlab"), "gitlab", true), policy, repositories, lineage, retentionProbe(root.path("loki").path("retentionProbe")));
@@ -109,7 +109,7 @@ public class SourceConnectorConfiguration {
             String approvalRef = optionalText(node.path("approvalRef")).orElseThrow(SourceConnectorConfiguration::invalid);
             if (!startAt.endsWith("Z")) throw invalid();
             try { return Optional.of(new RetentionProbeDeclaration(Instant.parse(startAt), approvalRef)); }
-            catch (java.time.format.DateTimeParseException malformed) { throw invalid(); }
+            catch (java.time.format.DateTimeParseException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",malformed); throw invalid(); }
         }
         private static Set<String> strings(JsonNode node) {
             Set<String> values = new HashSet<>();
@@ -128,7 +128,7 @@ public class SourceConnectorConfiguration {
         /** SourceHttpClient 생성자와 같은 규칙(http(s)·host·userInfo/query/fragment 없음·root path)이다. */
         private static URI baseUrl(String text) {
             URI uri;
-            try { uri = new URI(text); } catch (java.net.URISyntaxException malformed) { throw invalid(); }
+            try { uri = new URI(text); } catch (java.net.URISyntaxException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",malformed); throw invalid(); }
             if (!Set.of("http", "https").contains(uri.getScheme()) || uri.getHost() == null || uri.getRawUserInfo() != null
                     || uri.getRawQuery() != null || uri.getRawFragment() != null || !(uri.getPath().isEmpty() || uri.getPath().equals("/"))) throw invalid();
             return uri;
@@ -144,7 +144,7 @@ public class SourceConnectorConfiguration {
                 Path path = Path.of(text);
                 if (!path.isAbsolute() || !path.normalize().equals(path)) throw invalid();
                 return path;
-            } catch (InvalidPathException malformed) { throw invalid(); }
+            } catch (InvalidPathException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",malformed); throw invalid(); }
         }
     }
 
@@ -275,8 +275,8 @@ public class SourceConnectorConfiguration {
             try (InputStream input = resources.getResource("classpath:" + RESOURCE).getInputStream()) {
                 return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT)
                     .decode(ByteBuffer.wrap(input.readAllBytes())).toString();
-            } catch (CharacterCodingException malformed) { throw invalid(); }
-            catch (IOException missing) { throw invalid(); }
+            } catch (CharacterCodingException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",malformed); throw invalid(); }
+            catch (IOException missing) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",missing); throw invalid(); }
         }
         private static void register(BeanDefinitionRegistry registry, String name, RootBeanDefinition definition) {
             if (registry.containsBeanDefinition(name)) throw new IllegalStateException("Source 조립 Bean이 중복되었습니다: " + name);

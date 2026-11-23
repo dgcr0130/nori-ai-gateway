@@ -66,8 +66,8 @@ public final class ClassificationService {
                     }
                 }
             }
-            catch(InvalidOutput invalid){observer.diagnostic(request.jobId(),CallType.CLASSIFY,invalid.reason);result=new Rejected(ErrorCode.CONTRACT_INVALID,1,List.of());}
-            catch(RuntimeException invalid){observer.diagnostic(request.jobId(),CallType.CLASSIFY,LlmDiagnostic.CLASSIFY_SHAPE);result=new Rejected(ErrorCode.CONTRACT_INVALID,1,List.of());}
+            catch(InvalidOutput invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationService.class.getName()),"CLASSIFICATION_SERVICE_FAILED",invalid);observer.diagnostic(request.jobId(),CallType.CLASSIFY,invalid.reason);result=new Rejected(ErrorCode.CONTRACT_INVALID,1,List.of());}
+            catch(RuntimeException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationService.class.getName()),"CLASSIFICATION_SERVICE_FAILED",invalid);observer.diagnostic(request.jobId(),CallType.CLASSIFY,LlmDiagnostic.CLASSIFY_SHAPE);result=new Rejected(ErrorCode.CONTRACT_INVALID,1,List.of());}
         }
         var debug=System.getLogger(ClassificationService.class.getName());
         if(debug.isLoggable(System.Logger.Level.DEBUG))debug.log(System.Logger.Level.DEBUG,"CLASSIFICATION_CONTEXT job={0} retainedPairs={1} refsSha={2} historySourceJob={3}",
@@ -95,7 +95,7 @@ public final class ClassificationService {
     private Result decode(String json,Request request,Context context,List<HistoryPair> history){
         var mapper=SchemaContracts.JSON.rebuild().enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
         final JsonNode node;
-        try{node=mapper.readTree(json);SchemaContracts.canonicalize(json);}catch(RuntimeException invalid){throw invalid(LlmDiagnostic.CLASSIFY_JSON);}
+        try{node=mapper.readTree(json);SchemaContracts.canonicalize(json);}catch(RuntimeException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationService.class.getName()),"CLASSIFICATION_SERVICE_FAILED",invalid);throw invalid(LlmDiagnostic.CLASSIFY_JSON);}
         keys(node,Set.of("taskType","toolCalls","targets","timeWindow","searchQuery","retryQuery"));
         TaskType task=TaskType.valueOf(string(node.get("taskType"),64));var callsNode=node.get("toolCalls");var targetsNode=node.get("targets");if(!callsNode.isArray()||callsNode.size()>4||!targetsNode.isArray()||targetsNode.size()>16)throw invalid();
         if(Set.of(TaskType.GENERAL_QUERY,TaskType.UNSUPPORTED_REQUEST).contains(task)&&!callsNode.isEmpty())throw invalid();
@@ -111,7 +111,7 @@ public final class ClassificationService {
                     observer.diagnostic(request.jobId(),CallType.CLASSIFY,LlmDiagnostic.CLASSIFY_TIME_SOURCE);
                     return new Rejected(ErrorCode.PLAN_INVALID,1,List.of("timeWindow"));
                 }
-            } catch(java.time.DateTimeException|IllegalArgumentException invalid) {throw invalid(LlmDiagnostic.CLASSIFY_TIME);}
+            } catch(java.time.DateTimeException|IllegalArgumentException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationService.class.getName()),"CLASSIFICATION_SERVICE_FAILED",invalid);throw invalid(LlmDiagnostic.CLASSIFY_TIME);}
             window=Map.of("from",from,"to",to);
         }
         String search=string(node.get("searchQuery"),512),retry=string(node.get("retryQuery"),512);
@@ -132,7 +132,7 @@ public final class ClassificationService {
                         observer.diagnostic(request.jobId(),CallType.CLASSIFY,LlmDiagnostic.CLASSIFY_TIME_SOURCE);
                         return new Rejected(ErrorCode.PLAN_INVALID,1,List.of(bound));
                     }
-                } catch(java.time.DateTimeException|IllegalArgumentException invalid) {throw invalid(LlmDiagnostic.CLASSIFY_TIME);}
+                } catch(java.time.DateTimeException|IllegalArgumentException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationService.class.getName()),"CLASSIFICATION_SERVICE_FAILED",invalid);throw invalid(LlmDiagnostic.CLASSIFY_TIME);}
             }
             if(args.hasNonNull("targetRef")&&targets.stream().noneMatch(value->value.ref().equals(args.get("targetRef").asString())))throw invalid(LlmDiagnostic.CLASSIFY_TARGET);
             calls.add(new Classification.ToolCall(id,args));

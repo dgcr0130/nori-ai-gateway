@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job.recovery;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import java.util.*;
 import org.springframework.boot.*;
 import org.springframework.context.ApplicationEventPublisher;
@@ -18,10 +20,10 @@ public final class ReadinessGate implements ApplicationRunner,Ordered {
     @Override public int getOrder(){return Ordered.HIGHEST_PRECEDENCE+1;}
     @Override public void run(ApplicationArguments args){
         ready=false;
-        try{for(var condition:preconditions)condition.run();}
-        catch(RecoveryModeRouter.RestorePathRequired pending){System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"RESTORE_PATH_REQUIRED");return;}
-        catch(ReadinessPrecondition.PreparationFailed failed){System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"DOCUMENT_SYNC_FAILED");return;}
-        ready=true;publisher.publishEvent(new RecoveryCompleted());
+        try{for(var condition:preconditions){long started=System.nanoTime();event(System.getLogger(getClass().getName()),INFO,"STARTUP_PRECONDITION_STARTED","condition",condition.getClass().getSimpleName());try{condition.run();}catch(RuntimeException failure){failure(System.getLogger(getClass().getName()),ERROR,"STARTUP_PRECONDITION_FAILED",failure,"condition",condition.getClass().getSimpleName());throw failure;}event(System.getLogger(getClass().getName()),INFO,"STARTUP_PRECONDITION_COMPLETED","condition",condition.getClass().getSimpleName(),"durationMs",(System.nanoTime()-started)/1_000_000);}}
+        catch(RecoveryModeRouter.RestorePathRequired pending){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ReadinessGate.class.getName()),"READINESS_GATE_FAILED",pending);System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"RESTORE_PATH_REQUIRED");return;}
+        catch(ReadinessPrecondition.PreparationFailed failed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ReadinessGate.class.getName()),"READINESS_GATE_FAILED",failed);System.getLogger(ReadinessGate.class.getName()).log(System.Logger.Level.WARNING,"DOCUMENT_SYNC_FAILED");return;}
+        ready=true;event(System.getLogger(getClass().getName()),INFO,"STARTUP_READY","preconditions",preconditions.size());publisher.publishEvent(new RecoveryCompleted());
     }
     public boolean ready(){return ready;}
     public boolean admissionReady(){return ready&&knowledgeFailures.isEmpty();}

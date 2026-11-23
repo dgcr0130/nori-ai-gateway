@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.knowledge;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.app.job.recovery.ReadinessPrecondition;
 import com.nori.ai.gateway.app.security.*;
@@ -37,7 +39,7 @@ public final class DocumentStartupRunner implements ReadinessPrecondition {
                 String fingerprint=fingerprint(sources,limits);
                 synchronization.get().synchronize(scope,sources,limits,settings.embeddingModel(),fingerprint,probe.embeddingDimension());
             }
-        } catch(RuntimeException failure) { throw new PreparationFailed(); }
+        } catch(RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(DocumentStartupRunner.class.getName()),"DOCUMENT_STARTUP_RUNNER_FAILED",failure); throw new PreparationFailed(); }
     }
     private String fingerprint(List<DocumentCorpus.Source> sources,DocumentCorpus.Limits limits) {
         // 자격 본문은 지문 입력에도 넣지 않습니다. 모델·주소·차원은 묶음 필드와 함께 결속합니다.
@@ -49,7 +51,7 @@ public final class DocumentStartupRunner implements ReadinessPrecondition {
         String input=SchemaContracts.JSON.writeValueAsString(Map.of("llm",llm,"sources",normalized,"limits",limits,"mask","mask-v1","s3Endpoint",environment.getProperty("ai.gateway.documents.s3Endpoint","")));
         String text=SchemaContracts.JSON.writeValueAsString(ordered(SchemaContracts.JSON.readValue(input,Object.class)));
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8))); }
-        catch(NoSuchAlgorithmException impossible) { throw new IllegalStateException("설정 지문을 계산할 수 없습니다"); }
+        catch(NoSuchAlgorithmException impossible) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(DocumentStartupRunner.class.getName()),"DOCUMENT_STARTUP_RUNNER_FAILED",impossible); throw new IllegalStateException("설정 지문을 계산할 수 없습니다"); }
     }
     private static Object ordered(Object value) {
         if(value instanceof Map<?,?> map) { var sorted=new TreeMap<String,Object>();map.forEach((key,item)->sorted.put(key.toString(),ordered(item)));return sorted; }

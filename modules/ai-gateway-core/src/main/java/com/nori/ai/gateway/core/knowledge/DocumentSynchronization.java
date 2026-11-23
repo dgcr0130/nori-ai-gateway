@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.core.knowledge;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.core.port.InferenceClient;
 import com.nori.ai.gateway.core.scope.VerifiedSystemScope;
 import java.util.*;
@@ -16,6 +18,7 @@ public final class DocumentSynchronization {
         this.objects = objects; this.extractor = extractor; this.store = store; this.keywords = keywords; this.inference = inference;
     }
     public Bundle synchronize(VerifiedSystemScope scope, List<Source> sources, Limits limits, String model, String configSha, int dimension) {
+        long logStarted=System.nanoTime();event(System.getLogger(getClass().getName()),INFO,"DOCUMENT_SYNC_STARTED","system",scope.boundSystem(),"sources",sources.size(),"model",model);
         store.cleanNonActive(scope);
         var documents = new ArrayList<Document>();
         record Located(Source source,DocumentObjectStore.ObjectKey key) {}
@@ -28,7 +31,8 @@ public final class DocumentSynchronization {
             return key!=0?key:Arrays.compareUnsigned(a.source().bucket().getBytes(java.nio.charset.StandardCharsets.UTF_8),b.source().bucket().getBytes(java.nio.charset.StandardCharsets.UTF_8));
         });
         for (var located : listed) {
-                var source=located.source();var key=located.key();
+                long documentStarted=System.nanoTime();var source=located.source();var key=located.key();
+                var previous=store.currentRevision(scope,source.bucket(),key.key());
                 var parsed = extractor.extract(source, key.key(), objects.download(source, key, limits.maxFileBytes()), limits);
                 var parents = new ArrayList<Parent>();
                 for (var parent : parsed.parents()) {
@@ -36,6 +40,7 @@ public final class DocumentSynchronization {
                     for (var child : parent.children()) children.add(new Child(child.id(), child.ordinal(), child.location(), child.header(), child.bodyMasked(), child.identifiers(), embed(child.header()+"\n"+child.bodyMasked(), dimension)));
                     parents.add(new Parent(parent.id(), parent.location(), parent.header(), parent.bodyMasked(), parent.bodySha256(), children));
                 }
+                event(System.getLogger(getClass().getName()),INFO,"DOCUMENT_SYNC_OBJECT","system",scope.boundSystem(),"objectKey",key.key(),"size",key.size(),"revision",parsed.revision(),"operation",previous.isEmpty()?"NEW":previous.get().equals(parsed.revision())?"UNCHANGED":"UPDATED","blocks",parents.size(),"chunks",parents.stream().mapToInt(p->p.children().size()).sum(),"durationMs",(System.nanoTime()-documentStarted)/1_000_000);
                 documents.add(new Document(parsed.id(), parsed.bucket(), parsed.objectKey(), parsed.revision(), parsed.title(), parsed.permissions(), parsed.issues(), parents));
         }
         var answers = new ArrayList<Answer>();
@@ -59,6 +64,7 @@ public final class DocumentSynchronization {
             store.activate(scope, bundle,originalAnswers.stream().map(Answer::id).collect(java.util.stream.Collectors.toSet()));
             keywords.install(scope, prepared);
         }
+        event(System.getLogger(getClass().getName()),INFO,"DOCUMENT_SYNC_COMPLETED","system",scope.boundSystem(),"documents",documents.size(),"answers",answers.size(),"durationMs",(System.nanoTime()-logStarted)/1_000_000);
         return bundle;
     }
     private float[] embed(String text, int dimension) {

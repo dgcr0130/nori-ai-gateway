@@ -78,7 +78,7 @@ public final class ToolDispatcher {
         if (result.evidence().stream().anyMatch(e -> !scope.actorRef().equals(e.actorAccessScope())))
             { result = results.failure(tool, ResultStatus.FAILED, ErrorCode.CONTRACT_INVALID, null); validated=false; }
         if(validated)try{com.nori.ai.gateway.core.evidence.EvidenceAssembler.projectKnowledge(tool,result,scope);}
-        catch(IllegalArgumentException invalidMetadata){result=results.failure(tool,ResultStatus.FAILED,ErrorCode.CONTRACT_INVALID,null);validated=false;}
+        catch(IllegalArgumentException invalidMetadata){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ToolDispatcher.class.getName()),"TOOL_DISPATCHER_FAILED",invalidMetadata);result=results.failure(tool,ResultStatus.FAILED,ErrorCode.CONTRACT_INVALID,null);validated=false;}
         if (invocation != null) invocation.complete(result,validated);
         return result;
     }
@@ -134,7 +134,7 @@ public final class ToolDispatcher {
         validateBoundInputs(prepared,attempt,scope,context,step);
         InvocationState state=new InvocationState();
         try { return new Returned(dispatchInternal(step,scope,context,prepared,attempt,grant,state),Optional.ofNullable(state.record)); }
-        catch (RuntimeException | Error failure) { if (state.fallback==null) throw failure; return new Threw(failure,state.failed()); }
+        catch (RuntimeException | Error failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ToolDispatcher.class.getName()),"TOOL_DISPATCHER_FAILED",failure); if (state.fallback==null) throw failure; return new Threw(failure,state.failed()); }
         finally { attempt.close(); }
     }
     private void validateBoundInputs(PlanValidator.Prepared prepared,com.nori.ai.gateway.core.authz.StepAttempt attempt,VerifiedSystemScope scope,ExecutionContext context,PlanStep step) {

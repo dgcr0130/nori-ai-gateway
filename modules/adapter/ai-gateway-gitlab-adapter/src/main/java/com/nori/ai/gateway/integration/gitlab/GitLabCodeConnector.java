@@ -27,8 +27,8 @@ public final class GitLabCodeConnector {
     }
     public CodeResult searchCode(SourceReadAccess.Request request,String term,CodeScope scope,String ref,Optional<GitLabPipelineLineageReader.Lineage> lineage) {
         try{return searchGuarded(request,term,scope,ref,lineage);}
-        catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
-        catch(SourceReadAccess.Rejected rejected){return result(rejected.status());}
+        catch(SourceReadAccess.GuardStopped stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabCodeConnector.class.getName()),"GIT_LAB_CODE_CONNECTOR_FAILED",stopped);throw stopped.rethrow();}
+        catch(SourceReadAccess.Rejected rejected){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabCodeConnector.class.getName()),"GIT_LAB_CODE_CONNECTOR_FAILED",rejected);return result(rejected.status());}
     }
     private CodeResult searchGuarded(SourceReadAccess.Request request,String term,CodeScope scope,String ref,Optional<GitLabPipelineLineageReader.Lineage> lineage) {
         Objects.requireNonNull(scope); Objects.requireNonNull(lineage);
@@ -69,8 +69,8 @@ public final class GitLabCodeConnector {
                 page++;
             } while (true);
             return new CodeResult(snippets.isEmpty() ? ResultStatus.EMPTY : ResultStatus.SUCCESS, snippets);
-        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){throw guarded;}
-        catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE); }
+        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabCodeConnector.class.getName()),"GIT_LAB_CODE_CONNECTOR_FAILED",guarded);throw guarded;}
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabCodeConnector.class.getName()),"GIT_LAB_CODE_CONNECTOR_FAILED",failure); return result(ResultStatus.SOURCE_UNAVAILABLE); }
     }
     private static CodeResult result(ResultStatus status) { return new CodeResult(status, List.of()); }
 }

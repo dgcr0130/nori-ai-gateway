@@ -22,11 +22,11 @@ public final class ReviewCursor {
             String payload=new String(Base64.getUrlDecoder().decode(parts[0]),StandardCharsets.UTF_8);
             if(!MessageDigest.isEqual(sign(scope,state,payload),Base64.getUrlDecoder().decode(parts[1])))throw FeedbackFailure.invalid();
             var values=payload.split("\n",-1);if(values.length!=2)throw FeedbackFailure.invalid();return new Position(Instant.parse(values[0]),UUID.fromString(values[1]));
-        }catch(RuntimeException invalid){throw FeedbackFailure.invalid();}
+        }catch(RuntimeException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ReviewCursor.class.getName()),"REVIEW_CURSOR_FAILED",invalid);throw FeedbackFailure.invalid();}
     }
     private static String encode(byte[] bytes){return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);}
     private byte[] sign(VerifiedSystemScope scope,String state,String payload) {
         try{var mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(key,"HmacSHA256"));return mac.doFinal((scope.boundSystem().name()+"\n"+state+"\n"+payload).getBytes(StandardCharsets.UTF_8));}
-        catch(GeneralSecurityException impossible){throw new IllegalStateException("검토 커서를 처리할 수 없습니다");}
+        catch(GeneralSecurityException impossible){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ReviewCursor.class.getName()),"REVIEW_CURSOR_FAILED",impossible);throw new IllegalStateException("검토 커서를 처리할 수 없습니다");}
     }
 }

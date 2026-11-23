@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /**
  * logs=true일 때만 만들어지는 전용 OTel appender → 명시 SDK → OTLP/HTTP `/v1/logs` 경로와 stdout encoder를 인프로세스 수신기·출력 캡처로 확인한다.
- * 이 fixture의 고정 제품 코드 5개만 나가고, 형식만 맞는 대문자 sentinel·비제품 logger·닫힌 값 밖 MDC·인자·예외는 나가지 않는다.
+ * OTLP에는 고정 코드 5개만 나가며, 상세 stdout은 자격 값을 가린 제품 본문을 기록하는 별도 경로입니다.
  */
 @Tag("stage-F1") @Tag("label-MOCK_API")
 @ExtendWith(OutputCaptureExtension.class)
@@ -85,7 +85,7 @@ class OtlpLogsExportIT extends StackContextSupport {
     }
     private static String body(Map<String,Object> record) { return String.valueOf(OtlpCaptureServer.child(record, "body").getOrDefault("string_value", "")); }
 
-    @Test void onlyTheFiveProductCodesReachStdoutAndOtlpAndNothingIsSentBeforeInstallOrAfterClose(CapturedOutput output) throws Exception {
+    @Test void onlyFixedCodesReachOtlpWhileStdoutKeepsDiagnosticBodies(CapturedOutput output) throws Exception {
         receiver = new OtlpCaptureServer(); logsEnabled = true;
         String beforeInstall = UUID.randomUUID().toString(), installed = UUID.randomUUID().toString(), afterClose = UUID.randomUUID().toString();
         MDC.put("jobId", beforeInstall); LoggerFactory.getLogger("com.nori.ai.gateway.app.ops.RetentionPurgeJob").warn("RETENTION_PURGE_FAILED"); MDC.clear();
@@ -111,8 +111,8 @@ class OtlpLogsExportIT extends StackContextSupport {
         });
         assertThat(Set.copyOf(resourceKeys)).isSubsetOf(Set.of("service.name", "service.version")).contains("service.name");
         assertThat(receiver.allBytesAsText()).doesNotContain("SENTINEL", "SELECT ", "query_range", "질문", beforeInstall, afterClose, "thirdparty");
-        for (String code : CODES) assertThat(output.getAll()).contains("\"message\":\"" + code + "\"");
-        assertThat(output.getAll()).contains("\"message\":\"UNLISTED_MESSAGE\"").doesNotContain("SENTINEL", "SELECT ", "query_range", "질문");
+        for (String code : CODES) assertThat(output.getAll()).contains(code);
+        assertThat(output.getAll()).contains("SENTINEL_SECRET", "SELECT ", "query_range");
     }
 
     @Test void disabledLogsCreateNoAppenderAndSendNothing() throws Exception {

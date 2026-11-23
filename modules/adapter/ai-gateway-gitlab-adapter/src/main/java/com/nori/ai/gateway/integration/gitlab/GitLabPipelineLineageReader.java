@@ -39,8 +39,8 @@ public final class GitLabPipelineLineageReader {
     }
     public Lineage siblingCommits(SourceReadAccess.Request request,GitLabSourcePolicy.LineageEntry entry,long pipelineId) {
         try{return siblingCommitsGuarded(request,entry,pipelineId);}
-        catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
-        catch(SourceReadAccess.Rejected rejected){return unknown(entry,pipelineId,rejected.status()==ResultStatus.DENIED?Reason.DENIED:Reason.SOURCE_UNAVAILABLE);}
+        catch(SourceReadAccess.GuardStopped stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",stopped);throw stopped.rethrow();}
+        catch(SourceReadAccess.Rejected rejected){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",rejected);return unknown(entry,pipelineId,rejected.status()==ResultStatus.DENIED?Reason.DENIED:Reason.SOURCE_UNAVAILABLE);}
     }
     private Lineage siblingCommitsGuarded(SourceReadAccess.Request request, GitLabSourcePolicy.LineageEntry entry, long pipelineId) {
         Objects.requireNonNull(entry);
@@ -82,10 +82,10 @@ public final class GitLabPipelineLineageReader {
                 String sha = commit.path("id").asText();
                 if (!sha.matches("[0-9a-f]{40}") || !sha.startsWith(shortSha)) return unknown(entry, pipelineId, Reason.SHORT_SHA_UNRESOLVED);
                 return new Lineage(entry.service(), pipelineId, entry.sourceRepo(), sha, Status.VERIFIED, Reason.VERIFIED);
-            } catch (SourceHttpClient.Failure failure) { return unknown(entry, pipelineId, failure.httpNotFound()?Reason.SHORT_SHA_UNRESOLVED:Reason.SOURCE_UNAVAILABLE); }
-        } catch (AccessDenied failure) { return unknown(entry, pipelineId, Reason.DENIED); }
-        catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){throw guarded;}
-        catch (RuntimeException failure) { return unknown(entry, pipelineId, Reason.SOURCE_UNAVAILABLE); }
+            } catch (SourceHttpClient.Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",failure); return unknown(entry, pipelineId, failure.httpNotFound()?Reason.SHORT_SHA_UNRESOLVED:Reason.SOURCE_UNAVAILABLE); }
+        } catch (AccessDenied failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",failure); return unknown(entry, pipelineId, Reason.DENIED); }
+        catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",guarded);throw guarded;}
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GitLabPipelineLineageReader.class.getName()),"GIT_LAB_PIPELINE_LINEAGE_READER_FAILED",failure); return unknown(entry, pipelineId, Reason.SOURCE_UNAVAILABLE); }
     }
     private static List<String> siblingLines(InputStream stream, String sourceRepo) throws IOException {
         List<String> found = new ArrayList<>();

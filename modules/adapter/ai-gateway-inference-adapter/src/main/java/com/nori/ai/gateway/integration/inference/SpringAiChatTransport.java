@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.integration.inference;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.core.budget.CallType;
 import com.nori.ai.gateway.core.budget.ChatMessage;
 import java.util.List;
@@ -37,7 +39,10 @@ public final class SpringAiChatTransport implements ChatTransport {
         if (output != null) builder.responseFormat(OpenAiChatModel.ResponseFormat.builder()
             .type(OpenAiChatModel.ResponseFormat.Type.JSON_SCHEMA).jsonSchema(output.schema()).strict(true).build());
         OpenAiChatOptions options = builder.build();
-        var response = model.call(new Prompt(renderer.normalize(messages).stream().map(SpringAiChatTransport::message).toList(), options));
+        var normalized = renderer.normalize(messages);
+        // 메시지 본문은 호출부 LLM_CHAT_REQUEST가 기록하므로 여기서는 실제 전송 옵션과 병합 뒤 메시지 수만 남깁니다.
+        event(System.getLogger(getClass().getName()),INFO,"LLM_CHAT_TRANSPORT_REQUEST","purpose",type,"model",options.getModel(),"temperature",options.getTemperature(),"maxTokens",options.getMaxTokens(),"messages",normalized.size());
+        var response = model.call(new Prompt(normalized.stream().map(SpringAiChatTransport::message).toList(), options));
         var result = response == null ? null : response.getResult();
         var usage = response == null || response.getMetadata() == null ? null : response.getMetadata().getUsage();
         Integer promptTokens = usage == null ? null : usage.getPromptTokens(), completionTokens = usage == null ? null : usage.getCompletionTokens();

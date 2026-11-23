@@ -45,7 +45,7 @@ public final class FeedbackService {
                 fields(node,Set.of("bucket","objectKey","revision","section","lineFrom","lineTo"));
                 for(String key:List.of("bucket","objectKey","revision","section"))if(!node.get(key).isString())throw FeedbackFailure.invalid();
                 for(String key:List.of("lineFrom","lineTo"))if(!node.get(key).isIntegralNumber()||!node.get(key).canConvertToInt())throw FeedbackFailure.invalid();
-                try{var location=SchemaContracts.JSON.treeToValue(node,DocumentLocation.class);if(location.objectKey().isBlank())throw FeedbackFailure.invalid();locations.add(location);}catch(IllegalArgumentException invalid){throw FeedbackFailure.invalid();}
+                try{var location=SchemaContracts.JSON.treeToValue(node,DocumentLocation.class);if(location.objectKey().isBlank())throw FeedbackFailure.invalid();locations.add(location);}catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(FeedbackService.class.getName()),"FEEDBACK_SERVICE_FAILED",invalid);throw FeedbackFailure.invalid();}
             }
             // 기존 질문 접수의 상한을 바꾸거나 질문을 자르지 않고, 새 문항 계약만 검사합니다.
             if(!locations.isEmpty())text(SchemaContracts.JSON.valueToTree(detail.question()),1,2000);

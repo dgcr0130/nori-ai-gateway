@@ -15,7 +15,7 @@ public record StructuredOutput(String schema) {
         try {
             var strict = SchemaContracts.JSON.rebuild().enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
             return SchemaContracts.matches(SchemaContracts.parse(schema), strict.readTree(content));
-        } catch (RuntimeException invalid) { return false; }
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(StructuredOutput.class.getName()),"STRUCTURED_OUTPUT_FAILED",invalid); return false; }
     }
 
     @Override public String toString() { return "StructuredOutput[보호됨]"; }

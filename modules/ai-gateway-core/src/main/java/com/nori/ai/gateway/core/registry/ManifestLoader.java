@@ -12,7 +12,7 @@ public final class ManifestLoader {
             try (var files = Files.list(path)) {
                 return files.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("index.json"))
                     .sorted().map(this::loadOne).toList();
-            } catch (IOException e) { throw new IllegalArgumentException("Manifest를 읽을 수 없습니다"); }
+            } catch (IOException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ManifestLoader.class.getName()),"MANIFEST_LOADER_FAILED",e); throw new IllegalArgumentException("Manifest를 읽을 수 없습니다"); }
         }
         return List.of(loadOne(path));
     }
@@ -25,7 +25,7 @@ public final class ManifestLoader {
         SchemaContracts.validateSchema(node.get("inputSchema")); SchemaContracts.validateSchema(node.get("outputSchema"));
         CapabilityManifest manifest;
         try { manifest = SchemaContracts.JSON.treeToValue(node, CapabilityManifest.class); }
-        catch (RuntimeException e) { throw new IllegalArgumentException("Manifest 계약이 잘못되었습니다"); }
+        catch (RuntimeException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ManifestLoader.class.getName()),"MANIFEST_LOADER_FAILED",e); throw new IllegalArgumentException("Manifest 계약이 잘못되었습니다"); }
         if (!SchemaContracts.digest(manifest.inputSchema(), manifest.outputSchema()).equals(manifest.schemaDigest()))
             throw new IllegalArgumentException("Schema digest가 일치하지 않습니다");
         return manifest;
@@ -44,12 +44,12 @@ public final class ManifestLoader {
     }
     private JsonNode read(Path path) {
         try { return SchemaContracts.parse(Files.readString(path)); }
-        catch (IOException e) { throw new IllegalArgumentException("계약 파일을 읽을 수 없습니다"); }
+        catch (IOException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ManifestLoader.class.getName()),"MANIFEST_LOADER_FAILED",e); throw new IllegalArgumentException("계약 파일을 읽을 수 없습니다"); }
     }
     private JsonNode resource(String name) {
         try (InputStream input = ManifestLoader.class.getClassLoader().getResourceAsStream(name)) {
             if (input == null) throw new IllegalArgumentException("계약 리소스가 없습니다");
             return SchemaContracts.parse(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
-        } catch (IOException e) { throw new IllegalArgumentException("계약 리소스를 읽을 수 없습니다"); }
+        } catch (IOException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ManifestLoader.class.getName()),"MANIFEST_LOADER_FAILED",e); throw new IllegalArgumentException("계약 리소스를 읽을 수 없습니다"); }
     }
 }

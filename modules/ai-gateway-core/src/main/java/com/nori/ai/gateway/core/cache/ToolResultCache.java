@@ -62,6 +62,6 @@ public final class ToolResultCache {
         var binding=attempt.binding();
         var values=List.of(binding.ownerSystem().name(),binding.actorRef().value(),binding.sub(),grant.currentPdg(),prepared.plan().conversationId(),binding.capabilityId(),binding.contractVersion(),binding.schemaDigest(),binding.argumentsDigest(),binding.resourcesDigest(),binding.sourceRef(),inputs.sourceFreshnessPolicy(),inputs.modelRevision().orElse(""),inputs.sourceRevision().orElse(""));
         try{return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(values)).getBytes(StandardCharsets.UTF_8)));}
-        catch(java.security.NoSuchAlgorithmException failure){throw new IllegalStateException("캐시 키를 만들 수 없습니다",failure);}
+        catch(java.security.NoSuchAlgorithmException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ToolResultCache.class.getName()),"TOOL_RESULT_CACHE_FAILED",failure);throw new IllegalStateException("캐시 키를 만들 수 없습니다",failure);}
     }
 }

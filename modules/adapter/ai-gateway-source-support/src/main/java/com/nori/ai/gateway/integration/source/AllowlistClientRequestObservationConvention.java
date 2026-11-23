@@ -16,7 +16,7 @@ public final class AllowlistClientRequestObservationConvention implements Client
     @Override public KeyValues getLowCardinalityKeyValues(ClientRequestObservationContext context) {
         String status = "IO_ERROR";
         try { if (context.getResponse() != null) status = context.getResponse().getStatusCode().value() / 100 + "xx"; }
-        catch (IOException failure) { status = "IO_ERROR"; }
+        catch (IOException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(AllowlistClientRequestObservationConvention.class.getName()),"ALLOWLIST_CLIENT_REQUEST_OBSERVATION_CONVENTION_FAILED",failure); status = "IO_ERROR"; }
         return KeyValues.of("source_id", sourceId, "method", "GET", "status_class", status);
     }
     @Override public KeyValues getHighCardinalityKeyValues(ClientRequestObservationContext context) { return KeyValues.empty(); }

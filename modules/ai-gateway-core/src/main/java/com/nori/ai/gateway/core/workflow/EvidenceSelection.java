@@ -20,6 +20,7 @@ public final class EvidenceSelection {
     public Selected select(List<DocumentSearch.Round> rounds,List<EvidenceUnit> other,SearchSettings settings,java.util.function.Predicate<List<EvidenceUnit>> fits) {
         var ranked=RankFusion.fuse(rounds,settings.rrfK());var parents=new LinkedHashMap<String,EvidenceUnit>();
         var children=new HashMap<UUID,List<DocumentLocation>>();
+        for(var score:ranked)com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"DOCUMENT_SEARCH_HIT","objectKey",score.hit().child().location().objectKey(),"revision",score.hit().child().location().revision(),"block",score.hit().parent().id(),"chunk",score.hit().child().id(),"score",score.score(),"title",score.hit().parent().header());
         for(var score:ranked)children.computeIfAbsent(score.hit().parent().id(),key->new ArrayList<>()).add(score.hit().child().location());
         for(var round:rounds)for(var answer:round.verified())for(var hit:answer.parents()) {
             var locations=children.computeIfAbsent(hit.parent().id(),key->new ArrayList<>());var parent=hit.parent().location();

@@ -82,12 +82,13 @@ public final class InferenceReadinessService implements InferenceReadiness, Smar
             LOG.log(System.Logger.Level.INFO, "INFERENCE_READINESS_" + observation.state() + (observation.reason() == Reason.NONE ? "" : "_" + observation.reason()));
         for (State raised : alerts) if (!previous.alerts().contains(raised)) LOG.log(System.Logger.Level.WARNING, "INFERENCE_ALERT_RAISED_" + raised);
         if (!previous.alerts().isEmpty() && alerts.isEmpty()) LOG.log(System.Logger.Level.INFO, "INFERENCE_ALERT_CLEARED");
+        if(previous.state()!=current.state()||previous.reason()!=current.reason())com.nori.ai.gateway.core.logging.DiagnosticLog.event(LOG,System.Logger.Level.INFO,"INFERENCE_READINESS_CHANGED","models",probe.modelNames(),"previous",previous.state(),"state",current.state(),"reason",current.reason(),"embeddingDimension",current.embeddingDimension());
         return current;
     }
 
     private void refreshSafely() {
         try { refresh(); }
-        catch (RuntimeException failure) {
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(InferenceReadinessService.class.getName()),"INFERENCE_READINESS_SERVICE_FAILED",failure);
             // 판정 자체가 실패해도 주기를 멈추지 않고 fail-closed 로 기록한다.
             synchronized (this) { record(new Observation(State.INFERENCE_UNAVAILABLE, Reason.ENDPOINT_ERROR, null)); }
         }

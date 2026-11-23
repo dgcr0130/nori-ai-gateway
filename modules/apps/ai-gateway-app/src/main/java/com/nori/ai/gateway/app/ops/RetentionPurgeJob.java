@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.ops;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.hooks.PausePointRegistry;
 import com.nori.ai.gateway.app.job.recovery.ReadinessGate;
 import com.nori.ai.gateway.app.observability.MetricsCatalog;
@@ -43,7 +45,7 @@ public final class RetentionPurgeJob implements AutoCloseable {
         if (nextRunAt != null && now.isBefore(nextRunAt)) return;
         try {
             if (purgeNow(now)) nextRunAt = now.plus(PERIOD);
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(RetentionPurgeJob.class.getName()),"RETENTION_PURGE_JOB_FAILED",failure);
             // 실패 batch만 rollback되고 이전 커밋은 남습니다. 다음 주기에 다시 시도하며 경보는 실패 지표로 판정합니다.
             nextRunAt = now.plus(PERIOD);
             signalFailure();
@@ -52,8 +54,8 @@ public final class RetentionPurgeJob implements AutoCloseable {
     /** 보류 지점이 걸려 있으면 그 주기를 건너뜁니다. */
     private boolean purgeNow(Instant now) {
         if (pauses.map(registry -> registry.held(PausePointRegistry.Point.PURGE_HOLD)).orElse(false)) return false;
-        for (int deleted; (deleted = retention.purgeExpiredCacheBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;) cache.increment(deleted);
-        for (int deleted; (deleted = retention.purgeExpiredAuditBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;) audit.increment(deleted);
+        for (int deleted; (deleted = retention.purgeExpiredCacheBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;){cache.increment(deleted);event(System.getLogger(getClass().getName()),INFO,"RETENTION_PURGED","target","cache","count",deleted);}
+        for (int deleted; (deleted = retention.purgeExpiredAuditBatch(RetentionMaintenanceRepository.DEFAULT_PURGE_BATCH_SIZE)) > 0;){audit.increment(deleted);event(System.getLogger(getClass().getName()),INFO,"RETENTION_PURGED","target","audit","count",deleted);}
         return true;
     }
     private void signalFailure() {

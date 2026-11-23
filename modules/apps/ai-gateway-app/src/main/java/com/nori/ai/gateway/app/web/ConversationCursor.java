@@ -29,12 +29,12 @@ public final class ConversationCursor {
             var fields = payload.split("\n", -1);
             if (fields.length != 2 || fields[1].isBlank()) throw new IllegalArgumentException();
             return new Position(Instant.parse(fields[0]),fields[1]);
-        } catch (RuntimeException failure) { throw new IllegalArgumentException("대화 커서가 잘못되었습니다"); }
+        } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ConversationCursor.class.getName()),"CONVERSATION_CURSOR_FAILED",failure); throw new IllegalArgumentException("대화 커서가 잘못되었습니다"); }
     }
     private byte[] sign(VerifiedSystemScope scope, String payload) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256"); mac.init(new SecretKeySpec(key,"HmacSHA256"));
             return mac.doFinal((scope.boundSystem().name() + "\n" + scope.actorRef().value() + "\n" + payload).getBytes(StandardCharsets.UTF_8));
-        } catch (GeneralSecurityException failure) { throw new IllegalStateException("대화 커서를 처리할 수 없습니다"); }
+        } catch (GeneralSecurityException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ConversationCursor.class.getName()),"CONVERSATION_CURSOR_FAILED",failure); throw new IllegalStateException("대화 커서를 처리할 수 없습니다"); }
     }
 }

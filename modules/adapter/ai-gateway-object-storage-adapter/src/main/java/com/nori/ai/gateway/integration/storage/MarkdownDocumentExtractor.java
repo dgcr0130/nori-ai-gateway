@@ -31,7 +31,7 @@ public final class MarkdownDocumentExtractor implements DocumentExtractor {
             if (content.oversized() || content.bytes().length > limits.maxFileBytes()) throw violation(1, "FILE_TOO_LARGE");
             final String raw;
             try { raw = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(content.bytes())).toString(); }
-            catch (CharacterCodingException invalid) { throw violation(1, "INVALID_UTF_EIGHT"); }
+            catch (CharacterCodingException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MarkdownDocumentExtractor.class.getName()),"MARKDOWN_DOCUMENT_EXTRACTOR_FAILED",invalid); throw violation(1, "INVALID_UTF_EIGHT"); }
             if (raw.startsWith("\ufeff")) throw violation(1, "BOM");
             String[] lines = raw.split("\n", -1);
             for (int i = 0; i < lines.length; i++) {
@@ -71,7 +71,7 @@ public final class MarkdownDocumentExtractor implements DocumentExtractor {
             }
             if (parents.isEmpty()) throw violation(1, "NO_SECTION");
             return new DocumentCorpus.Document(UUID.randomUUID(), source.bucket(), key, content.revision(), mask(title), source.permissions(), List.of(), parents);
-        } catch (Violation invalid) {
+        } catch (Violation invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MarkdownDocumentExtractor.class.getName()),"MARKDOWN_DOCUMENT_EXTRACTOR_FAILED",invalid);
             return new DocumentCorpus.Document(UUID.randomUUID(), source.bucket(), key, content.revision(), mask(title), source.permissions(), List.of(new Issue(invalid.line, invalid.reason)), List.of());
         }
     }
@@ -157,7 +157,7 @@ public final class MarkdownDocumentExtractor implements DocumentExtractor {
     private static int from(Node node) { return node.getSourceSpans().stream().mapToInt(span->span.getLineIndex()+1).min().orElse(1); }
     private static int to(Node node) { return node.getSourceSpans().stream().mapToInt(span->span.getLineIndex()+1).max().orElse(from(node)); }
     private static void length(String text,int max,int line,String reason) { int size=text.codePointCount(0,text.length()); if(size<1||size>max) throw violation(line,reason); }
-    static String sha(byte[] bytes) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); } catch(NoSuchAlgorithmException impossible) { throw new IllegalStateException("해시를 계산할 수 없습니다"); } }
+    static String sha(byte[] bytes) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)); } catch(NoSuchAlgorithmException impossible) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(MarkdownDocumentExtractor.class.getName()),"MARKDOWN_DOCUMENT_EXTRACTOR_FAILED",impossible); throw new IllegalStateException("해시를 계산할 수 없습니다"); } }
     private static Violation violation(int line,String reason) { return new Violation(line,reason); }
     private static final class Violation extends RuntimeException {
         final int line; final String reason;

@@ -26,7 +26,7 @@ public final class InferenceEndpointConfig {
             baseUrl = uri;
             apiKey = settings.apiKeyFile() == null ? null : Files.readString(Path.of(settings.apiKeyFile())).strip();
             if (apiKey != null && (apiKey.isEmpty() || apiKey.codePoints().anyMatch(c -> c <= 32 || c == 127))) throw invalid();
-        } catch (Exception failure) { throw invalid(); }
+        } catch (Exception failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.credentialFailure(System.getLogger(InferenceEndpointConfig.class.getName()),"INFERENCE_ENDPOINT_CONFIG_FAILED",failure); throw invalid(); }
     }
     private static IllegalStateException invalid() { return new IllegalStateException("추론 endpoint 설정이 잘못되었습니다"); }
     public URI baseUrl() { return baseUrl; }

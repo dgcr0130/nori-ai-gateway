@@ -122,7 +122,7 @@ public final class CitedHistoryContext {
             var current = SchemaContracts.JSON.treeToValue(unit.location(), DocumentLocation.class);
             return current.bucket().equals(reference.bucket()) && current.objectKey().equals(reference.objectKey()) && current.revision().equals(reference.revision())
                 && current.section().equals(reference.section()) && current.lineFrom() <= reference.lineFrom() && current.lineTo() >= reference.lineTo();
-        } catch (RuntimeException invalid) { return false; }
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(CitedHistoryContext.class.getName()),"CITED_HISTORY_CONTEXT_FAILED",invalid); return false; }
     }
     private static void validatePairs(List<Pair> pairs) {
         if (pairs == null || pairs.size() > 4 || pairs.stream().map(Pair::ref).distinct().count() != pairs.size()) throw invalid();

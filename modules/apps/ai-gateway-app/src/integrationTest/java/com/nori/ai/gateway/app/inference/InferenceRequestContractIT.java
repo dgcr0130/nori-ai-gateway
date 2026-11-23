@@ -150,7 +150,7 @@ class InferenceRequestContractIT extends StackContextSupport {
     }
 
     @Test @ExtendWith(OutputCaptureExtension.class)
-    void serverErrorDisconnectAndEmptyChoicesAreOneRequestPerAttemptAndLeakNoSentinel(CapturedOutput output) {
+    void serverErrorDisconnectAndEmptyChoicesKeepBodiesInStdoutAndOutOfOtlp(CapturedOutput output) {
         start();
         awaitReadinessAndClear();
         var messages = messagesOf(60);
@@ -175,7 +175,7 @@ class InferenceRequestContractIT extends StackContextSupport {
         assertThat(otlp).as("OTLP 수신 경로가 실제로 동작").isNotEmpty();
         String exported = otlp.stream().map(bytes -> new String(bytes, StandardCharsets.UTF_8)).reduce("", String::concat);
         assertThat(exported).doesNotContain(PROMPT_SENTINEL, QUESTION_SENTINEL);
-        assertThat(output.getAll()).doesNotContain(PROMPT_SENTINEL, QUESTION_SENTINEL);
+        assertThat(output.getAll()).contains("LLM_CHAT_REQUEST", PROMPT_SENTINEL, QUESTION_SENTINEL);
     }
 
     @Test void readinessMapsUnauthorizedErrorsAndNonJsonToEndpointErrorNeverModelLoading() {

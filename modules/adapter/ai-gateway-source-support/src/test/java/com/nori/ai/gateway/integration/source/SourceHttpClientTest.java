@@ -30,6 +30,34 @@ class SourceHttpClientTest {
         assertThat(SourceHttpClient.CONNECT_TIMEOUT).isEqualTo(Duration.ofSeconds(3));
         assertThat(SourceHttpClient.READ_TIMEOUT).isEqualTo(Duration.ofSeconds(10));
     }
+    /** 진단 로그용 오류 본문 읽기가 끊겨도 404 판정과 5xx 1회 재시도는 상태 코드대로 유지됩니다. */
+    @Test void aTruncatedErrorBodyKeepsTheStatusClassification() throws Exception {
+        for (int status : List.of(404, 503)) {
+            try (var server = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+                var connections = new java.util.concurrent.atomic.AtomicInteger();
+                var responder = Thread.ofVirtual().start(() -> {
+                    while (!server.isClosed()) {
+                        try (var socket = server.accept()) {
+                            connections.incrementAndGet();
+                            var input = socket.getInputStream(); int matched = 0;
+                            for (int value; matched < 4 && (value = input.read()) >= 0;) matched = value == "\r\n\r\n".charAt(matched) ? matched + 1 : (value == '\r' ? 1 : 0);
+                            socket.getOutputStream().write(("HTTP/1.1 " + status + " Error\r\nContent-Type: application/json\r\nContent-Length: 1000\r\nConnection: close\r\n\r\n{\"partial\"")
+                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                            socket.getOutputStream().flush();
+                        } catch (java.io.IOException closed) { return; }
+                    }
+                });
+                var http = new SourceHttpClient(java.net.URI.create("http://127.0.0.1:" + server.getLocalPort()), "gitlab", SourceObservability.noop());
+                assertThatThrownBy(() -> http.json(http.uri(List.of("api", "test"), Map.of()), "stub-read-token", http.deadline(Duration.ofSeconds(30))))
+                    .isInstanceOfSatisfying(SourceHttpClient.Failure.class, failure -> {
+                        assertThat(failure.httpNotFound()).as("status %d", status).isEqualTo(status == 404);
+                        assertThat(failure.deadline()).isFalse();
+                    });
+                assertThat(connections.get()).as("status %d", status).isEqualTo(status == 503 ? 2 : 1);
+                server.close(); responder.join(Duration.ofSeconds(5));
+            }
+        }
+    }
     @Test void aBlockedResponseCannotOverrunTheOverallStepDeadline() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
         try (var source = new ConnectorTestSupport()) {

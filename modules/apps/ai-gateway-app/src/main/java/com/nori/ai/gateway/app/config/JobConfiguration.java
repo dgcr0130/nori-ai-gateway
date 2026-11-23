@@ -58,7 +58,7 @@ public class JobConfiguration {
         try(var input=JobConfiguration.class.getClassLoader().getResourceAsStream(path)){
             if(input==null)throw new IllegalStateException("프롬프트 자원이 없습니다: "+path);
             return new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
-        }catch(java.io.IOException failure){throw new IllegalStateException("프롬프트 자원을 읽을 수 없습니다: "+path,failure);}
+        }catch(java.io.IOException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(JobConfiguration.class.getName()),"JOB_CONFIGURATION_FAILED",failure);throw new IllegalStateException("프롬프트 자원을 읽을 수 없습니다: "+path,failure);}
     }
     @Bean StartupRecoveryRunner startupRecoveryRunner(QueueJobRepository jobs,JobTerminalCommitter terminal,JobEventPublisher events,CacheInvalidationRepository caches,Clock clock,GatewaySystemsProperties systems,CapacityProfile capacity){return new StartupRecoveryRunner(jobs,terminal,events,caches,clock,systems,capacity);}
     @Bean RecoveryModeRouter recoveryModeRouter(InstanceEpochRepository epochs,DbSystemIdentifierReader identifiers,DatabaseEmptinessProbe empty,RecoveryProperties properties,Clock clock,StartupRecoveryRunner normal,Optional<RestoreRecoveryHandler> restore){return new RecoveryModeRouter(epochs,identifiers,empty,properties,clock,normal,restore);}

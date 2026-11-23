@@ -22,8 +22,8 @@ public final class TempoTraceConnector {
     public TempoTraceConnector(SourceHttpClient http, SourceReadAccess access) { this.http = Objects.requireNonNull(http); this.access = Objects.requireNonNull(access); }
     public TraceResult search(SourceReadAccess.Request request,String service,String namespace,TimeWindow window) {
         try{return searchGuarded(request,service,namespace,window);}
-        catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
-        catch(SourceReadAccess.Rejected rejected){return result(rejected.status(),List.of());}
+        catch(SourceReadAccess.GuardStopped stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",stopped);throw stopped.rethrow();}
+        catch(SourceReadAccess.Rejected rejected){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",rejected);return result(rejected.status(),List.of());}
     }
     private TraceResult searchGuarded(SourceReadAccess.Request request, String service,String namespace, TimeWindow window) {
         if (request.locations().traces().stream().noneMatch(value->value.service().equals(service)&&value.namespace().equals(namespace)&&request.scope().perm().containsAll(value.requiredPermissions()))) return result(ResultStatus.DENIED, List.of());
@@ -45,13 +45,13 @@ public final class TempoTraceConnector {
                 if (!trace.spans().isEmpty()) traces.add(trace);
             }
             return result(traces.isEmpty() ? ResultStatus.EMPTY : ResultStatus.SUCCESS, traces);
-        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){throw guarded;}
-        catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE, List.of()); }
+        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",guarded);throw guarded;}
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",failure); return result(ResultStatus.SOURCE_UNAVAILABLE, List.of()); }
     }
     public TraceResult getTrace(SourceReadAccess.Request request,String traceId) {
         try{return getTraceGuarded(request,traceId);}
-        catch(SourceReadAccess.GuardStopped stopped){throw stopped.rethrow();}
-        catch(SourceReadAccess.Rejected rejected){return result(rejected.status(),List.of());}
+        catch(SourceReadAccess.GuardStopped stopped){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",stopped);throw stopped.rethrow();}
+        catch(SourceReadAccess.Rejected rejected){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",rejected);return result(rejected.status(),List.of());}
     }
     private TraceResult getTraceGuarded(SourceReadAccess.Request request, String traceId) {
         if (request.locations().traces().isEmpty() || !validTraceId(traceId)) return result(ResultStatus.DENIED, List.of());
@@ -60,8 +60,8 @@ public final class TempoTraceConnector {
         try {
             Trace trace = load(request,traceId, http.deadline(Duration.ofSeconds(30)), Optional.empty());
             return result(trace.spans().isEmpty() ? ResultStatus.EMPTY : ResultStatus.SUCCESS, trace.spans().isEmpty() ? List.of() : List.of(trace));
-        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){throw guarded;}
-        catch (RuntimeException failure) { return result(ResultStatus.SOURCE_UNAVAILABLE, List.of()); }
+        } catch(SourceReadAccess.GuardStopped | SourceReadAccess.Rejected guarded){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",guarded);throw guarded;}
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(TempoTraceConnector.class.getName()),"TEMPO_TRACE_CONNECTOR_FAILED",failure); return result(ResultStatus.SOURCE_UNAVAILABLE, List.of()); }
     }
     private Trace load(SourceReadAccess.Request request,String id, long deadline, Optional<TimeWindow> window) {
         JsonNode body = http.json(http.uri(List.of("api", "traces", id), Map.of()), null, deadline,()->access.require(request,request.sourceAllowlistRef())).body();

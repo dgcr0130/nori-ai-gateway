@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.observability.AuditRecorder;
 import com.nori.ai.gateway.core.audit.AuditEvent;
 import com.nori.ai.gateway.core.evidence.EvidenceAssembler;
@@ -35,24 +37,25 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         audit.writeForJob(AuditEvent.jobClassified(job.scope(),job.conversationId(),job.jobId(),task));
         if(task==TaskType.UNSUPPORTED_REQUEST)return TerminalSpec.outcome(JobStatus.SUCCEEDED,ResultStatus.UNSUPPORTED,null,Map.of("status",ResultStatus.UNSUPPORTED.name()));
         var definition=builder.definition(job);
-        try{builder.checkOptions(definition,job);}catch(WorkflowPlanBuilder.Blocked blocked){return finishClarification(job,ErrorCode.PLAN_INVALID,List.of("options"));}
+        try{builder.checkOptions(definition,job);}catch(WorkflowPlanBuilder.Blocked blocked){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",blocked);return finishClarification(job,ErrorCode.PLAN_INVALID,List.of("options"));}
         var context=object(job.requestInput().requestFields().get("context"));
         TimeWindowResolver.Resolved resolved;
         try {
             resolved=windows.resolve(job.classification(),context,()->{
                 try{return messages.findPreviousResolvedTimeWindow(job.scope(),job.jobId(),job.requestInput().messageId());}
-                catch(RuntimeException failure){expiry.assertLive(job.cancellation());throw failure;}
+                catch(RuntimeException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",failure);expiry.assertLive(job.cancellation());throw failure;}
             },definition);
-        }catch(TimeWindowResolver.Failure invalid){return finishClarification(job,invalid.code(),List.of("timeWindow"));}
+        }catch(TimeWindowResolver.Failure invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",invalid);return finishClarification(job,invalid.code(),List.of("timeWindow"));}
         if(resolved.window().isPresent()) {
             try {
                 if(!messages.updateResolvedTimeWindow(job.scope(),job.jobId(),job.requestInput().messageId(),resolved.values())) {
                     expiry.assertLive(job.cancellation());throw new IllegalStateException("요청 시간 구간을 저장할 수 없습니다");
                 }
-            }catch(RuntimeException failure){expiry.assertLive(job.cancellation());throw failure;}
+            }catch(RuntimeException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",failure);expiry.assertLive(job.cancellation());throw failure;}
         }
         final WorkflowExecutionPlan plan;
-        try{plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());}catch(WorkflowPlanBuilder.Invalid invalid){return finishClarification(job,ErrorCode.PLAN_INVALID,invalid.fields());}
+        try{plan=builder.build(definition,registry.view(job.scope()),job,resolved.values());}catch(WorkflowPlanBuilder.Invalid invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",invalid);return finishClarification(job,ErrorCode.PLAN_INVALID,invalid.fields());}
+        body(System.getLogger(getClass().getName()),INFO,"WORKFLOW_PLAN",SchemaContracts.JSON.writeValueAsString(plan),"jobId",job.jobId());
         ZoneId zone=context.get("timezone") instanceof String value?ZoneId.of(value):null;
         var calls=new ToolCallBudget();var outcome=executor.run(job,plan,resolvers.forJob(job,zone),calls);
         WorkflowGrounding.Prepared prepared=null;
@@ -78,7 +81,9 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         if(prepared!=null&&!prepared.sufficient())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
         if(prepared==null&&pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
         var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected(),prepared.history());
+        body(System.getLogger(getClass().getName()),INFO,"COMPOSER_INPUT",SchemaContracts.JSON.writeValueAsString(input),"jobId",job.jobId());
         var composed=service.compose(job,input);
+        body(System.getLogger(getClass().getName()),INFO,"COMPOSER_OUTPUT",SchemaContracts.JSON.writeValueAsString(composed),"jobId",job.jobId());
         return assembler.assembleAnswer(outcome,composed,job.inferenceMode());
     }
     private TerminalSpec finishClarification(JobContext job,ErrorCode code,List<String> fields) {
@@ -133,6 +138,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
             var at=unit.observedAt()==null?job.scope().issuedAt():java.time.Instant.parse(unit.observedAt());
             pairs.add(new TerminalSpec.StoredEvidence(new Evidence(id,job.scope().boundSystem(),unit.sourceType(),ref,null,at,null,null,"OBSERVED",job.scope().actorRef()),Optional.empty()));
         }
+        body(System.getLogger(getClass().getName()),INFO,"WORKFLOW_RESULT",SchemaContracts.JSON.writeValueAsString(initial.resultPayload()),"jobId",job.jobId(),"status",initial.resultStatus());
         var finalEvidence=finalEvidence(job,initial.resultPayload(),pairs,Set.copyOf(selectedIds));
         var answer=finalEvidence.payload().get("answer");
         if(answer!=null&&answer.isObject()&&answer.path("citations").isArray())for(var citation:answer.get("citations")) {

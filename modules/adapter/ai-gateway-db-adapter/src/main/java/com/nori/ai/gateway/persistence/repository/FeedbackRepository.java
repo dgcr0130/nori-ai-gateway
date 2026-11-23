@@ -58,7 +58,7 @@ public final class FeedbackRepository extends ScopedJdbc implements FeedbackStor
             var evidence=scoped(scope,"SELECT evidence::text FROM kn.answer_snapshot WHERE system_id=:bound AND id=:id").param("id",snapshot.get()).query(String.class).single();
             for(var unit:SchemaContracts.JSON.readTree(evidence))if(unit.path("sourceType").asString().equals("DOCUMENT")) {
                 try{documents(scope,List.of(SchemaContracts.JSON.treeToValue(unit.get("location"),DocumentLocation.class)));}
-                catch(FeedbackFailure unavailable){throw FeedbackFailure.missing();}
+                catch(FeedbackFailure unavailable){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(FeedbackRepository.class.getName()),"FEEDBACK_REPOSITORY_FAILED",unavailable);throw FeedbackFailure.missing();}
             }
             var previous=scoped(scope,"SELECT id,version,state,rating,comment_masked,created_at,updated_at FROM kn.feedback WHERE system_id=:bound AND answer_id=:answer AND actor_ref=:actor FOR UPDATE")
                 .param("answer",snapshot.get()).query(FeedbackRepository::feedback).optional();

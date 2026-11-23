@@ -17,7 +17,7 @@ public final class BlockExportController {
             if(blocks!=null&&blocks.isArray()) {
                 var matches=new java.util.ArrayList<JsonNode>();
                 for(var block:blocks)if(block.path("id").isString()&&blockId.equals(block.path("id").asString()))matches.add(block);
-                if(matches.size()==1){responses.assertLive(access);return matches.getFirst();}
+                if(matches.size()==1){responses.assertLive(access);com.nori.ai.gateway.core.logging.DiagnosticLog.body(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"BLOCK_EXPORTED",matches.getFirst().toString(),"jobId",jobId,"blockId",blockId);return matches.getFirst();}
             }
         }
         throw new UniformNotFound();

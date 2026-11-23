@@ -20,7 +20,7 @@ public final class AnswerCheck {
         if (completed.content().contains("<think>") || completed.content().contains("</think>")) return ANSWER_TOKENS_UNCOUNTABLE;
         final int answer;
         try { answer = answers.count(completed.content()); }
-        catch (IllegalArgumentException uncountable) { return ANSWER_TOKENS_UNCOUNTABLE; }
+        catch (IllegalArgumentException uncountable) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(AnswerCheck.class.getName()),"ANSWER_CHECK_FAILED",uncountable); return ANSWER_TOKENS_UNCOUNTABLE; }
         if (answer < 0) return ANSWER_TOKENS_UNCOUNTABLE;
         if (answer > budget.answerLimit()) return ANSWER_LIMIT_EXCEEDED;
         // 공개 본문보다 작은 총 사용량은 모순이며, 분리 가능한 나머지만 사고 사용량으로 판정합니다.

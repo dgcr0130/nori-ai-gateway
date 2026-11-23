@@ -1,6 +1,6 @@
 FROM harbor.nori.local/library/eclipse-temurin:21-jre-jammy
 
-ENV JAVA_OPTS="-XX:+UseG1GC -XX:+UseContainerSupport" \
+ENV JAVA_OPTS="-XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=50.0" \
     TZ=Asia/Seoul \
     USER_ID=3000 \
     GROUP_ID=2000 \

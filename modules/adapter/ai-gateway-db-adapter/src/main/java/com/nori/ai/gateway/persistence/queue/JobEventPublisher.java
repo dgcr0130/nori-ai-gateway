@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.persistence.queue;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
@@ -20,6 +22,7 @@ public final class JobEventPublisher {
         List<Published> events = jdbc.sql("SELECT id,job_id,type,payload::text FROM gw.job_event WHERE id=:id AND published_at IS NULL AND NOT external_suppressed")
             .param("id",eventId).query((rs,n) -> new Published(rs.getLong(1),rs.getString(2),rs.getString(3),rs.getString(4))).list();
         for (Published event : events) {
+            body(System.getLogger(getClass().getName()),INFO,"JOB_EVENT_PUBLISHED",event.payload(),"jobId",event.jobId(),"eventId",event.eventId(),"type",event.type());
             publisher.publishEvent(event);
             jdbc.sql("UPDATE gw.job_event SET published_at=:now WHERE id=:id AND published_at IS NULL")
                 .param("id",event.eventId()).param("now",Timestamp.from(clock.instant().truncatedTo(ChronoUnit.MICROS))).update();

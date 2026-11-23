@@ -104,7 +104,7 @@ public final class EvidenceCandidateSelection {
             // 문장 상한을 넘긴 응답을 임의로 잘라 답을 만들지 않습니다.
             if (ids.size() > 20) { diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE); return "{\"selectedIds\":[]}"; }
             return SchemaContracts.JSON.writeValueAsString(result);
-        } catch (RuntimeException malformed) { diagnostic.accept(LlmDiagnostic.SENTENCE_JSON); return "{\"selectedIds\":[]}"; }
+        } catch (RuntimeException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(EvidenceCandidateSelection.class.getName()),"EVIDENCE_CANDIDATE_SELECTION_FAILED",malformed); diagnostic.accept(LlmDiagnostic.SENTENCE_JSON); return "{\"selectedIds\":[]}"; }
     }
     public String reconstructDecisionRows(String response, java.util.function.Consumer<LlmDiagnostic> diagnostic) {
         return reconstructRows(decisionSelection(response, diagnostic), diagnostic);
@@ -143,7 +143,7 @@ public final class EvidenceCandidateSelection {
         try {
             SchemaContracts.canonicalize(response);
             value = SchemaContracts.JSON.rebuild().enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build().readTree(response);
-        } catch (RuntimeException malformed) { diagnostic.accept(LlmDiagnostic.SENTENCE_JSON); return "{\"sentences\":[]}"; }
+        } catch (RuntimeException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(EvidenceCandidateSelection.class.getName()),"EVIDENCE_CANDIDATE_SELECTION_FAILED",malformed); diagnostic.accept(LlmDiagnostic.SENTENCE_JSON); return "{\"sentences\":[]}"; }
         if (!value.isObject() || value.size() != 1 || !value.path("selectedIds").isArray() || value.path("selectedIds").size() > 20) {
             diagnostic.accept(LlmDiagnostic.SENTENCE_STRUCTURE); return "{\"sentences\":[]}";
         }
@@ -163,7 +163,7 @@ public final class EvidenceCandidateSelection {
             var result = new ArrayList<String>();
             for (var id : SchemaContracts.JSON.readTree(response).path("selectedIds")) if (id.isString() && available.contains(id.asString())) result.add(id.asString());
             return List.copyOf(result);
-        } catch (RuntimeException invalid) { return List.of(); }
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(EvidenceCandidateSelection.class.getName()),"EVIDENCE_CANDIDATE_SELECTION_FAILED",invalid); return List.of(); }
     }
 
     public static final String PRIORITY_INSTRUCTION = """

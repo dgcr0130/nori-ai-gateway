@@ -1,4 +1,6 @@
 package com.nori.ai.gateway.app.job;
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.core.llm.ClassificationService;
 import com.nori.ai.gateway.core.registry.CapabilityRegistry;
@@ -23,7 +25,7 @@ public final class ClassificationInputs implements ClassificationService.Context
             for(var message:history){
                 if(!"assistant".equals(message.role())||message.responseRef()==null||message.responseRef().equals(request.jobId()))continue;
                 final com.nori.ai.gateway.app.web.ResultResponseAssembler.Access value;
-                try{value=access.assemble(request.scope(),message.responseRef());}catch(com.nori.ai.gateway.app.web.UniformNotFound removed){continue;}
+                try{value=access.assemble(request.scope(),message.responseRef());}catch(com.nori.ai.gateway.app.web.UniformNotFound removed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ClassificationInputs.class.getName()),"CLASSIFICATION_INPUTS_FAILED",removed);continue;}
                 if(!value.allowed()||value.job().terminalAt()==null||value.job().seq()>=request.input().jobSeq()||!value.job().conversationId().equals(request.conversationId()))continue;
                 var input=jobs.findRequestInput(request.scope(),message.responseRef());if(input.isEmpty())continue;
                 var question=questions.get(input.get().messageId());if(question==null||question.id().equals(request.input().messageId()))continue;
@@ -36,6 +38,7 @@ public final class ClassificationInputs implements ClassificationService.Context
             var candidate=candidates.get(i);pairs.add(candidate.pair());
             CitedHistoryInputs.fromAccess("H"+(i+1),request,candidate.pair(),candidate.input(),candidate.access()).ifPresent(references::add);
         }
+        body(System.getLogger(getClass().getName()),INFO,"CLASSIFICATION_HISTORY_INPUT",com.nori.ai.gateway.core.registry.SchemaContracts.JSON.writeValueAsString(pairs),"jobId",request.jobId(),"conversationId",request.conversationId());
         return new ClassificationService.Context(registry.view(request.scope()),pairs,glossary.current(request.scope(),system.glossary()),limit,references);
     }
 }

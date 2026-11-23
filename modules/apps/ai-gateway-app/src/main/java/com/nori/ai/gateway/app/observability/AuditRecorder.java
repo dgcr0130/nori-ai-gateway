@@ -22,11 +22,11 @@ public final class AuditRecorder {
 
     public void write(AuditEvent event) {
         try { writer.write(event); }
-        catch (RuntimeException | Error failure) { failed(); throw failure; }
+        catch (RuntimeException | Error failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(AuditRecorder.class.getName()),"AUDIT_RECORDER_FAILED",failure); failed(); throw failure; }
     }
     public void writeForJob(AuditEvent event) {
         try { writer.writeForJob(event); }
-        catch (RuntimeException | Error failure) { failed(); throw failure; }
+        catch (RuntimeException | Error failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(AuditRecorder.class.getName()),"AUDIT_RECORDER_FAILED",failure); failed(); throw failure; }
     }
     private void failed() {
         failures.increment();

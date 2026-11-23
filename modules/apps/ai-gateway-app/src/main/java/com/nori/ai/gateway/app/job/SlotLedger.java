@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.core.job.CancellationToken;
 import java.util.*;
 
@@ -9,13 +11,13 @@ public final class SlotLedger {
     private final Set<String> terminated=new HashSet<>();
     public synchronized CancellationToken claim(String jobId){
         if(active.containsKey(jobId)||released.contains(jobId))throw new IllegalStateException("실행 슬롯을 중복 확보할 수 없습니다");
-        var token=new CancellationToken();active.put(jobId,token);return token;
+        var token=new CancellationToken();active.put(jobId,token);event(System.getLogger(getClass().getName()),INFO,"JOB_SLOT_CLAIMED","jobId",jobId,"running",active.size());return token;
     }
     public synchronized Optional<CancellationToken> token(String jobId){return Optional.ofNullable(active.get(jobId));}
     public synchronized void signalIfActive(String jobId,CancellationToken.Reason reason){
         // 종료 표지와 신호 전달을 직렬화하여 늦은 interrupt가 종결 tx를 중단하지 않게 합니다.
         if(!terminated.contains(jobId)){
-            var token=active.get(jobId);if(token!=null)token.signal(reason);
+            var token=active.get(jobId);if(token!=null){event(System.getLogger(getClass().getName()),WARNING,"JOB_INTERRUPTED","jobId",jobId,"reason",reason);token.signal(reason);}
         }
     }
     public synchronized void markTerminated(String jobId){
@@ -25,7 +27,7 @@ public final class SlotLedger {
     public synchronized boolean terminated(String jobId){return terminated.contains(jobId);}
     public synchronized void release(String jobId){
         if(released.contains(jobId))throw new IllegalStateException("실행 슬롯이 중복 반납되었습니다");
-        if(active.remove(jobId)!=null){terminated.remove(jobId);released.add(jobId);}
+        if(active.remove(jobId)!=null){terminated.remove(jobId);released.add(jobId);event(System.getLogger(getClass().getName()),INFO,"JOB_SLOT_RELEASED","jobId",jobId,"running",active.size());}
     }
     public synchronized int activeCount(){return active.size();}
     public synchronized int releaseCount(){return released.size();}

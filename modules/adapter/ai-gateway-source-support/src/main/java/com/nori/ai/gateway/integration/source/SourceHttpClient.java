@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.integration.source;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.fasterxml.jackson.databind.*;
 import io.micrometer.observation.ObservationRegistry;
 import org.springframework.http.*;
@@ -116,7 +118,7 @@ public final class SourceHttpClient {
                 ClientHttpRequestFactory shield = (target, method) -> {
                     final ClientHttpRequest delegate;
                     try { delegate = transport.createRequest(target, method); }
-                    catch (IOException | RuntimeException failure) { throw sanitized(failure, deadlineLimited); }
+                    catch (IOException | RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure); throw sanitized(failure, deadlineLimited); }
                     return new ClientHttpRequest() {
                         @Override public HttpMethod getMethod() { return delegate.getMethod(); }
                         @Override public URI getURI() { return delegate.getURI(); }
@@ -125,7 +127,7 @@ public final class SourceHttpClient {
                         @Override public OutputStream getBody() { throw new Failure(false, false); }
                         @Override public ClientHttpResponse execute() {
                             try { return delegate.execute(); }
-                            catch (IOException | RuntimeException failure) { throw sanitized(failure, deadlineLimited); }
+                            catch (IOException | RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure); throw sanitized(failure, deadlineLimited); }
                         }
                     };
                 };
@@ -133,11 +135,25 @@ public final class SourceHttpClient {
                     .observationConvention(new AllowlistClientRequestObservationConvention(sourceId)).build();
                 var request = client.get().uri(uri).accept(MediaType.APPLICATION_JSON);
                 if (token != null) request.header("PRIVATE-TOKEN", token);
+                long logStarted=System.nanoTime();
+                event(System.getLogger(getClass().getName()),INFO,"SOURCE_REQUEST","sourceId",sourceId,"method","GET","url",uri,"headers",Map.of("Accept","application/json","PRIVATE-TOKEN",token==null?"absent":"[MASKED]"),"body","");
                 return request.exchange((req, response) -> {
+                    var logged=new com.nori.ai.gateway.core.logging.DiagnosticLog.Utf8Capture();var total=new long[]{0};int[] logStatus={0};
+                    InputStream captured=new FilterInputStream(response.getBody()) {
+                        private void remember(byte[] b,int offset,int count){if(count>0){logged.accept(b,offset,count);total[0]+=count;}}
+                        @Override public int read() throws IOException {int value=in.read();if(value>=0){byte[] one={(byte)value};remember(one,0,1);}return value;}
+                        @Override public int read(byte[] b,int offset,int length) throws IOException {if(expired(deadline))throw new Failure(false,true);int count=in.read(b,offset,length);remember(b,offset,count);return count;}
+                    };
                     try {
-                        int status = response.getStatusCode().value();
-                        if (status < 200 || status >= 300) throw new Failure(status >= 500 && status <= 599, false,status==404);
-                        InputStream bounded = new FilterInputStream(response.getBody()) {
+                        int status = response.getStatusCode().value();logStatus[0]=status;
+                        if (status < 200 || status >= 300) {
+                            // 오류 본문은 진단 로그용으로만 읽으며, 읽기 실패가 상태 기반 재시도·404 판정을 바꾸지 않습니다.
+                            var statusFailure = new Failure(status >= 500 && status <= 599, false,status==404);
+                            try { captured.readNBytes(MAX_JSON_BYTES+1); }
+                            catch (IOException | RuntimeException unreadable) { statusFailure.addSuppressed(unreadable); }
+                            throw statusFailure;
+                        }
+                        InputStream bounded = new FilterInputStream(captured) {
                             private void check() { if (expired(deadline)) throw new Failure(false, true); }
                             @Override public int read() throws IOException { check(); int value = super.read(); check(); return value; }
                             @Override public int read(byte[] bytes, int offset, int length) throws IOException {
@@ -145,12 +161,13 @@ public final class SourceHttpClient {
                             }
                         };
                         return reader.read(bounded, response.getHeaders());
-                    } catch (Failure failure) { throw failure; }
-                    catch (IOException | RuntimeException failure) { throw new Failure(false, deadlineLimited && expired(deadline)); }
+                    } catch (Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure); throw failure; }
+                    catch (IOException | RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure); throw new Failure(false, deadlineLimited && expired(deadline)); }
+                    finally {capturedBody(System.getLogger(SourceHttpClient.class.getName()),logStatus[0]>=200&&logStatus[0]<300?INFO:WARNING,"SOURCE_RESPONSE",logged,"sourceId",sourceId,"url",uri,"status",logStatus[0],"contentType",response.getHeaders().getFirst("Content-Type"),"durationMs",(System.nanoTime()-logStarted)/1_000_000,"observedBytes",total[0]);}
                 });
-            } catch (Failure failure) {
+            } catch (Failure failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure);
                 if (failure.deadline || !failure.retryable || attempt == 1) throw failure;
-            } catch (RuntimeException failure) { throw new Failure(false, false); }
+            } catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceHttpClient.class.getName()),"SOURCE_HTTP_CLIENT_FAILED",failure); throw new Failure(false, false); }
         }
         throw new Failure(false, false);
     }

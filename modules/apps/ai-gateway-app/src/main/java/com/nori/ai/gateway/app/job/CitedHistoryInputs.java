@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.job;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.web.ResultResponseAssembler;
 import com.nori.ai.gateway.core.knowledge.DocumentLocation;
 import com.nori.ai.gateway.core.llm.ClassificationService;
@@ -35,9 +37,10 @@ public final class CitedHistoryInputs {
                 locations.add(SchemaContracts.JSON.treeToValue(location, DocumentLocation.class));
             }
             if (locations.isEmpty() || locations.size() > CitedHistoryContext.MAX_DOCUMENT_CITATIONS) return Optional.empty();
+            body(System.getLogger(CitedHistoryInputs.class.getName()),INFO,"CITED_HISTORY_INPUT",SchemaContracts.JSON.writeValueAsString(Map.of("question",history.question(),"answer",history.answer(),"locations",locations)),"jobId",request.jobId(),"reference",ref);
             return Optional.of(new CitedHistoryContext.Pair(ref, access.job().id(), history.question(), history.answer(), List.copyOf(locations)));
-        } catch (RuntimeException invalid) {
-            // 실패한 원문을 노출하거나 공개 500으로 바꾸지 않고 참조 문맥을 제공하지 않습니다.
+        } catch (RuntimeException invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(CitedHistoryInputs.class.getName()),"CITED_HISTORY_INPUTS_FAILED",invalid);
+            // 공개 응답으로 실패 원문을 보내거나 500으로 바꾸지 않고 참조 문맥을 제공하지 않습니다.
             return Optional.empty();
         }
     }

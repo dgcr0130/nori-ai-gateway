@@ -1,5 +1,7 @@
 package com.nori.ai.gateway.app.ops;
 
+import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
+import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.app.config.SourceConnectorConfiguration.LokiProbeFactory;
 import com.nori.ai.gateway.app.config.SourceConnectorConfiguration.ProbeWindowInput;
@@ -53,7 +55,7 @@ public final class SourceRetentionProbeScheduler implements AutoCloseable {
         if (nextRunAt != null && now.isBefore(nextRunAt)) return;
         nextRunAt = now.plus(PERIOD);
         try { probeNow(now); }
-        catch (RuntimeException failure) {
+        catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceRetentionProbeScheduler.class.getName()),"SOURCE_RETENTION_PROBE_SCHEDULER_FAILED",failure);
             // 저장 실패는 행을 바꾸지 않으며 다음 주기에 다시 측정합니다.
             failures.increment();
             System.getLogger(SourceRetentionProbeScheduler.class.getName()).log(System.Logger.Level.WARNING, "RETENTION_PROBE_FAILED");
@@ -69,7 +71,8 @@ public final class SourceRetentionProbeScheduler implements AutoCloseable {
             if (window.isEmpty()) continue;
             Optional<LokiRetentionProbe.ProbeObservation> observed;
             try { observed = factory.create(window.get()).measure(app.name(),app.namespace()); }
-            catch (RuntimeException failure) { failures.increment(); continue; }
+            catch (RuntimeException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceRetentionProbeScheduler.class.getName()),"SOURCE_RETENTION_PROBE_SCHEDULER_FAILED",failure); failures.increment(); continue; }
+            event(System.getLogger(getClass().getName()),INFO,"RETENTION_PROBE_COMPLETED","sourceId",sourceId,"observed",observed);
             observed.ifPresent(value -> probes.upsert(sourceId, value.verifiedOldestAt(), value.probeLimit(), now));
         }
     }

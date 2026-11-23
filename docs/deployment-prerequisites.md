@@ -17,13 +17,13 @@
 | G-ALERT | NOT_RUN (미확인) | 운영 monitoring의 alert rule 형식·수신처 읽기 전용 확인 기록이 없다. exec `docs/observability/03-alert-policy.md`는 Prometheus rule·Alertmanager 1차안이며 실제 배포는 후속이라고 적는다. |
 | G-OBS-READBACK | NOT_RUN (미확인) | Tempo·Loki·metric 읽기 경로와 Alloy `alloy-gateway`의 OTLP logs 수신 파이프라인 확인 기록이 없다. |
 
-따라서 `ai.gateway.otlp.logs.enabled=false`(stdout JSON만)를 유지하고, AC-24-AUDIT-ALLOW 배포 판정과 경보 leaf는 NOT_RUN이다. 로컬 인프로세스 수신기 시험은 export 경로·허용 속성의 로컬 검증이며 운영 수신·경보 전달 PASS가 아니다.
+따라서 `ai.gateway.otlp.logs.enabled=false`(상세 stdout 로그만)를 유지하고, AC-24-AUDIT-ALLOW 배포 판정과 경보 leaf는 NOT_RUN이다. 로컬 인프로세스 수신기 시험은 export 경로·허용 속성의 로컬 검증이며 운영 수신·경보 전달 PASS가 아니다.
 
 ### 수집 경로 (Plan §10.1)
 
 - metrics: `micrometer-registry-otlp` 명시 registry → `http://alloy-gateway.monitoring.svc:4318/v1/metrics` (`ai.gateway.otlp.metrics.enabled=true`). Boot 4.0.10 OTLP metrics 자동구성은 `spring-boot-opentelemetry`의 `OpenTelemetryProperties` 클래스를 조건으로 요구하며 그 모듈이 runtime에 없어 활성화되지 않는다.
 - traces: 명시 `SdkTracerProvider` + `OtlpHttpSpanExporter` → `/v1/traces`(`ai.gateway.otlp.traces.enabled=true`일 때만 exporter 연결, 꺼져도 SDK trace는 생성). 만드는 span은 두 가지다: 정상 인증 `/v1/*` 요청마다 `ServiceTokenAuthFilter`가 원격 부모 없이 만드는 `aigw.request`(SERVER, 속성 0)와 직접 Source 요청의 `aigw.source.request`(CLIENT, `source_id`·`method`·`status_class`). javaagent·tracing bridge·표준 HTTP handler 없음.
-- logs: stdout `AllowlistJsonEncoder`. OTLP `/v1/logs`는 G-OBS-READBACK 확인 후 `ai.gateway.otlp.logs.enabled=true`로만 켠다.
+- logs: stdout `PatternLayoutEncoder`로 시각·수준·스레드·traceId·requestId·system·conversationId·jobId·logger와 이벤트 코드를 기록한다. 질문·답변·LLM·외부 HTTP 본문은 자격 값만 가려 기록하며 본문은 30,000자씩 최대 10줄로 나눈다. 파일 appender는 없다. OTLP `/v1/logs`는 기존 고정 코드 허용 필터를 유지하고, G-OBS-READBACK 확인 후 `ai.gateway.otlp.logs.enabled=true`로만 켠다.
 
 ### §11.6 경보와 신호 소유
 
@@ -60,4 +60,4 @@ Source 관측 속성과 meter 태그는 `source_id`, `method`, `status_class` 3�
 
 차트는 앱 설정의 backendUrl 보유 시스템마다 namespace·Pod selector를 받아 ingress와 backend 포트를 계산합니다. LLM·S3는 앱 설정의 명시적 IPv4·포트에서 /32 규칙을 만들고 DB·DNS·Loki·Tempo·OTLP는 values-prod.yaml의 공용 대상을 씁니다. Loki는 canary와 구별하도록 세 라벨 전체로 선택합니다. 클러스터 안 수용 실행 장치는 두지 않습니다.
 
-startupProbe는 readiness와 분리된 `/actuator/health/liveness`를 10초·180회로 확인합니다. 문서 동기화 동안 readiness는 닫혀 있고 liveness는 그 의존성으로 닫지 않습니다. CI 배포 대기 시간 2100초는 startupProbe의 최대 1800초와 이후 readiness 전환 여유를 포함합니다. 메모리를 실측한 뒤 resources와 JVM RAM 비율을 확정하며 그 전에는 임의 값을 두지 않습니다.
+startupProbe는 readiness와 분리된 `/actuator/health/liveness`를 10초·180회로 확인합니다. 문서 동기화 동안 readiness는 닫혀 있고 liveness는 그 의존성으로 닫지 않습니다. CI 배포 대기 시간 2100초는 startupProbe의 최대 1800초와 이후 readiness 전환 여유를 포함합니다. 2026-11-23 prod 실측(기동·문서 동기화 뒤 컨테이너 최대 855Mi, 힙 약 224MiB·힙 밖 네이티브 약 585MiB)에 따라 메모리 예약 1Gi·상한 2Gi, CPU 예약 500m·상한 2를 두고 JVM 힙은 `-XX:MaxRAMPercentage=50`(1GiB)입니다. 실제 질문 부하가 들어온 뒤 다시 측정해 조정합니다.

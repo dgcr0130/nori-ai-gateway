@@ -33,7 +33,7 @@ public final class ServiceTokenAuthFilter implements Filter {
     }
     @Override public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         var http = (HttpServletRequest)request; var output = (HttpServletResponse)response;
-        UUID requestId = UUID.randomUUID();
+        UUID requestId = http.getAttribute(com.nori.ai.gateway.app.observability.HttpDiagnosticFilter.REQUEST_ID_ATTRIBUTE) instanceof UUID id?id:UUID.randomUUID();
         String authorization = http.getHeader("Authorization");
         VerifiedServiceIdentity service = null;
         VerifiedSystemScope scope = null;
@@ -49,34 +49,40 @@ public final class ServiceTokenAuthFilter implements Filter {
             assertion = verifier.verify(bodies.assertion(replay),service,replay);
             scope = scopes.forRequest(service,assertion,requestId);
             if (!bodies.check(replay,scope.boundSystem())) throw new ActorAssertionVerifier.Rejected(SYSTEM_SCOPE_MISMATCH);
-        } catch (com.nori.ai.gateway.core.feedback.FeedbackFailure invalid) {
+        } catch (com.nori.ai.gateway.core.feedback.FeedbackFailure invalid) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ServiceTokenAuthFilter.class.getName()),"SERVICE_TOKEN_AUTH_FILTER_FAILED",invalid);
             output.setStatus(invalid.status());output.setCharacterEncoding("UTF-8");output.setContentType("application/json");
             output.getWriter().write("{\"code\":\""+invalid.code()+"\",\"message\":\"피드백 입력을 확인해 주세요\",\"requestId\":\""+requestId+"\"}");return;
-        } catch (ActorAssertionVerifier.Rejected rejection) {
+        } catch (ActorAssertionVerifier.Rejected rejection) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ServiceTokenAuthFilter.class.getName()),"SERVICE_TOKEN_AUTH_FILTER_FAILED",rejection);
+            com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.WARNING,"AUTH_REJECTED","reason",rejection.reason(),"path",http.getRequestURI(),"system",scope==null?null:scope.boundSystem(),"requestId",requestId);
             // 감사 저장 경계만 변환하며 이후 controller 예외를 인증 거절로 바꾸지 않습니다.
             try {
                 if (service == null) auditor.unauthenticated(requestId,rejection.reason());
                 else if (scope == null) auditor.serviceVerified(service,requestId,rejection.reason());
                 else auditor.actorVerified(service,scope,requestId,rejection.reason());
-            } catch (DataAccessException | TransactionException failure) {
+            } catch (DataAccessException | TransactionException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ServiceTokenAuthFilter.class.getName()),System.Logger.Level.ERROR,"AUTH_AUDIT_FAILED",failure);
                 output.setHeader("Retry-After","1");
                 respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId,RouteClassifier.isFeedback(http)); return;
             }
             respond(output,rejection.reason().httpStatus(),"인증 또는 요청 범위를 확인할 수 없습니다.",requestId,RouteClassifier.isFeedback(http)); return;
         }
+        try(var logContext=com.nori.ai.gateway.app.observability.LogContext.open(org.slf4j.MDC.getCopyOfContextMap())) {
+        org.slf4j.MDC.put("ownerSystem",scope.boundSystem().name());
+        com.nori.ai.gateway.core.logging.DiagnosticLog.event(System.getLogger(getClass().getName()),System.Logger.Level.INFO,"AUTH_VERIFIED","system",scope.boundSystem(),"actor",scope.actorRef(),"delegationPresent",assertion.delegation().isPresent());
         replay.setAttribute(VERIFIED_SCOPE_ATTRIBUTE,scope);
         assertion.delegation().ifPresent(value -> replay.setAttribute(VERIFIED_DELEGATION_ATTRIBUTE,value));
         // 원격 traceparent는 부모로 쓰지 않고, URL·route·header·body 없이 속성 0개의 서버 span만 만듭니다.
         var span = tracer.spanBuilder("aigw.request").setSpanKind(SpanKind.SERVER).setNoParent().startSpan();
+        org.slf4j.MDC.put("traceId",span.getSpanContext().getTraceId());
         try (var current = span.makeCurrent()) {
             // 이 감사 저장만 접수 전 인프라 실패로 변환하며 handler 이후 예외는 이 catch 밖입니다.
             try { audit.write(AuditEvent.apiRequest(scope, span.getSpanContext().getTraceId())); }
-            catch (DataAccessException | TransactionException failure) {
+            catch (DataAccessException | TransactionException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(ServiceTokenAuthFilter.class.getName()),System.Logger.Level.ERROR,"AUTH_AUDIT_FAILED",failure);
                 output.setHeader("Retry-After","1");
                 respond(output,503,"요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.",requestId,RouteClassifier.isFeedback(http)); return;
             }
             chain.doFilter(replay,response);
-        } finally { span.end(); }
+        } finally { replay.setAttribute(com.nori.ai.gateway.app.observability.HttpDiagnosticFilter.CONTEXT_ATTRIBUTE,org.slf4j.MDC.getCopyOfContextMap());span.end();org.slf4j.MDC.remove("traceId");org.slf4j.MDC.remove("ownerSystem"); }
+        }
     }
     private static void respond(HttpServletResponse response, int status, String message, UUID requestId,boolean feedback) throws IOException {
         response.setStatus(status); response.setCharacterEncoding("UTF-8"); response.setContentType("application/json");

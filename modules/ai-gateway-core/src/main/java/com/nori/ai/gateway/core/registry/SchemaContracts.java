@@ -16,19 +16,19 @@ public final class SchemaContracts {
     private SchemaContracts() {}
     public static JsonNode parse(String text) {
         try { JsonNode node = JSON.readTree(text); if (node == null) throw new IllegalArgumentException("parse failed"); validateUnicode(node); return node; }
-        catch (RuntimeException e) { throw new IllegalArgumentException("parse failed"); }
+        catch (RuntimeException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaContracts.class.getName()),"SCHEMA_CONTRACTS_FAILED",e); throw new IllegalArgumentException("parse failed"); }
     }
     public static String canonicalize(String text) {
         validateUnicode(parse(text));
         try { return new JsonCanonicalizer(text).getEncodedString(); }
-        catch (IOException | RuntimeException e) { throw new IllegalArgumentException("parse failed"); }
+        catch (IOException | RuntimeException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaContracts.class.getName()),"SCHEMA_CONTRACTS_FAILED",e); throw new IllegalArgumentException("parse failed"); }
     }
     public static String digest(JsonNode input, JsonNode output) {
         var pair = JSON.createObjectNode().set("inputSchema", input).set("outputSchema", output);
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(canonicalize(pair.toString()).getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) { throw new IllegalStateException("SHA-256을 사용할 수 없습니다", e); }
+        } catch (NoSuchAlgorithmException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaContracts.class.getName()),"SCHEMA_CONTRACTS_FAILED",e); throw new IllegalStateException("SHA-256을 사용할 수 없습니다", e); }
     }
     public static void validateSchema(JsonNode node) {
         rejectExternalReferences(node);
@@ -37,11 +37,11 @@ public final class SchemaContracts {
             if (!meta.validate(node).isEmpty()) throw new IllegalArgumentException("Schema 형식이 잘못되었습니다");
             // networknt의 기본 preload는 참조 오류를 지연하므로 기동 시 검증을 명시적으로 완료합니다.
             SCHEMAS.getSchema(node).initializeValidators();
-        } catch (RuntimeException e) { throw new IllegalArgumentException("Schema 형식이 잘못되었습니다"); }
+        } catch (RuntimeException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaContracts.class.getName()),"SCHEMA_CONTRACTS_FAILED",e); throw new IllegalArgumentException("Schema 형식이 잘못되었습니다"); }
     }
     public static boolean matches(JsonNode schema, JsonNode value) {
         try { return value != null && SCHEMAS.getSchema(schema).validate(value).isEmpty(); }
-        catch (RuntimeException e) { return false; }
+        catch (RuntimeException e) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SchemaContracts.class.getName()),"SCHEMA_CONTRACTS_FAILED",e); return false; }
     }
     private static void rejectExternalReferences(JsonNode node) {
         if (node.isObject()) for (var entry : node.properties()) {

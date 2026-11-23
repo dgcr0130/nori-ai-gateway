@@ -79,7 +79,8 @@ class StackSmokeIT extends StackContextSupport {
         assertThat(context.getBeansOfType(io.opentelemetry.api.OpenTelemetry.class).values()).singleElement().isInstanceOf(com.nori.ai.gateway.app.observability.GatewayOpenTelemetry.class);
         assertThat(context.getBeansOfType(com.nori.ai.gateway.app.observability.OtlpLogAppenderInstaller.class)).isEmpty();
         var root = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-        assertThat(((ch.qos.logback.core.ConsoleAppender<?>) root.getAppender("STDOUT")).getEncoder()).isInstanceOf(com.nori.ai.gateway.app.observability.AllowlistJsonEncoder.class);
+        assertThat(((ch.qos.logback.core.ConsoleAppender<?>) root.getAppender("STDOUT")).getEncoder()).isInstanceOf(ch.qos.logback.classic.encoder.PatternLayoutEncoder.class);
+        assertThat(((ch.qos.logback.classic.encoder.PatternLayoutEncoder)((ch.qos.logback.core.ConsoleAppender<?>)root.getAppender("STDOUT")).getEncoder()).getPattern()).isEqualTo("%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] app=ai-gateway traceId=%X{traceId} requestId=%X{requestId} system=%X{ownerSystem} conversationId=%X{conversationId} jobId=%X{jobId} %logger{36} - %msg%n");
         // logs=false이면 OTel appender를 만들지 않으므로 root에는 STDOUT만 있습니다.
         var appenders = new java.util.ArrayList<ch.qos.logback.core.Appender<?>>(); root.iteratorForAppenders().forEachRemaining(appenders::add);
         assertThat(appenders).noneMatch(io.opentelemetry.instrumentation.logback.appender.v1_0.OpenTelemetryAppender.class::isInstance).anyMatch(appender -> appender.getName().equals("STDOUT"));
