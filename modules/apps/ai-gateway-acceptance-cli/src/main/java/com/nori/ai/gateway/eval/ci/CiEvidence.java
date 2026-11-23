@@ -204,10 +204,11 @@ public final class CiEvidence {
                 process.descendants().forEach(ProcessHandle::destroyForcibly);
                 process.destroyForcibly();
                 // 읽기 스레드가 막혀 있으면 소유한 스트림을 닫아 풀어 준다. 이 경로는 이미 성공(EOF 로 닫힘)이거나 실패 판정이 끝난 뒤다.
+                // Linux 는 읽는 쪽을 닫아도 막힌 read 가 풀리지 않으므로(고아 손자가 파이프를 쥔 경우) 읽기 스레드는 남은 마감 안에서만 기다린다.
                 try { stream.close(); } catch (IOException alreadyFailing) { readFailed.set(true); }
                 // 정리 대기 동안만 인터럽트 표시를 내려 두고 끝나면 그대로 되돌린다.
                 boolean interrupted = Thread.interrupted();
-                try { reader.join(Duration.ofSeconds(10)); process.waitFor(10, TimeUnit.SECONDS); }
+                try { reader.join(Duration.ofNanos(remaining(deadline))); process.waitFor(10, TimeUnit.SECONDS); }
                 catch (InterruptedException e) { interrupted = true; }
                 finally { if (interrupted) Thread.currentThread().interrupt(); }
             }
