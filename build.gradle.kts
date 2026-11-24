@@ -117,7 +117,10 @@ subprojects {
     afterEvaluate { tasks.withType<Test>().toList().forEach { configuredTest -> configuredTest.apply {
         val testTask = this
         useJUnitPlatform {
-            providers.gradleProperty("includeTags").orNull?.split(',')?.filter { it.isNotBlank() }?.let { includeTags(*it.toTypedArray()) }
+            val includedTags = providers.gradleProperty("includeTags").orNull
+            // 실제 LLM 골든 시험은 includeTags를 지정한 별도 실행에서만 포함한다.
+            if (includedTags == null) excludeTags("llm-golden")
+            else includedTags.split(',').filter { it.isNotBlank() }.let { includeTags(*it.toTypedArray()) }
         }
         filter.isFailOnNoMatchingTests = true
         // CI 컨테이너에서 도는 단위 test만 힙을 묶는다. integrationTest는 로컬 Docker 전용이다.

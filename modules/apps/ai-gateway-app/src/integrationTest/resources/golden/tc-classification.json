@@ -1,0 +1,159 @@
+{
+  "referenceTime": "2026-11-24T19:30:00+09:00",
+  "timezone": "Asia/Seoul",
+  "cases": [
+    {
+      "id": "G01",
+      "question": "PHOTO_001 호기의 등록 정보를 알고 싶어.",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.eqp.readRegistration", "args": {"eqp": "PHOTO_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G02",
+      "question": "PHOTO_001 통신 설정이 어떻게 되어 있어?",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.eqp.readRegistration", "args": {"eqp": "PHOTO_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G03",
+      "question": "CLN_001 설비의 현재 상태를 알려줘",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.eqp.getOperationalSnapshot", "args": {"eqp": "CLN_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G04",
+      "question": "설비 CLN_001에 연결된 모델 정의와 모델 파라미터, SECS 또는 SOCKET 메시지 정의를 조회해 알려 주세요. 운영 상태 대신 모델 구성을 읽어 주세요.",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.model.read", "args": {"eqp": "CLN_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G05",
+      "question": "tc.model.read 도구를 사용하여 eqp=CLN_001에 연결된 모델과 메시지 정의를 읽어 주세요.",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.model.read", "args": {"eqp": "CLN_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G06",
+      "question": "설비 CLN_001의 DLQ 데드레터 큐 목록을 조회해 실패 메시지와 오류 내역을 알려 주세요.",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.dlq.list", "args": {"eqp": "CLN_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G07",
+      "question": "설비 CLN_001의 통신 로그를 2026-11-23T01:37:29Z부터 2026-11-24T01:37:29Z까지 조회해 송수신 기록을 알려 주세요. from=2026-11-23T01:37:29Z, to=2026-11-24T01:37:29Z입니다.",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.commLogs.search", "args": {"eqp": "CLN_001", "from": "2026-11-23T01:37:29Z", "to": "2026-11-24T01:37:29Z"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G08",
+      "question": "설비는 모르겠지만 오늘 에러가 발생했던 설비 혹은 시스템 오류가 있다고 하더라고. 무슨일인지 정리해서 보고해줘.",
+      "referenceTime": "2026-11-24T19:27:24+09:00",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [
+          {"toolId": "logs.search", "args": {"from": "2026-11-23T15:00:00Z", "to": "2026-11-24T10:27:24Z"}},
+          {"toolId": "trace.search", "args": {"from": "2026-11-23T15:00:00Z", "to": "2026-11-24T10:27:24Z"}}
+        ],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G09",
+      "question": "새 설비 등록은 화면에서 어떻게 해?",
+      "historyPairs": [],
+      "expected": {"kind": "PLAN", "toolCalls": [], "documentSearchRequired": true, "clarificationFields": []}
+    },
+    {
+      "id": "G10",
+      "question": "설비 등록 화면에서 통신 모드 PASSIVE 옵션은 무슨 뜻이고 어떻게 등록하나요?",
+      "historyPairs": [],
+      "expected": {"kind": "PLAN", "toolCalls": [], "documentSearchRequired": true, "clarificationFields": []}
+    },
+    {
+      "id": "G11",
+      "question": "뭘 물어볼 수 있어?",
+      "historyPairs": [],
+      "expected": {"kind": "HELP", "toolCalls": [], "documentSearchRequired": false, "clarificationFields": []}
+    },
+    {
+      "id": "G12",
+      "question": "PHOTO_001 호기를 삭제하고 연결 설정을 바꿔줘.",
+      "historyPairs": [],
+      "expected": {"kind": "UNSUPPORTED", "toolCalls": [], "documentSearchRequired": false, "clarificationFields": []}
+    },
+    {
+      "id": "G13",
+      "question": "그 호기의 등록 정보를 알려줘.",
+      "historyPairs": [],
+      "expected": {"kind": "CLARIFICATION", "toolCalls": [], "documentSearchRequired": false, "clarificationFields": ["eqp"]}
+    },
+    {
+      "id": "G14",
+      "question": "그 호기의 등록 정보를 알려줘.",
+      "historyPairs": [
+        {
+          "question": "PHOTO_001 호기의 등록 정보를 알고 싶어.",
+          "answer": "PHOTO_001 호기의 등록 정보입니다.",
+          "resourceRefs": [{"type": "EQP", "ref": "PHOTO_001"}]
+        }
+      ],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "tc.eqp.readRegistration", "args": {"eqp": "PHOTO_001"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G15",
+      "question": "PHOTO_001이랑 CLN_001 상태 비교해줘",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [
+          {"toolId": "tc.eqp.getOperationalSnapshot", "args": {"eqp": "PHOTO_001"}},
+          {"toolId": "tc.eqp.getOperationalSnapshot", "args": {"eqp": "CLN_001"}}
+        ],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    }
+  ]
+}
