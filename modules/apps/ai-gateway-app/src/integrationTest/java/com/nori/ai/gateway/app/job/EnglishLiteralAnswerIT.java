@@ -34,22 +34,22 @@ class EnglishLiteralAnswerIT extends LlmStubSupport {
         var store=context.getBean(DocumentIndexRepository.class);var index=context.getBean(MemoryDocumentKeywordIndex.class);var scope=scope("actor");store.saveBuilding(scope,bundle);
         try(var prepared=index.prepare(scope,store.load(scope,bundle.id()))){store.activate(scope,bundle);index.install(scope,prepared);}
     }
-    private JobAdmissionService.Accepted run(String key,String... ids) throws Exception {
+    private JobAdmissionService.Accepted run(String key,String... texts) throws Exception {
         String value=intentWire("document",null);
-        var job=admitScripted(key,QUESTION,Map.of(),List.of(classify(value),composeSelection(ids)),Optional.empty(),null);
+        var job=admitScripted(key,QUESTION,Map.of(),List.of(classify(value),composeSentences(Arrays.stream(texts).map(text->Map.<String,Object>of("text",text,"factIds",List.of("e1"))).toList())),Optional.empty(),null);
         assertThat(terminal(job)).as("합성 fixture result=%s payload=%s",result(job.jobId()),payload(job.jobId())).isEqualTo("SUCCEEDED");
         assertThat(scripts().scriptedCalls(job.jobId(),CallType.CLASSIFY)).isOne();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
         assertThat(stub.received().stream().filter(request->request.path().equals("/v1/embeddings")).map(request->json.readTree(request.body()).path("input").size()).toList()).containsExactly(1);
         return job;
     }
     @Test void sourceValidatedUnrelatedKoreanSaveSuccessCannotSatisfyExplicitEnglishOutput() throws Exception {
-        seed("저장 검증 성공 안내가 나타난다.");var job=run("literal-missing","C1");
-        var answer=payload(job.jobId()).path("answer");assertThat(result(job.jobId())).containsEntry("status","EMPTY").containsEntry("error_code",null);
-        assertThat(answer.path("kind").asString()).isEqualTo("NO_EVIDENCE");assertThat(answer.path("text").asString()).isEqualTo("근거 없음");assertThat(answer.path("sentences")).isEmpty();assertThat(answer.path("citations")).isEmpty();
+        seed("저장 검증 성공 안내가 나타난다.");var job=run("literal-missing","저장 검증 성공 안내가 나타난다.");
+        var answer=payload(job.jobId()).path("answer");assertThat(result(job.jobId())).containsEntry("status","SUCCESS").containsEntry("error_code",null);
+        assertThat(answer.path("kind").asString()).isEqualTo("PARTIAL");assertThat(answer.path("text").asString()).isEqualTo("확인된 조회 결과를 문장으로 정리하지 못했습니다. 참고 자료의 근거 원문을 확인해 주세요.");assertThat(answer.path("sentences")).isEmpty();assertThat(answer.path("citations")).hasSize(1);
     }
     @Test void actualEnglishLiteralAndSupportingKoreanContextRemainSourceValidatedAnswer() throws Exception {
         String contextText="저장 검증 성공 안내를 확인한다.",literal="영어 출력 문구는 \"SAVED OK\"이다.";
-        seed(contextText+"\n"+literal);var job=run("literal-present","C1","C2");var answer=payload(job.jobId()).path("answer");
-        assertThat(answer.path("kind").asString()).isEqualTo("ANSWER");assertThat(answer.path("text").asString()).isEqualTo(contextText+"[1]\n"+literal+"[1]");assertThat(answer.path("sentences")).hasSize(2);assertThat(answer.path("citations")).hasSize(1);
+        seed(contextText+"\n"+literal);var job=run("literal-present",contextText,literal);var answer=payload(job.jobId()).path("answer");
+        assertThat(answer.path("kind").asString()).isEqualTo("ANSWER");assertThat(answer.path("text").asString()).isEqualTo(contextText+"[1] "+literal+"[1]");assertThat(answer.path("sentences")).hasSize(2);assertThat(answer.path("citations")).hasSize(1);
     }
 }

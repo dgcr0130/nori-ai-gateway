@@ -19,9 +19,9 @@ import static org.assertj.core.api.Assertions.*;
 
 class ScriptedChatTransportTest {
     @Test void schemaIgnoringMixedIdsAreNotSilentlyRepairedByTheOperationalTransport() {
-        String content="{\"selectedIds\":[\"C1\",\"UNKNOWN\"]}";
+        String content="{\"sentences\":[{\"text\":\"확인했습니다.\",\"factIds\":[\"e1\",\"labels\"]}]}";
         bind("mixed-ids",List.of(new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,20)),Optional.empty());
-        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"selectedIds\":{\"type\":\"array\",\"items\":{\"enum\":[\"C1\"]}}},\"required\":[\"selectedIds\"],\"additionalProperties\":false}");
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"sentences\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\"},\"factIds\":{\"type\":\"array\",\"items\":{\"enum\":[\"e1\"]}}},\"required\":[\"text\",\"factIds\"],\"additionalProperties\":false}}},\"required\":[\"sentences\"],\"additionalProperties\":false}");
         try(var observed=scripts.open("mixed-ids",CallType.COMPOSER,MESSAGES)) {
             assertThat(transport.send(CallType.COMPOSER,MESSAGES,3072,java.time.Duration.ofSeconds(3),schema).content()).isEqualTo(content);
         }

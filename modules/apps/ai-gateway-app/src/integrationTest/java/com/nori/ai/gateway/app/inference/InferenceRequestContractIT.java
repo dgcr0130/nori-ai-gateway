@@ -136,13 +136,13 @@ class InferenceRequestContractIT extends StackContextSupport {
     @Test void structuredOutputUsesTheSameActualPromptCounterAndItsOwnConstraintBudget() {
         start();awaitReadinessAndClear();
         var messages=messagesOf(100);usagePrompt.set(100);
-        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"sentences\":{\"type\":\"array\",\"items\":{\"enum\":[{\"text\":\"조건이 없으면 전송하지 않는다.\",\"citations\":[1]}]}}},\"required\":[\"sentences\"],\"additionalProperties\":false}");
+        var schema=new com.nori.ai.gateway.core.llm.StructuredOutput("{\"type\":\"object\",\"properties\":{\"sentences\":{\"type\":\"array\",\"maxItems\":20,\"items\":{\"type\":\"object\",\"properties\":{\"text\":{\"type\":\"string\",\"minLength\":1,\"maxLength\":1000},\"factIds\":{\"type\":\"array\",\"minItems\":1,\"maxItems\":6,\"items\":{\"enum\":[\"e1\"]}}},\"required\":[\"text\",\"factIds\"],\"additionalProperties\":false}}},\"required\":[\"sentences\"],\"additionalProperties\":false}");
         assertThat(client().chat(CallType.COMPOSER,messages,max(CallType.COMPOSER),new com.nori.ai.gateway.core.job.CancellationToken(),schema))
             .isInstanceOfSatisfying(Completed.class,value->{assertThat(value.inputTokens()).isEqualTo(100);assertThat(value.promptTokens()).isEqualTo(100);});
         var request=stub.received().stream().filter(r->r.path().equals("/v1/chat/completions")).findFirst().orElseThrow();
         var body=JSON.readTree(request.body());
         assertThat(body.path("response_format").path("json_schema").path("schema")).isEqualTo(JSON.readTree(schema.schema()));
-        assertThat(body.path("messages").toString()).doesNotContain("citations","enum");
+        assertThat(body.path("messages").toString()).doesNotContain("factIds","enum");
         assertThat(context.getBean(PromptTokenCounting.class).count(messages)).isEqualTo(100);
         var large=new com.nori.ai.gateway.core.llm.StructuredOutput(JSON.writeValueAsString(Map.of("enum",List.of("문법선택 ".repeat(6000)))));
         assertThat(client().chat(CallType.COMPOSER,messages,max(CallType.COMPOSER),new com.nori.ai.gateway.core.job.CancellationToken(),large)).isInstanceOf(InferenceClient.BudgetExceeded.class);

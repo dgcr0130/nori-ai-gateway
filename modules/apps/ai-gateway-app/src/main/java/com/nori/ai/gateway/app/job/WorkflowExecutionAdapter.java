@@ -81,7 +81,7 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         if(prepared!=null&&!service.groundedQuestionFits(job))return assembler.assemble(outcome,ComposerOutcome.INPUT_BUDGET_EXCEEDED,job.inferenceMode());
         if(prepared!=null&&!prepared.sufficient())return assembler.assemble(outcome,ComposerOutcome.NOT_INVOKED,job.inferenceMode());
         if(prepared==null&&pauses.isPresent())pauses.get().hit(com.nori.ai.gateway.app.hooks.PausePointRegistry.Point.BEFORE_COMPOSER,job.jobId());
-        var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected(),prepared.history());
+        var input=prepared==null?ComposerInputs.build(job,outcome,definition.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW,registry,sanitizer,logSummarizer):ComposerInputs.selected(job,prepared.selected(),prepared.history(),prepared.businessTargets());
         body(System.getLogger(getClass().getName()),INFO,"COMPOSER_INPUT",SchemaContracts.JSON.writeValueAsString(input),"jobId",job.jobId());
         var composed=service.compose(job,input);
         body(System.getLogger(getClass().getName()),INFO,"COMPOSER_OUTPUT",SchemaContracts.JSON.writeValueAsString(composed),"jobId",job.jobId());

@@ -84,11 +84,10 @@ class HybridSearchHttpTest {
                     String intent=task.equals("LIVE_QUERY")?"fixture-read":task.equals("GENERAL_QUERY")?"help":"document";
                     var selection=SchemaContracts.JSON.createObjectNode();selection.putArray("needs").addObject().put("intent",intent).putNull("subject");
                     String text=classify?selection.toString():literalAnswer(messages,mode.equals("retry"));
-                    if(!classify&&Set.of("all-removed","truncated-all-removed").contains(mode))text="{\"selectedIds\":[\"UNKNOWN\"]}";
+                    if(!classify&&Set.of("all-removed","truncated-all-removed").contains(mode))text="{\"sentences\":[{\"text\":\"설비 상태 T3\",\"factIds\":[\"UNKNOWN\"]}]}";
                     if(!classify&&mode.equals("partial")) {
                         var answer=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(text);
-                        var keys=new ArrayList<String>();answer.propertyNames().forEach(keys::add);assertThat(keys.size()).isGreaterThan(1);
-                        answer.put(keys.getLast(),"invalid");text=answer.toString();
+                        answer.withArray("sentences").addObject().put("text","999999").putArray("factIds").add("e1");text=answer.toString();
                     }
                     int prompt=counter.countText(InferenceFixtures.renderer().render(messages)),completion=counter.countText(text);
                     var body=SchemaContracts.JSON.createObjectNode().put("id","local").put("object","chat.completion").put("created",1).put("model","qwen3:4b");
@@ -118,9 +117,9 @@ class HybridSearchHttpTest {
                 var config=new CoreBeansConfiguration();var client=context.getBean(InferenceClient.class);var expiry=new ExpiryCheckpoint();var business=ConfiguredTool.create(OwnerSystem.TC,"asset.read","설비 상태 조회",mode.equals("stale-log")?ToolKind.LOG:ToolKind.BUSINESS,SchemaContracts.parse("{\"type\":\"object\",\"additionalProperties\":false}"),SchemaContracts.parse("{\"type\":\"object\"}"),List.of("READ"),10000);
                 var versions=new ContractVersionPolicy();var registry=new CapabilityRegistry(Set.of("seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)?List.of(business):List.of(),Set.of(ImplementationPhase.PHASE_1),versions);
                 var declarations=List.of(
-                    new ClassificationIntent("fixture-read","로컬 자료 조회",List.of("asset.read"),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.LIVE_QUERY,false),
-                    new ClassificationIntent("document","문서",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.KNOWLEDGE_QUERY,true),
-                    new ClassificationIntent("help","도움말",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.GENERAL_QUERY,false));
+                    new ClassificationIntent("fixture-read","로컬 자료 조회",List.of("asset.read"),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.LIVE_QUERY,false,false),
+                    new ClassificationIntent("document","문서",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.KNOWLEDGE_QUERY,true,false),
+                    new ClassificationIntent("help","도움말",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.GENERAL_QUERY,false,false));
                 var glossary=mode.equals("same-query")?Map.<String,String>of():Map.of("T3","상태");
                 var inputs=mock(ClassificationInputs.class);when(inputs.load(any())).thenReturn(new ClassificationService.Context(registry.view(scope),List.of(),glossary,2,List.of(),declarations));
                 var classification=config.classificationService(client,policy,context.getBean(HfTokenizerCounter.class),context.getBean(PromptTokenCounting.class),expiry,Optional.empty(),audits::add,inputs);
@@ -154,17 +153,17 @@ class HybridSearchHttpTest {
                     assertThat(embeddingRequests.get(i)).isEqualTo(SchemaContracts.JSON.valueToTree(expected));
                 }
                 switch(mode) {
-                    case "retry"->{assertThat(embeddings).isEqualTo(2);assertThat(chats).isEqualTo(2);assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("text").asString()).isEqualTo("설비 T3[1]\n상태 T3[2]");assertThat(terminal.commitData().orElseThrow().sourceDeps().knowledgeDocuments()).hasSize(2);}
+                    case "retry"->{assertThat(embeddings).isEqualTo(2);assertThat(chats).isEqualTo(2);assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("text").asString()).isEqualTo("설비 T3[1] 상태 T3[2]");assertThat(terminal.commitData().orElseThrow().sourceDeps().knowledgeDocuments()).hasSize(2);}
                     case "seven"->{assertThat(embeddings).isZero();assertThat(chats).as("status=%s payload=%s paths=%s",terminal.resultStatus(),terminal.resultPayload(),sent.stream().map(v->v.split(" ")[0]).toList()).isEqualTo(2);var saved=terminal.commitData().orElseThrow().snapshot().orElseThrow();assertThat(saved.evidence()).hasSize(7);for(int i=0;i<7;i++){assertThat(saved.evidence().get(i).path("number").asInt()).isEqualTo(i+1);assertThat(saved.evidence().get(i).path("bodyMasked").asString()).isEqualTo("설비 상태 T3 항목 "+(i+1));}assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");}
                     case "large"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(1);assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.PARTIAL);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.PARTIAL);assertThat(terminal.eventType()).isEqualTo("job.partial");assertThat(terminal.resultPayload().get("missingFields")).isEqualTo(List.of("truncatedItems"));assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("kind").asString()).isEqualTo("NO_EVIDENCE");}
                     case "all-removed","truncated-all-removed"->{
                         assertThat(chats).isEqualTo(2);boolean truncated=mode.equals("truncated-all-removed");
-                        assertThat(terminal.resultStatus()).isEqualTo(truncated?ResultStatus.PARTIAL:ResultStatus.EMPTY);assertThat(terminal.jobStatus()).isEqualTo(truncated?JobStatus.PARTIAL:JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo(truncated?"job.partial":"job.completed");assertThat(terminal.errorCode()).isNull();
-                        var answer=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"));assertThat(answer.path("kind").asString()).isEqualTo("NO_EVIDENCE");assertThat(answer.path("text").asString()).isEqualTo("근거 없음");assertThat(answer.path("sentences")).isEmpty();assertThat(answer.path("citations")).isEmpty();
+                        assertThat(terminal.resultStatus()).isEqualTo(truncated?ResultStatus.PARTIAL:ResultStatus.SUCCESS);assertThat(terminal.jobStatus()).isEqualTo(truncated?JobStatus.PARTIAL:JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo(truncated?"job.partial":"job.completed");assertThat(terminal.errorCode()).isNull();
+                        var answer=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"));assertThat(answer.path("kind").asString()).isEqualTo("PARTIAL");assertThat(answer.path("text").asString()).isEqualTo("확인된 조회 결과를 문장으로 정리하지 못했습니다. 참고 자료의 근거 원문을 확인해 주세요.");assertThat(answer.path("sentences")).isEmpty();assertThat(answer.path("citations")).isNotEmpty();
                         if(truncated){assertThat(embeddings).isZero();assertThat(terminal.resultPayload().get("missingFields")).isEqualTo(List.of("truncatedItems"));var saved=terminal.commitData().orElseThrow().snapshot().orElseThrow();assertThat(saved.evidence()).singleElement().satisfies(unit->{assertThat(unit.path("number").asInt()).isEqualTo(1);assertThat(unit.path("location").path("ref").asString()).isEqualTo("item-2");assertThat(unit.path("bodyMasked").asString()).isEqualTo("설비 상태 T3 항목 2");});}else assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");
                     }
                     case "partial"->{assertThat(chats).isEqualTo(2);assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.SUCCESS);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo("job.completed");assertThat(terminal.errorCode()).isNull();var answer=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"));assertThat(answer.path("kind").asString()).isEqualTo("PARTIAL");assertThat(answer.path("text").asString()).isEqualTo("설비 상태 T3[1]");assertThat(answer.path("sentences")).hasSize(1);assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");}
-                    case "stale-log"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.STALE);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo("job.completed");assertThat(terminal.errorCode()).isNull();var answer=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"));assertThat(answer.path("kind").asString()).isEqualTo("PARTIAL");assertThat(answer.path("text").asString()).isEqualTo("설비 상태 T3[1]\n최신 자료가 아닐 수 있습니다.");assertThat(answer.path("sentences")).hasSize(1);assertThat(answer.path("citations").get(0).path("sourceType").asString()).isEqualTo("LOG");assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");}
+                    case "stale-log"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.STALE);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.SUCCEEDED);assertThat(terminal.eventType()).isEqualTo("job.completed");assertThat(terminal.errorCode()).isNull();var answer=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer"));assertThat(answer.path("kind").asString()).isEqualTo("PARTIAL");assertThat(answer.path("text").asString()).isEqualTo("설비 상태 T3[1]\n\n최신 자료가 아닐 수 있습니다.");assertThat(answer.path("sentences")).hasSize(1);assertThat(answer.path("citations").get(0).path("sourceType").asString()).isEqualTo("LOG");assertThat(terminal.resultPayload()).doesNotContainKey("missingFields");}
                     case "http-fail","non-json","source-http-fail","source-non-json"->{
                         assertThat(chats).isEqualTo(2);boolean data=mode.startsWith("source-");assertThat(terminal.resultStatus()).isEqualTo(data?ResultStatus.PARTIAL:ResultStatus.FAILED);assertThat(terminal.jobStatus()).isEqualTo(data?JobStatus.PARTIAL:JobStatus.FAILED);assertThat(terminal.eventType()).isEqualTo(data?"job.partial":"job.failed");assertThat(terminal.errorCode()).isEqualTo(ErrorCode.LLM_UNAVAILABLE);assertThat(terminal.resultPayload()).containsEntry("missingFields",List.of("answer")).doesNotContainKey("answer");
                         var commit=terminal.commitData().orElseThrow();assertThat(commit.snapshot()).isEmpty();assertThat(commit.assistantMessage().orElseThrow().contentMasked()).isEmpty();
@@ -185,12 +184,12 @@ class HybridSearchHttpTest {
     }
     /** 선택된 실제 단위와 같은 text/인용만 반환하며 검색 결과나 token oracle을 바꾸지 않습니다. */
     private String literalAnswer(List<ChatMessage> messages,boolean all) {
-        var evidence=SchemaContracts.JSON.readTree(messages.getLast().content()).path("data").path("evidence");
-        if(!evidence.isArray()||evidence.isEmpty())return "등록된 기능을 안내합니다.";
-        var result=SchemaContracts.JSON.createObjectNode();
-        for(int i=0;i<evidence.size();i++) {
-            var marker=java.util.regex.Pattern.compile("\\[(C[0-9]+)@L[0-9]+]").matcher(evidence.get(i).path("body").asString());
-            boolean first=true;while(marker.find()){result.put(marker.group(1),(all||i==0)&&first);first=false;}
+        var facts=SchemaContracts.JSON.readTree(messages.getLast().content()).path("facts");
+        if(!facts.isArray()||facts.isEmpty())return "등록된 기능을 안내합니다.";
+        var result=SchemaContracts.JSON.createObjectNode();var rows=result.putArray("sentences");
+        for(int i=0;i<facts.size();i++)if(all||i==0) {
+            var fact=facts.get(i);String text=fact.path("text").asString().split("\\n",2)[0];
+            rows.addObject().put("text",text).putArray("factIds").add(fact.path("id").asString());
         }
         return result.toString();
     }

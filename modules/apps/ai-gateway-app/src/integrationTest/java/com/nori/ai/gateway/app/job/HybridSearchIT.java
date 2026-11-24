@@ -26,9 +26,10 @@ class HybridSearchIT extends LlmStubSupport {
         return intentWire(task.equals("LIVE_QUERY")?"status":"document",null);
     }
     @Test void activeCorpusFlowsThroughTheActualJobAndProtectsStoredResultWithDocumentDependencies()throws Exception {
-        seed();var job=admitScripted("hybrid-document","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),composeSelection("C1")),Optional.empty(),null);
+        seed();var job=admitScripted("hybrid-document","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),composeFacts("설비 상태 T3","e1")),Optional.empty(),null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");assertThat(result(job.jobId())).containsEntry("status","SUCCESS");assertThat(scripts().scriptedCalls(job.jobId(),CallType.CLASSIFY)).isOne();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
         assertThat(stub.count("/v1/embeddings")).isEqualTo(1);assertThat(payload(job.jobId()).path("toolSummary")).hasSize(1);
+        assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("ANSWER");assertThat(payload(job.jobId()).path("answer").path("text").asString()).isEqualTo("설비 상태 T3[1]");
         var deps=json.readTree(jdbc().sql("SELECT result_source_deps::text FROM gw.result WHERE job_id=:id").param("id",job.jobId()).query(String.class).single());assertThat(deps.path("knowledgeDocuments")).hasSize(1);assertThat(deps.path("knowledgeDocuments").get(0).path("revision").asString()).isEqualTo("a".repeat(64));
     }
     @Test void normalEmptyCorpusSearchesTwiceAndNeverCallsComposer()throws Exception {

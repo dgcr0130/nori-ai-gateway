@@ -36,16 +36,20 @@ public class WorkflowExecutionConfiguration {
     @Bean WorkflowExecutionAdapter workflowExecutionAdapter(CapabilityRegistry registry,WorkflowPlanBuilder builder,WorkflowExecutor executor,WorkflowResourceResolverFactory resolvers,TimeWindowResolver windows,MessageRepository messages,ExpiryCheckpoint expiry,ContentSanitizer sanitizer,TerminalOutcomeAssembler assembler,ConversationSummaryBuilder summaries,com.nori.ai.gateway.core.evidence.EvidenceAssembler evidence,com.nori.ai.gateway.app.observability.AuditRecorder audit,
             java.util.Optional<com.nori.ai.gateway.core.llm.ComposerService> composer,LogSummarizer logSummarizer,java.util.Optional<com.nori.ai.gateway.app.hooks.PausePointRegistry> pauses,java.util.Optional<WorkflowGrounding> grounding){return new WorkflowExecutionAdapter(registry,builder,executor,resolvers,windows,messages,expiry,sanitizer,assembler,summaries,evidence,audit,composer,logSummarizer,pauses,grounding);}
     /**
-     * Response Composer(Plan P20). 추론 비활성에서는 빈 자체가 없다(N7). 프롬프트는 compose-v1 이고 답변 토큰은 pin tokenizer 로 센다.
+     * Response Composer(Plan P20). 추론 비활성에서는 빈 자체가 없다(N7). 도움말은 compose-v1, 근거 답변은 core의 compose-v2를 쓰며 답변 토큰은 pin tokenizer로 센다.
      * 추론 활성 조건과 프롬프트 자원을 이 Job 실행 설정이 함께 가진다(Plan §16.4 WorkflowExecutionConfiguration 의 Composer 배선).
      */
     @Bean @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="ai.gateway.inference.mode",havingValue="enabled")
     com.nori.ai.gateway.core.llm.ComposerService composerService(InferenceClient inference,com.nori.ai.gateway.core.budget.PromptReducer reducer,com.nori.ai.gateway.core.budget.TokenBudgetPolicy policy,
             com.nori.ai.gateway.integration.tokenizer.HfTokenizerCounter tokenizer,ExpiryCheckpoint expiry,java.util.Optional<com.nori.ai.gateway.core.llm.LlmCallObserver> observer,
             com.nori.ai.gateway.core.llm.LlmCallAudit audit,com.nori.ai.gateway.core.knowledge.SearchLanguage language,org.springframework.core.env.Environment environment,com.nori.ai.gateway.core.knowledge.SearchSettings search,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems){
-        if(!prompt(COMPOSE_SELECT_PROMPT).equals(com.nori.ai.gateway.core.llm.EvidenceCandidateSelection.systemPrompt(false)))throw new IllegalStateException("선택 프롬프트 자원과 전송 계약이 다릅니다");
-        if(!prompt(COMPOSE_SELECT_SUFFIX_PROMPT).equals(com.nori.ai.gateway.core.llm.EvidenceCandidateSelection.CONDITION_INSTRUCTION))throw new IllegalStateException("선택 보완 지시 자원과 전송 계약이 다릅니다");
-        return new com.nori.ai.gateway.core.llm.ComposerService(inference,reducer,policy,tokenizer::countText,expiry,observer.orElse(com.nori.ai.gateway.core.llm.LlmCallObserver.NONE),audit,prompt(COMPOSE_PROMPT),language,configurationFingerprint(environment,search,systems));
+        var presentations=new java.util.HashMap<com.nori.ai.gateway.core.scope.OwnerSystem,com.nori.ai.gateway.core.llm.ComposerService.Presentation>();
+        systems.systems().forEach((id,system)->{
+            var descriptions=new java.util.HashMap<String,String>();system.tools().forEach(tool->descriptions.put(tool.id(),tool.description()));
+            var tableTools=new java.util.HashSet<String>();system.intents().stream().filter(com.nori.ai.gateway.core.llm.ClassificationIntent::answerTable).forEach(intent->tableTools.addAll(intent.toolIds()));
+            presentations.put(com.nori.ai.gateway.core.scope.OwnerSystem.valueOf(id),new com.nori.ai.gateway.core.llm.ComposerService.Presentation(descriptions,tableTools));
+        });
+        return new com.nori.ai.gateway.core.llm.ComposerService(inference,reducer,policy,tokenizer::countText,expiry,observer.orElse(com.nori.ai.gateway.core.llm.LlmCallObserver.NONE),audit,prompt(COMPOSE_PROMPT),language,configurationFingerprint(environment,search,systems),presentations);
     }
     private static String configurationFingerprint(org.springframework.core.env.Environment environment,com.nori.ai.gateway.core.knowledge.SearchSettings search,com.nori.ai.gateway.app.config.GatewaySystemsProperties systems) {
         var settings=com.nori.ai.gateway.integration.inference.LlmSettings.load(environment);
@@ -53,14 +57,13 @@ public class WorkflowExecutionConfiguration {
         var values=new java.util.TreeMap<String,Object>();values.put("baseUrl",settings.baseUrl());values.put("generationModel",settings.generationModel());values.put("embeddingModel",settings.embeddingModel());
         values.put("temperature",settings.temperature());values.put("contextTokens",settings.contextTokens());values.put("tokenCounting",settings.tokenCounting());values.put("budgets",settings.budgets());
         values.put("evidenceTokens",settings.evidenceTokens());values.put("requestTimeout",settings.requestTimeout().toString());values.put("prompt",prompt(COMPOSE_PROMPT));values.put("mask","mask-v1");
-        values.put("groundedPrompt",prompt(COMPOSE_SELECT_PROMPT));values.put("groundedHistoryPrompt",com.nori.ai.gateway.core.llm.EvidenceCandidateSelection.systemPrompt(true));values.put("historyClassification",com.nori.ai.gateway.core.llm.CitedHistoryContext.INSTRUCTION);
-        values.put("groundedPromptVersion",com.nori.ai.gateway.core.llm.EvidenceCandidateSelection.PROMPT_VERSION);values.put("groundedSuffixAfterOwner",prompt(COMPOSE_SELECT_SUFFIX_PROMPT));values.put("groundedAnswerShape",com.nori.ai.gateway.core.llm.QuestionAnswerShape.contract());
+        values.put("groundedPrompt",prompt(com.nori.ai.gateway.core.llm.GroundedFacts.PROMPT_PATH));
+        values.put("groundedSchema",SchemaContracts.parse(com.nori.ai.gateway.core.llm.GroundedFacts.output(1).schema()));
+        values.put("historyClassification",com.nori.ai.gateway.core.llm.CitedHistoryContext.INSTRUCTION);values.put("groundedAnswerShape",com.nori.ai.gateway.core.llm.QuestionAnswerShape.contract());
         values.put("search",search);var sources=new java.util.TreeMap<String,Object>();systems.systems().forEach((id,system)->sources.put(id,java.util.Map.of("tools",system.tools(),"documents",system.documents(),"apps",system.apps(),"traces",system.traces(),"repositories",system.repositories(),"glossary",system.glossary(),"intents",system.intents())));values.put("systems",sources);
         return com.nori.ai.gateway.core.result.AnswerSnapshot.sha(SchemaContracts.canonicalize(SchemaContracts.JSON.writeValueAsString(values)));
     }
     public static final String COMPOSE_PROMPT="prompts/compose-v1.txt";
-    public static final String COMPOSE_SELECT_PROMPT="prompts/compose-select-v1.txt";
-    public static final String COMPOSE_SELECT_SUFFIX_PROMPT="prompts/compose-select-suffix-v1.txt";
     private static String prompt(String path){
         try(var input=WorkflowExecutionConfiguration.class.getClassLoader().getResourceAsStream(path)){
             if(input==null)throw new IllegalStateException("프롬프트 자원이 없습니다: "+path);

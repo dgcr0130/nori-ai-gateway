@@ -50,21 +50,19 @@ abstract class LlmStubSupport extends P09QueueSupport {
         String content=composeWire(text);
         return new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,Math.max(30,answerTokens(content)));
     }
-    /** 성공 fixture가 실제 제공된 후보 ID를 명시합니다. 무효 출력의 자동 보정에는 사용하지 않습니다. */
-    protected static TestHookRegistry.LlmReply composeSelection(String... ids) {
-        return composeSelection(Arrays.stream(ids).mapToInt(id->Integer.parseInt(id.substring(1))).max().orElse(0),ids);
+    /** 문장과 fact ID를 명시하며 원문 후보를 복원하지 않습니다. */
+    protected static TestHookRegistry.LlmReply composeFacts(String text,String... ids) {
+        return composeSentences(List.of(Map.of("text",text,"factIds",List.of(ids))));
     }
-    protected static TestHookRegistry.LlmReply composeSelection(int count,String... ids) {
-        var decisions=SchemaContracts.JSON.createObjectNode();for(int i=1;i<=count;i++)decisions.put("C"+i,false);
-        for(String id:ids)decisions.put(id,true);
-        String content=decisions.toString();
+    protected static TestHookRegistry.LlmReply composeSentences(List<Map<String,Object>> rows) {
+        String content=SchemaContracts.JSON.writeValueAsString(Map.of("sentences",rows));
         return new TestHookRegistry.LlmReply(CallType.COMPOSER,content,"stop",null,Math.max(30,answerTokens(content)));
     }
     protected static String composeWire(String text) {
-        var matcher=java.util.regex.Pattern.compile("\\[e([0-9]+)]").matcher(text);var citations=new ArrayList<Integer>();
-        while(matcher.find())citations.add(Integer.parseInt(matcher.group(1)));
+        var matcher=java.util.regex.Pattern.compile("\\[e([0-9]+)]").matcher(text);var citations=new ArrayList<String>();
+        while(matcher.find())citations.add("e"+matcher.group(1));
         if(citations.isEmpty()||text.contains("<think>")||text.contains("</think>"))return text;
-        return SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(Map.of("text",text.replaceAll("\\[e[0-9]+]",""),"citations",citations))));
+        return SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(Map.of("text",text.replaceAll("\\[e[0-9]+]",""),"factIds",citations))));
     }
     /** 기존 호출부의 시나리오 코드만 의도 ID로 옮기며 시각·도구 인자를 응답에 넣지 않습니다. */
     protected static String wire(String t,String eqp,String from,String to,String qRef){

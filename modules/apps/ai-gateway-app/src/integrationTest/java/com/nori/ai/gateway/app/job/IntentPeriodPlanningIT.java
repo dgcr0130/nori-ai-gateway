@@ -19,14 +19,14 @@ class IntentPeriodPlanningIT extends LlmStubSupport {
     @Test void missingRequiredPeriodClarifiesAndOptionalDlqDoesNotRequireOne()throws Exception {
         var required=admitScripted("missing-period","EQP-001 통신 로그",clockOnly(),List.of(classify(intentWire("communication","EQP-001"))),Optional.empty(),null);
         assertThat(terminal(required)).isEqualTo("FAILED");assertClarification(required.jobId(),"TIME_WINDOW_REQUIRED",List.of("timeWindow"));assertThat(tools(required.jobId())).isZero();
-        calls().reset();var optional=admitScripted("optional-dlq","EQP-001 DLQ 조회",clockOnly(),List.of(classify(intentWire("dlq","EQP-001")),composeSelection("C1")),Optional.empty(),null);terminal(optional);
+        calls().reset();var optional=admitScripted("optional-dlq","EQP-001 DLQ 조회",clockOnly(),List.of(classify(intentWire("dlq","EQP-001")),composeFacts(OBSERVED_TEXT,"e1")),Optional.empty(),null);terminal(optional);
         assertThat(result(optional.jobId()).get("error_code")).isNull();assertThat(calls().requests).singleElement().satisfies(r->{assertThat(r.body().path("toolId").asString()).isEqualTo("tc.dlq.list");assertThat(r.body().path("arguments")).isEqualTo(json.valueToTree(Map.of("eqp","EQP-001")));});
         assertThat(jdbc().sql("SELECT capability_id FROM gw.tool_execution WHERE job_id=:job").param("job",optional.jobId()).query(String.class).list()).containsExactly("tc.dlq.list");
     }
     @Test void noQuestionPeriodUsesContextThenImmediatelyPrecedingResolvedWindowInUtc()throws Exception {
-        var first=admitScripted("context-period","EQP-001 통신 로그",windowOnly(),List.of(classify(intentWire("communication","EQP-001")),composeSelection("C1")),Optional.empty(),null);terminal(first);
+        var first=admitScripted("context-period","EQP-001 통신 로그",windowOnly(),List.of(classify(intentWire("communication","EQP-001")),composeFacts(OBSERVED_TEXT,"e1")),Optional.empty(),null);terminal(first);
         assertThat(calls().requests).singleElement().satisfies(r->{assertThat(r.body().path("arguments").path("from").asString()).isEqualTo("2026-11-05T23:00:00Z");assertThat(r.body().path("arguments").path("to").asString()).isEqualTo("2026-11-05T23:30:00Z");});
-        calls().reset();var second=admitScripted("previous-period","EQP-001 통신 로그",clockOnly(),List.of(classify(intentWire("communication","EQP-001")),composeSelection("C1")),Optional.empty(),first.conversationId());terminal(second);
+        calls().reset();var second=admitScripted("previous-period","EQP-001 통신 로그",clockOnly(),List.of(classify(intentWire("communication","EQP-001")),composeFacts(OBSERVED_TEXT,"e1")),Optional.empty(),first.conversationId());terminal(second);
         assertThat(calls().requests).singleElement().satisfies(r->{assertThat(r.body().path("arguments").path("from").asString()).isEqualTo("2026-11-05T23:00:00Z");assertThat(r.body().path("arguments").path("to").asString()).isEqualTo("2026-11-05T23:30:00Z");});
     }
     @Test void unsupportedUsesExistingTerminalResultAndDerivedAuditType()throws Exception {

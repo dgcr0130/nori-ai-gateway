@@ -136,6 +136,7 @@ class BusinessGroundingContractTest {
         var adapter=new WorkflowExecutionAdapter(f.registry(),builder,executor,mock(WorkflowResourceResolverFactory.class),new TimeWindowResolver(),mock(MessageRepository.class),new ExpiryCheckpoint(),new ContentSanitizer(),new TerminalOutcomeAssembler(),new ConversationSummaryBuilder(),new EvidenceAssembler(),mock(AuditRecorder.class),Optional.of(composer),new LogSummarizer(),Optional.empty(),Optional.of(f.grounding()));
         var terminal=adapter.execute(f.job());assertThat(terminal.resultStatus()).isEqualTo(ResultStatus.PARTIAL);assertThat(terminal.jobStatus()).isEqualTo(JobStatus.PARTIAL);
         assertThat(terminal.resultPayload().get("missingFields")).isEqualTo(List.of("truncatedItems"));
-        assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("kind").asString()).isEqualTo("ANSWER");verify(composer).compose(any(),any());
+        assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("kind").asString()).isEqualTo("ANSWER");var captured=org.mockito.ArgumentCaptor.forClass(ComposerService.Input.class);verify(composer).compose(any(),captured.capture());
+        assertThat(captured.getValue().businessTargets()).containsExactly("CLN_001");
     }
 }

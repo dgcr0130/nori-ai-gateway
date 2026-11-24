@@ -68,7 +68,7 @@ class LlmScriptedTransportIT extends LlmStubSupport {
     }
 
     @Test @Tag("AC-31") void stubUsageEqualsTheGatewayCountAndAShorterUsageIsDetectedAsTruncationBehindTheScript() throws Exception {
-        var counted = admitScripted("usage-count", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), composeSelection("C1")), Optional.empty(), null);
+        var counted = admitScripted("usage-count", "EQP-001 상태 알려줘", windowOnly(), List.of(classify(wire("LQ", "EQP-001", null, null, null)), composeFacts(OBSERVED_TEXT,"e1")), Optional.empty(), null);
         assertThat(terminal(counted)).isEqualTo("SUCCEEDED");
         assertThat(payload(counted.jobId()).path("answer").path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");
         var truncated = admitScripted("usage-short", "EQP-001 상태 알려줘", windowOnly(),
@@ -82,7 +82,7 @@ class LlmScriptedTransportIT extends LlmStubSupport {
         perms = Set.of("EQP_READ", "COMM_LOG_READ", "DLQ_READ", "AI_LOG_READ", "AI_TRACE_READ");
         // 장애 의도의 4개 앱 로그 행과 빈 trace를 사용하며 업무 snapshot은 추가하지 않습니다.
         context.getBean(WorkflowSourceFixture.Server.class).logText="EQP-001 장애 원인 관측 자료";
-        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), composeSelection(4,"C1")), Optional.empty(), null);
+        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), composeFacts(OBSERVED_TEXT,"e1")), Optional.empty(), null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");
         var trace = new ArrayList<String>();
         payload(job.jobId()).path("trace").forEach(value -> trace.add(value.path("outcome").asString()));

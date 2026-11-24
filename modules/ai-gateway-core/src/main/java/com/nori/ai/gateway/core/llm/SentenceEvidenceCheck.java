@@ -11,7 +11,6 @@ import java.util.regex.Pattern;
 /** 인용한 단위의 본문과 그 헤더만 비교하며 의미 추론이나 수치 변환을 하지 않습니다. */
 public final class SentenceEvidenceCheck {
     private static final Set<String> FUNCTION=Set.of("근거","확인","결과","정보","조회","문서","내용","값");
-    private static final Pattern FACT=Pattern.compile("(?<![a-z0-9_.])(?:[+−-]?[0-9]+(?:,[0-9]{3})+(?:\\.[0-9]+)?(?:[a-z][a-z0-9]*)?|[+−-]?\\.[0-9]+(?:[a-z][a-z0-9]*)?|[+−-]?[a-z0-9_]+(?:[.-][a-z0-9_]+)*)(?:%)?(?![a-z0-9_]|[.-][a-z0-9_])");
     private static final Pattern ENGLISH=Pattern.compile("(?<![a-z0-9_.-])[a-z_][a-z0-9_]*(?:[.-][a-z0-9_]+)*");
     private static final tools.jackson.databind.json.JsonMapper STRICT=SchemaContracts.JSON.rebuild().enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
     private final SearchLanguage language;
@@ -54,28 +53,7 @@ public final class SentenceEvidenceCheck {
         var citations=cited.stream().map(n->new GroundedAnswer.Citation(n,"e"+n,units.get(n-1).sourceType(),units.get(n-1).location())).toList();
         return new GroundedAnswer(partial?"PARTIAL":"ANSWER",String.join("\n",rendered),citations,kept);
     }
-    private boolean facts(String text,String body) {return factTokens(body).containsAll(factTokens(text));}
-    private Set<String> factTokens(String text) {
-        var tokens=new HashSet<String>();var matcher=FACT.matcher(SearchText.normalize(text));
-        while(matcher.find()) {
-            String token=matcher.group();if(!token.codePoints().anyMatch(Character::isDigit)&&token.chars().noneMatch(c->c=='.'||c=='_'||c=='-'))continue;
-            // 수치와 식별자의 최대 경계를 먼저 잡아 1,000·1.2.3·부호를 작은 숫자로 빌리지 않습니다.
-            // 한글 단위 뒤 조사는 같은 Nori의 실제 품사로 구분하며 수치를 변환하지 않습니다.
-            if(token.matches("[+−-]?(?:[0-9]+(?:,[0-9]{3})*(?:\\.[0-9]+)?|\\.[0-9]+)")) {
-                String suffix=SearchText.normalize(text).substring(matcher.end());var letters=Pattern.compile("^[가-힣]+").matcher(suffix);
-                if(letters.find()) {
-                    String attached=letters.group();var unit=new StringBuilder();int offset=0;
-                    for(var term:language.analyze(attached)) {
-                        if(!term.tag().startsWith("N")||!attached.startsWith(term.text(),offset))break;
-                        unit.append(term.text());offset+=term.text().length();
-                    }
-                    token+=unit;
-                }
-            }
-            tokens.add(token);
-        }
-        return tokens;
-    }
+    private boolean facts(String text,String body) {return FactTokens.extract(body,language).containsAll(FactTokens.extract(text,language));}
     private boolean names(String text,String evidence) {
         var available=new HashSet<String>();
         for(var term:language.analyze(evidence))if(Set.of("NNP","NNG").contains(term.tag()))available.add(SearchText.normalize(term.text()));

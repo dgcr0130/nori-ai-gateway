@@ -59,11 +59,11 @@ class CitedHistoryIT extends LlmStubSupport {
         if(reference)value.put("historyRef",ref);return value.toString();
     }
     private JobAdmissionService.Accepted first(String key,String question,String conversation)throws Exception {
-        var job=admitScripted(key,question,Map.of(),List.of(classify(wire(false,null)),composeSelection(2,"C1")),Optional.empty(),conversation);
+        var job=admitScripted(key,question,Map.of(),List.of(classify(wire(false,null)),composeFacts(FIRST,"e1")),Optional.empty(),conversation);
         assertSucceeded(job);assertThat(payload(job.jobId()).path("answer").path("text").asString()).isEqualTo(FIRST+"[1]");return job;
     }
     private JobAdmissionService.Accepted follow(String key,String conversation,String ref,Optional<TestHookRegistry.PromptWatch> watch) {
-        return admitScripted(key,FOLLOW,Map.of(),List.of(classify(wire(true,ref)),composeSelection(2,"C2")),watch,conversation);
+        return admitScripted(key,FOLLOW,Map.of(),List.of(classify(wire(true,ref)),composeFacts(SECOND,"e1")),watch,conversation);
     }
 
     @Test void actualAccessibleCitationSuppliesRetrievalContextAndCurrentSourceOnlyAnswerWithOriginalQuestion()throws Exception {
@@ -92,7 +92,7 @@ class CitedHistoryIT extends LlmStubSupport {
     @Test void independentInterjectionDoesNotRequestAHistoryReference()throws Exception {
         seed("a".repeat(64),Set.of("AI_DOC_READ"));var prior=first("independent-first","로그인 화면 아이디 저장은 무엇인가요?",null);
         var independent=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(wire(false,null));
-        var job=admitScripted("independent","그런데 다른 독립 질문: 새 권한 코드는 무엇인가요?",Map.of(),List.of(classify(independent.toString()),composeSelection(2,"C1")),Optional.empty(),prior.conversationId());
+        var job=admitScripted("independent","그런데 다른 독립 질문: 새 권한 코드는 무엇인가요?",Map.of(),List.of(classify(independent.toString()),composeFacts(FIRST,"e1")),Optional.empty(),prior.conversationId());
         assertSucceeded(job);assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
         assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isZero();
     }

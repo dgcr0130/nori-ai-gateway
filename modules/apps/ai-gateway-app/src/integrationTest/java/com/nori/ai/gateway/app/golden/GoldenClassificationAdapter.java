@@ -188,6 +188,54 @@ final class GoldenClassificationAdapter implements AutoCloseable {
         }
     }
 
+    /** 분류 골든과 같은 실제 client·tokenizer·설정으로 작성 경로를 실행합니다. */
+    Map<String,Object> compose(Path root,LlmGoldenCompositionTest.Case value) throws Exception {
+        transport.responses.clear();transport.calls=0;
+        Path fixture=root.resolve("modules/apps/ai-gateway-app/src/test/resources/fixtures/business-grounding/"+value.fixture()+".json");
+        byte[] bytes=java.nio.file.Files.readAllBytes(fixture);var data=SchemaContracts.JSON.readTree(bytes);
+        Instant observed=Instant.parse(value.observedAt());
+        var manifest=registry.find(OwnerSystem.TC,value.tool()).orElseThrow();
+        var permissions=new HashSet<String>();registry.all().forEach(tool->permissions.addAll(tool.requiredPermission()));
+        var scope=new VerifiedSystemScope(OwnerSystem.TC,"golden",new ActorRef("actor"),"actor",permissions,"0".repeat(64),observed.minusSeconds(1),observed.plusSeconds(180),"golden-compose");
+        var job=new JobContext("golden-compose","golden-conversation",scope,"d".repeat(22),new CancellationToken(),InferenceMode.ENABLED,
+            Map.of("taskType","LIVE_QUERY"),new JobRequestInput("message",1,value.question(),Map.of()));
+        job.cancellation().deadline(Instant.now().plusSeconds(180),Clock.systemUTC());
+        var definitionStep=new WorkflowDefinition.Step("business",value.tool(),null,List.of(),false,List.of());
+        var step=new PlanStep("business",value.tool(),List.of(),value.targets().stream().map(ref->new ResourceRef("EQP",ref)).toList(),SchemaContracts.JSON.createObjectNode().put("eqp",value.targets().getFirst()));
+        var definition=new WorkflowDefinition(OwnerSystem.TC,TaskType.LIVE_QUERY,List.of(definitionStep),WorkflowDefinition.AnswerSource.TOOL_RESULTS,null);
+        var plan=new WorkflowExecutionPlan(definition,new PlanEnvelope(job.jobId(),job.conversationId(),value.question(),List.of(),TaskType.LIVE_QUERY,List.of(step)),List.of(new WorkflowExecutionPlan.ExecutionStep(definitionStep,step)));
+        var items=SchemaContracts.JSON.convertValue(data.path("items"),new tools.jackson.core.type.TypeReference<List<Map<String,Object>>>(){});
+        var missing=SchemaContracts.JSON.convertValue(data.path("missingFields"),new tools.jackson.core.type.TypeReference<List<String>>(){});
+        ToolResultEnvelope result=Objects.requireNonNull(ReflectionTestUtils.invokeMethod(Class.forName("com.nori.ai.gateway.app.job.ToolResults"),"result",manifest,scope,ResultStatus.valueOf(data.path("status").asString()),items,observed,missing,List.of(),List.of(),null));
+        var outcome=new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("business",result,true,items.size())),List.of(),result.evidence(),new ResultSourceDeps(List.of(),List.of()),List.of(),List.of(),Optional.empty());
+        var diagnostics=new ArrayList<LlmDiagnostic>();
+        var observer=new LlmCallObserver(){public Scope open(String j,com.nori.ai.gateway.core.budget.CallType t,List<com.nori.ai.gateway.core.budget.ChatMessage> m){return ()->{};}
+            public void diagnostic(String j,com.nori.ai.gateway.core.budget.CallType t,LlmDiagnostic reason){diagnostics.add(reason);}};
+        try(var language=new com.nori.ai.gateway.persistence.knowledge.MemoryDocumentKeywordIndex()) {
+            com.nori.ai.gateway.core.knowledge.SearchSettings search=bean(core,"searchSettings",environment);
+            var composer=GoldenClassificationAdapter.<ComposerService>bean(new WorkflowExecutionConfiguration(),"composerService",inference,
+                new com.nori.ai.gateway.core.budget.PromptReducer(counter,settings.policy()),settings.policy(),tokenizer,expiry,Optional.of(observer),(LlmCallAudit)a->{},language,environment,search,systems);
+            var inputs=new GroundingInputs(systems,registry,new ContentSanitizer());
+            com.nori.ai.gateway.core.knowledge.DocumentSearch noSearch=(a,b,c,d)->{throw new AssertionError("업무 골든은 문서를 검색하지 않습니다");};
+            var grounding=new WorkflowGrounding(noSearch,language,search,new EvidenceSelection(tokenizer::countText,settings.policy().evidenceTokens()),inputs,Clock.fixed(observed,ZoneOffset.UTC),expiry,composer::fitsGrounded);
+            var prepared=grounding.prepare(job,plan,outcome,new ToolCallBudget());
+            // 사례 4는 충분성 gate를 우회해 작성기 자체의 대상 대조를 독립적으로 시험합니다.
+            var input=new ComposerService.Input(List.of(),List.of(),"",List.of(),value.question(),List.of(),Optional.of(prepared.selected().json()),prepared.history(),value.targets());
+            var composed=composer.compose(job,input);var answer=composed.answer().orElseThrow(()->new AssertionError("작성 결과가 없습니다: "+composed.outcome()));
+            int returnedRows=0;
+            for(var response:transport.responses) {
+                Object raw=response.get("rawResponse");
+                if(raw instanceof String text) returnedRows+=SchemaContracts.JSON.readTree(text).path("sentences").size();
+            }
+            long summaries=prepared.selected().units().stream().filter(u->u.location().path("ref").asString().endsWith(":result-summary")).count();
+            var record=new LinkedHashMap<String,Object>();record.put("answer",answer);record.put("calls",composed.calls());record.put("outcome",composed.outcome().name());
+            record.put("deletedSentences",returnedRows-(answer.sentences().size()-summaries));record.put("diagnostics",diagnostics);
+            record.put("fixtureSha256",AnswerSnapshot.sha(new String(bytes,java.nio.charset.StandardCharsets.UTF_8)));record.put("configurationSha256",composer.configurationSha256());
+            record.put("inputCount",items.size());record.put("fitsSelected",composer.fitsGrounded(job,prepared.selected().units(),prepared.history()));record.put("selectedCount",prepared.selected().units().size());record.put("truncatedItems",prepared.selected().truncatedItems());record.put("selected",prepared.selected().units());
+            return record;
+        }
+    }
+
     private void history(LlmGoldenClassificationTest.GoldenCase value, VerifiedSystemScope scope, String conversation,
             Instant now, MessageRepository messages, JobRepository jobs, ResultResponseAssembler access) {
         var stored = new ArrayList<MessageRepository.Message>();

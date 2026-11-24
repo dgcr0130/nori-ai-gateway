@@ -5,9 +5,9 @@ public final class SystemConfigFixtures {
  private SystemConfigFixtures(){}
  public static java.util.List<com.nori.ai.gateway.core.llm.ClassificationIntent> intents(){
   return java.util.List.of(
-   new com.nori.ai.gateway.core.llm.ClassificationIntent("status","설비 상태",java.util.List.of("tc.eqp.getOperationalSnapshot"),true,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.LIVE_QUERY,false),
-   new com.nori.ai.gateway.core.llm.ClassificationIntent("document","문서",java.util.List.of(),false,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.KNOWLEDGE_QUERY,true),
-   new com.nori.ai.gateway.core.llm.ClassificationIntent("help","도움말",java.util.List.of(),false,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY,false));
+   new com.nori.ai.gateway.core.llm.ClassificationIntent("status","설비 상태",java.util.List.of("tc.eqp.getOperationalSnapshot"),true,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.LIVE_QUERY,false,false),
+   new com.nori.ai.gateway.core.llm.ClassificationIntent("document","문서",java.util.List.of(),false,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.KNOWLEDGE_QUERY,true,false),
+   new com.nori.ai.gateway.core.llm.ClassificationIntent("help","도움말",java.util.List.of(),false,com.nori.ai.gateway.core.llm.ClassificationIntent.PeriodRequirement.NONE,com.nori.ai.gateway.core.registry.TaskType.GENERAL_QUERY,false,false));
  }
  public static GatewaySystemsProperties systems(){
   var tool=new GatewaySystemsProperties.Tool("tc.eqp.getOperationalSnapshot","설비 조회",Map.of("type","object","additionalProperties",false,"properties",Map.of("eqp",Map.of("type","string","minLength",1,"maxLength",64)),"required",List.of("eqp")),Map.of("type","object"),List.of("EQP_READ"),10000);

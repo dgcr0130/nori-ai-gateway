@@ -114,8 +114,8 @@ public final class WorkflowGrounding {
     }
     private boolean fits(JobContext job,List<EvidenceUnit> units,List<CitedHistoryContext.Pair> available) {
         try {
-            var history=matchedHistory(job,targets(job),units,available);var selector=EvidenceCandidateSelection.prepare(units);
-            return selection.fitsTransmission(selector.transmittedData(job.requestInput().maskedQuestion(),units,language,history),selector.output().schema())&&transmission.fits(job,units,history);
+            var history=matchedHistory(job,targets(job),units,available);
+            return selection.fitsTransmission(GroundedFacts.data(job.requestInput().maskedQuestion(),units,history),GroundedFacts.output(units.size()).schema())&&transmission.fits(job,units,history);
         }catch(IllegalArgumentException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowGrounding.class.getName()),"WORKFLOW_GROUNDING_FAILED",invalid);return false;}
     }
     private EvidenceSelection.Selected select(JobContext job,List<DocumentSearch.Round> rounds,List<EvidenceUnit> sources,List<CitedHistoryContext.Pair> available) {

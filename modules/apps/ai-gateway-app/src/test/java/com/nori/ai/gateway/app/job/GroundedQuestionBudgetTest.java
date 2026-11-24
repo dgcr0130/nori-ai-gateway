@@ -53,10 +53,13 @@ class GroundedQuestionBudgetTest {
             var now=Instant.now();var scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("READ"),"pdg",now,now.plusSeconds(60),"job");
             var classification=new Classification(TaskType.KNOWLEDGE_QUERY,List.of(),List.of(),Map.of(),"설정 조건","설정 범위");
             var job=new JobContext("job","conversation",scope,"delegation",new CancellationToken(),InferenceMode.ENABLED,classification.jobClassification(),new JobRequestInput("message",1,QUESTION,Map.of()));
-            var empty=EvidenceCandidateSelection.prepare(List.of());
-            String data=empty.transmittedData(QUESTION,List.of(),language,Optional.empty());
             PromptTokenCounting counter=messages->tokens.countText(InferenceFixtures.renderer().render(messages));
-            int mandatory=counter.count(EvidenceCandidateSelection.messages("TC",QUESTION,data,false));
+            var countedMessages=new ArrayList<List<ChatMessage>>();var initialPolicy=TokenBudgetPolicy.current();
+            var probe=new ComposerService(mock(InferenceClient.class),new PromptReducer(messages->{countedMessages.add(List.copyOf(messages));return counter.count(messages);},initialPolicy),initialPolicy,tokens::countText,new ExpiryCheckpoint(),LlmCallObserver.NONE,attempt->{},"일반 도움말",language);
+            probe.groundedQuestionFits(job);
+            var mandatoryMessages=countedMessages.getLast();
+            assertThat(SchemaContracts.JSON.readTree(mandatoryMessages.getLast().content()).path("facts").isArray()).isTrue();
+            int mandatory=counter.count(mandatoryMessages);
             var current=TokenBudgetPolicy.current();var budgets=new EnumMap<CallType,TokenBudgetPolicy.CallBudget>(CallType.class);
             for(var type:CallType.values())budgets.put(type,current.budget(type));
             int limit=scenario==Case.QUESTION_OVERFLOW?mandatory-1:scenario==Case.PARENT_OVERFLOW?mandatory+1:current.budget(CallType.COMPOSER).inputLimit();

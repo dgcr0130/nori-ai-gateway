@@ -18,7 +18,7 @@ public final class IntentTestFixtures {
         intent("help","도움말",List.of(),false,"NONE",TaskType.GENERAL_QUERY,false),
         intent("unsupported","지원 안 함",List.of(),false,"NONE",TaskType.UNSUPPORTED_REQUEST,false));
     static ClassificationIntent intent(String id,String description,List<String> tools,boolean subject,String period,TaskType task,boolean documents){
-        return new ClassificationIntent(id,description,tools,subject,ClassificationIntent.PeriodRequirement.valueOf(period),task,documents);
+        return new ClassificationIntent(id,description,tools,subject,ClassificationIntent.PeriodRequirement.valueOf(period),task,documents,false);
     }
     public static CapabilityRegistry registry(){
         var manifests=new ArrayList<CapabilityManifest>();

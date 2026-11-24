@@ -23,11 +23,11 @@ class ReportSectionsContractIT extends LlmStubSupport {
     private String deps(String job) { return jdbc().sql("SELECT result_source_deps::text FROM gw.result WHERE job_id=:id").param("id", job).query(String.class).single(); }
 
     @Test void theSelectedReadUsesTheSameVerifiedBlocksAndSourceDependencies()throws Exception {
-        var first=run("report-first","B",List.of(composeSelection("C1")),Optional.empty());var second=run("report-second","B",List.of(composeSelection("C1")),Optional.empty());assertThat(terminal(first)).isEqualTo("SUCCEEDED");assertThat(terminal(second)).isEqualTo("SUCCEEDED");assertThat(deps(first.jobId())).isEqualTo(deps(second.jobId()));assertThat(payload(first.jobId()).path("blocks")).hasSize(1);assertThat(payload(first.jobId()).path("answer").path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");
+        var first=run("report-first","B",List.of(composeFacts(OBSERVED_TEXT,"e1")),Optional.empty());var second=run("report-second","B",List.of(composeFacts(OBSERVED_TEXT,"e1")),Optional.empty());assertThat(terminal(first)).isEqualTo("SUCCEEDED");assertThat(terminal(second)).isEqualTo("SUCCEEDED");assertThat(deps(first.jobId())).isEqualTo(deps(second.jobId()));assertThat(payload(first.jobId()).path("blocks")).hasSize(1);assertThat(payload(first.jobId()).path("answer").path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");
     }
     @Test void composerReceivesServerCoverageButNoNewLongNarrativeCall() throws Exception {
         var watch = Optional.of(new TestHookRegistry.PromptWatch(List.of("관측 자료")));
-        var job = run("report-composer", "D", List.of(composeSelection("C1")), watch);
+        var job = run("report-composer", "D", List.of(composeFacts(OBSERVED_TEXT,"e1")), watch);
         assertThat(scripts().scriptedCalls(job.jobId(), CallType.COMPOSER)).as("D 도 요약 Composer 1회").isOne();
         assertThat(scripts().promptWatch(job.jobId()).orElseThrow()).contains(new LlmScriptRegistry.WatchRow(CallType.COMPOSER,0,1));
 

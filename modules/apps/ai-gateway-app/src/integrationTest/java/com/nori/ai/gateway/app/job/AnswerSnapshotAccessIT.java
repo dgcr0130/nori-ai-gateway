@@ -12,7 +12,7 @@ class AnswerSnapshotAccessIT extends LlmStubSupport {
         try(var client=java.net.http.HttpClient.newHttpClient()){return client.send(request,java.net.http.HttpResponse.BodyHandlers.ofString());}
     }
     @Test void actualValidatedSnapshotAndCitationsSurviveDeletionWhileEveryOrdinaryPathBecomes404() throws Exception {
-        var job=admitScripted("snapshot-access","EQP-001 상태",windowOnly(),List.of(classify(wire("LQ","EQP-001",null,null,null)),composeSelection("C1")),Optional.empty(),null);
+        var job=admitScripted("snapshot-access","EQP-001 상태",windowOnly(),List.of(classify(wire("LQ","EQP-001",null,null,null)),composeFacts(OBSERVED_TEXT,"e1")),Optional.empty(),null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
         assertThat(jdbc().sql("SELECT content_masked FROM gw.message WHERE conversation_id=:conversation AND role='assistant'").param("conversation",job.conversationId()).query(String.class).single()).isEqualTo(OBSERVED_TEXT+"[1]");
         var answer=payload(job.jobId()).path("answer");assertThat(answer.path("kind").asString()).isEqualTo("ANSWER");assertThat(answer.path("text").asString()).isEqualTo(OBSERVED_TEXT+"[1]");

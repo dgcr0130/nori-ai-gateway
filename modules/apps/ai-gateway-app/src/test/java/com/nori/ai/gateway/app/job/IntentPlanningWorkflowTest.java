@@ -32,7 +32,7 @@ class IntentPlanningWorkflowTest {
         declaration("communication",List.of("tc.commLogs.search"),true,"REQUIRED",TaskType.LIVE_QUERY),
         declaration("incident",List.of("logs.search","trace.search"),false,"REQUIRED",TaskType.INCIDENT_ANALYSIS),
         declaration("unsupported",List.of(),false,"NONE",TaskType.UNSUPPORTED_REQUEST));
-    ClassificationIntent declaration(String id,List<String> tools,boolean subject,String period,TaskType task){return new ClassificationIntent(id,id,tools,subject,ClassificationIntent.PeriodRequirement.valueOf(period),task,false);}
+    ClassificationIntent declaration(String id,List<String> tools,boolean subject,String period,TaskType task){return new ClassificationIntent(id,id,tools,subject,ClassificationIntent.PeriodRequirement.valueOf(period),task,false,false);}
     CapabilityRegistry registry(){
         var manifests=new ArrayList<CapabilityManifest>();
         for(var intent:declarations)for(String id:intent.toolIds()){

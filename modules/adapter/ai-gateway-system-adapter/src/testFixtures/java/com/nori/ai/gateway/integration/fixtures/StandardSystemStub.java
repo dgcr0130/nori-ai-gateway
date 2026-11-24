@@ -49,7 +49,15 @@ public final class StandardSystemStub implements AutoCloseable {
   String delegation=request.headers().entrySet().stream().filter(entry->entry.getKey().equalsIgnoreCase("X-Delegation-Id")).flatMap(entry->entry.getValue().stream()).findFirst().orElse("");if(revoked.contains(hash(delegation))||!Objects.equals(delegations.get(hash(delegation)),request.body().path("subject").asString()))status="DENIED";
   if(scenario.equals("comm-trim")&&request.body().path("toolId").asString().equals("tc.commLogs.search"))status="PARTIAL";
   var body=new LinkedHashMap<String,Object>();body.put("version",scenario.equals("contract-v2")?"2":"1");for(String key:List.of("systemId","jobId","toolId"))body.put(key,request.body().path(key).asString());body.put("status",status);body.put("observedAt",clock.instant().toString());
-  String ref=request.body().path("arguments").path("eqp").asString("record-1");body.put("data",Set.of("SUCCESS","PARTIAL").contains(status)?Map.of("items",List.of(Map.of("ref",ref,"text",evidenceText,"values",Map.of()))):"EMPTY".equals(status)?Map.of("items",List.of()):null);if(scenario.equals("composer-oversize")&&Set.of("SUCCESS","PARTIAL").contains(status)){var steps=new ArrayList<Map<String,Object>>();for(int i=1;i<=320;i++)steps.add(Map.of("step","STEP-"+i,"description","장비 공정 단계의 적용 조건과 검증 절차 "+i));body.put("data",Map.of("items",List.of(Map.of("ref",ref,"text","모델 공정 자료","values",Map.of("steps",steps)))));}
+  String ref=request.body().path("arguments").path("eqp").asString("record-1");body.put("data",Set.of("SUCCESS","PARTIAL").contains(status)?Map.of("items",List.of(Map.of("ref",ref,"text",evidenceText,"values",Map.of()))):"EMPTY".equals(status)?Map.of("items",List.of()):null);if(scenario.equals("composer-oversize")&&Set.of("SUCCESS","PARTIAL").contains(status)){
+   var steps=new ArrayList<Map<String,Object>>();var text=new StringBuilder("모델 공정 자료");
+   // 응답 본문 상한을 지키면서 근거 예산을 넘도록 단계 번호와 조건·검증절차를 짧게 적습니다.
+   for(int i=1;i<=320;i++){
+    String step="STEP-"+i,description="장비 공정 단계의 적용 조건과 검증 절차 "+i;
+    steps.add(Map.of("step",step,"description",description));text.append('\n').append(i).append(":조건·검증절차");
+   }
+   body.put("data",Map.of("items",List.of(Map.of("ref",ref,"text",text.toString(),"values",Map.of("steps",steps)))));
+  }
   body.put("missingFields",status.equals("PARTIAL")?List.of("fixture-missing"):List.of());boolean comm=request.body().path("toolId").asString().equals("tc.commLogs.search");
   body.put("warnings",comm?List.of("RETENTION_UNVERIFIED"):List.of());
   var ranges=new ArrayList<Map<String,String>>();if(comm&&scenario.equals("comm-trim")){var args=request.body().path("arguments");ranges.add(Map.of("from",args.path("from").asString(),"to",clock.instant().minusSeconds(600).toString()));}

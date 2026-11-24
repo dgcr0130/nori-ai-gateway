@@ -15,6 +15,8 @@ class GatewayIntentConfigurationTest {
         for(var source:new YamlPropertySourceLoader().load("intent-config",new FileSystemResource(Path.of(System.getProperty("aigw.rootDir")).resolve("config/ai-gateway.yaml"))))environment.getPropertySources().addLast(source);
         var tc=GatewaySystemsProperties.load(environment).systems().get("TC");
         assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","status","model","dlq","communication","incident","document","help","unsupported");
+        assertThat(tc.intents().stream().filter(i->i.answerTable()).map(i->i.id()).toList()).containsExactly("registration");
+        assertThat(tc.intents().stream().filter(i->!i.id().equals("registration"))).allSatisfy(i->assertThat(i.answerTable()).isFalse());
         assertThat(tc.intents()).allSatisfy(intent->assertThat(intent.description()).isNotBlank());
         assertThat(tc.intents().stream().filter(i->i.id().equals("registration")).findFirst().orElseThrow().toolIds()).containsExactly("tc.eqp.readRegistration");
         assertThat(tc.intents().stream().filter(i->i.id().equals("incident")).findFirst().orElseThrow().toolIds()).containsExactly("logs.search","trace.search");
@@ -32,6 +34,8 @@ class GatewayIntentConfigurationTest {
             .withProperty("ai.gateway.systems.TC.intents[0].subjectRequired","false").withProperty("ai.gateway.systems.TC.intents[0].periodRequirement","NONE")
             .withProperty("ai.gateway.systems.TC.intents[0].taskType","KNOWLEDGE_QUERY").withProperty("ai.gateway.systems.TC.intents[0].documentSearch","true");
         var intent=GatewaySystemsProperties.load(environment).systems().get("TC").intents().getFirst();
-        assertThat(intent.id()).isEqualTo("custom-doc");assertThat(intent.description()).isEqualTo("등록된 사용자 설명");assertThat(intent.toolIds()).isEmpty();assertThat(intent.subjectRequired()).isFalse();assertThat(intent.periodRequirement().name()).isEqualTo("NONE");assertThat(intent.taskType().name()).isEqualTo("KNOWLEDGE_QUERY");assertThat(intent.documentSearch()).isTrue();
+        assertThat(intent.id()).isEqualTo("custom-doc");assertThat(intent.description()).isEqualTo("등록된 사용자 설명");assertThat(intent.toolIds()).isEmpty();assertThat(intent.subjectRequired()).isFalse();assertThat(intent.periodRequirement().name()).isEqualTo("NONE");assertThat(intent.taskType().name()).isEqualTo("KNOWLEDGE_QUERY");assertThat(intent.documentSearch()).isTrue();assertThat(intent.answerTable()).isFalse();
+        environment.withProperty("ai.gateway.systems.TC.intents[0].answerTable","true");
+        assertThat(GatewaySystemsProperties.load(environment).systems().get("TC").intents().getFirst().answerTable()).isTrue();
     }
 }

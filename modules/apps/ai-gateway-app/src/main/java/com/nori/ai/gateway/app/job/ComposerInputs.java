@@ -26,8 +26,11 @@ final class ComposerInputs {
         return selected(job,selected,java.util.Optional.empty());
     }
     static ComposerService.Input selected(JobContext job,com.nori.ai.gateway.core.workflow.EvidenceSelection.Selected selected,java.util.Optional<com.nori.ai.gateway.core.llm.ClassificationService.HistoryPair> history) {
+        return selected(job,selected,history,List.of());
+    }
+    static ComposerService.Input selected(JobContext job,com.nori.ai.gateway.core.workflow.EvidenceSelection.Selected selected,java.util.Optional<com.nori.ai.gateway.core.llm.ClassificationService.HistoryPair> history,List<String> businessTargets) {
         var evidence=selected.units().stream().map(u->new ComposerService.EvidenceDigest(u.sourceType(),null,u.observedAt())).toList();
-        return new ComposerService.Input(evidence,List.of(),"",List.of(),job.requestInput().maskedQuestion(),List.of(),java.util.Optional.of(selected.json()),history);
+        return new ComposerService.Input(evidence,List.of(),"",List.of(),job.requestInput().maskedQuestion(),List.of(),java.util.Optional.of(selected.json()),history,businessTargets);
     }
 
     static ComposerService.Input build(JobContext job, WorkflowOutcome outcome, boolean registryView, CapabilityRegistry registry, ContentSanitizer sanitizer, LogSummarizer summarizer) {
