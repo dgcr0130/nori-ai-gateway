@@ -7,6 +7,7 @@ import com.nori.ai.gateway.core.result.*;
 import com.nori.ai.gateway.core.scope.*;
 import com.nori.ai.gateway.core.sanitize.ContentSanitizer;
 import com.nori.ai.gateway.core.workflow.*;
+import com.nori.ai.gateway.core.plan.*;
 import org.junit.jupiter.api.Test;
 import java.time.*;
 import java.util.*;
@@ -25,10 +26,22 @@ class GroundingInputsTest {
     }
     WorkflowOutcome outcome(List<List<Map<String,Object>>> rows) {
         var stages=new ArrayList<WorkflowOutcome.Stage>();for(int i=0;i<rows.size();i++) {
+            // 뒤쪽 Source 종류의 시험을 위한 빈 자리이며 업무 조회를 실행한 단계가 아닙니다.
+            if(i==0&&rows.get(i).isEmpty())continue;
             var result=ToolResults.result(tools.get(i),scope,ResultStatus.SUCCESS,rows.get(i),NOW,List.of(),Set.of(),List.of(),null);
             stages.add(new WorkflowOutcome.Stage("call-"+(i+1),result,true,rows.get(i).size()));
         }
         return new WorkflowOutcome(stages,List.of(),List.of(),new ResultSourceDeps(List.of(),List.of()),List.of(),List.of(),Optional.empty());
+    }
+    WorkflowExecutionPlan plan() {
+        var definitions=new ArrayList<WorkflowDefinition.Step>();var steps=new ArrayList<WorkflowExecutionPlan.ExecutionStep>();var projected=new ArrayList<PlanStep>();
+        for(int i=0;i<tools.size();i++) {
+            var definition=new WorkflowDefinition.Step("call-"+(i+1),tools.get(i).capabilityId(),null,List.of(),false,List.of());
+            var step=new PlanStep(definition.stepId(),definition.capabilityId(),List.of(),List.of(new ResourceRef("EQP","EQP-001")),SchemaContracts.JSON.createObjectNode().put("eqp","EQP-001"));
+            definitions.add(definition);projected.add(step);steps.add(new WorkflowExecutionPlan.ExecutionStep(definition,step));
+        }
+        var definition=new WorkflowDefinition(OwnerSystem.TC,TaskType.LIVE_QUERY,definitions,WorkflowDefinition.AnswerSource.TOOL_RESULTS,null);
+        return new WorkflowExecutionPlan(definition,new PlanEnvelope(job.jobId(),job.conversationId(),job.requestInput().maskedQuestion(),List.of(),TaskType.LIVE_QUERY,projected),steps);
     }
     @Test void sourceUnitsKeepArrayOrderLocationsValuesMaskingAndCanonicalBodies() {
         var system=List.<Map<String,Object>>of(Map.of("ref","EQP-002","text","설비 상태 T3 operator@example.com","values",Map.of("id","one")),Map.of("ref","EQP-001","text","별도 항목","values",Map.of("id","two")));
@@ -37,7 +50,7 @@ class GroundingInputsTest {
         var span2=new HashMap<>(span1);span2.put("startTimeUnixNano","2");span2.put("endTimeUnixNano","3");span2.put("name","첫번째");
         var traces=List.<Map<String,Object>>of(Map.of("traceId","t","spans",List.of(span1,span2)));
         var git=List.<Map<String,Object>>of(Map.of("sourceRepo","repo","path","b.java","ref","main","text","코드 B","codeRefKind","CURRENT_APPROVED_REF","deployedSourceCommit","UNKNOWN","missingEvidence",List.of()),Map.of("sourceRepo","repo","path","a.java","ref","main","text","코드 A"));
-        var found=inputs().collect(job,outcome(List.of(system,logs,traces,git)));assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).hasSize(8);
+        var found=inputs().collect(job,plan(),outcome(List.of(system,logs,traces,git)));assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).hasSize(8);
         assertThat(found.units().get(0).body()).contains("설비 상태 T3").doesNotContain("operator@example.com","two");assertThat(found.units().get(0).values().path("id").asString()).isEqualTo("one");
         assertThat(found.units().get(1).location().path("ref").asString()).isEqualTo("EQP-001");
         assertThat(found.units().get(2).body()).isEqualTo("최근 줄");assertThat(found.units().get(3).body()).isEqualTo("오래된 줄");
@@ -45,33 +58,32 @@ class GroundingInputsTest {
         assertThat(found.units().get(6).location().path("path").asString()).isEqualTo("a.java");assertThat(found.units().get(7).body()).contains("CURRENT_APPROVED_REF","UNKNOWN","missingEvidence");
         assertThat(found.units()).allSatisfy(u->{assertThat(u.permissions()).containsExactly("READ");assertThat(u.status()).isEqualTo("SUCCESS");assertThat(u.observedAt()).isEqualTo(NOW.toString());});
     }
-    @Test void missingRequiredLocationOrBodyRejectsTheStepAndZeroItemsIsZeroUnits() {
-        assertThat(inputs().collect(job,outcome(List.of(List.of()))).units()).isEmpty();
+    @Test void missingRequiredLocationOrBodyRejectsTheStep() {
         for(String field:List.of("ref","text","values")) {
             var row=new HashMap<String,Object>(Map.of("ref","EQP-001","text","설비 상태","values",Map.of()));row.remove(field);
-            var found=inputs().collect(job,outcome(List.of(List.of(row))));assertThat(found.units()).isEmpty();assertThat(found.invalidSteps()).containsExactly("call-1");
+            var found=inputs().collect(job,plan(),outcome(List.of(List.of(row))));assertThat(found.units()).isEmpty();assertThat(found.invalidSteps()).containsExactly("call-1");
         }
     }
     @Test void malformedLogTimeAndGitProvenanceAreContractFailuresRatherThanUsableEvidence() {
         var log=Map.<String,Object>of("app","app","namespace","ns","occurredAt","invalid-time","text","설비 상태 T3");
-        var invalidLog=inputs().collect(job,outcome(List.of(List.of(),List.of(log))));assertThat(invalidLog.units()).isEmpty();assertThat(invalidLog.invalidSteps()).containsExactly("call-2");
+        var invalidLog=inputs().collect(job,plan(),outcome(List.of(List.of(),List.of(log))));assertThat(invalidLog.units()).isEmpty();assertThat(invalidLog.invalidSteps()).containsExactly("call-2");
         var git=Map.<String,Object>of("sourceRepo","repo","path","a.java","ref","main","text","설비 상태 T3","missingEvidence",3);
-        var invalidGit=inputs().collect(job,outcome(List.of(List.of(),List.of(),List.of(),List.of(git))));assertThat(invalidGit.units()).isEmpty();assertThat(invalidGit.invalidSteps()).containsExactly("call-4");
+        var invalidGit=inputs().collect(job,plan(),outcome(List.of(List.of(),List.of(),List.of(),List.of(git))));assertThat(invalidGit.units()).isEmpty();assertThat(invalidGit.invalidSteps()).containsExactly("call-4");
     }
     @Test void sourcePermissionOrderComesFromTheConfigArrayAndMembershipStillRequiresAllPermissions() {
         var log=Map.<String,Object>of("app","app","namespace","ns","occurredAt",NOW.toString(),"text","설비 상태 T3");
         var configured=inputs(List.of("EXTRA","READ"));
         for(String capability:List.of("logs.search","trace.search","git.searchCode"))assertThat(configured.permissions(job,capability)).containsExactly("EXTRA","READ");
         assertThat(configured.permissions(job,"fixture.system")).containsExactly("READ");
-        var found=configured.collect(job,outcome(List.of(List.of(),List.of(log))));
+        var found=configured.collect(job,plan(),outcome(List.of(List.of(),List.of(log))));
         assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).singleElement().satisfies(u->assertThat(u.permissions()).containsExactly("EXTRA","READ"));
         assertThat(EvidenceSelection.json(found.units())).contains("\"permissions\":[\"EXTRA\",\"READ\"]");
-        assertThat(inputs(List.of("EXTRA","MISSING")).collect(job,outcome(List.of(List.of(),List.of(log)))).invalidSteps()).containsExactly("call-2");
+        assertThat(inputs(List.of("EXTRA","MISSING")).collect(job,plan(),outcome(List.of(List.of(),List.of(log)))).invalidSteps()).containsExactly("call-2");
     }
     @Test void gitOrderingUsesUtf8BytesForPathsRatherThanUtf16CodeUnits() {
         String earlier="src/\uE000.java",later="src/\uD800\uDC00.java";
         var rows=List.<Map<String,Object>>of(Map.of("sourceRepo","repo","path",later,"ref","main","text","설비"),Map.of("sourceRepo","repo","path",earlier,"ref","main","text","설비"));
-        var found=inputs().collect(job,outcome(List.of(List.of(),List.of(),List.of(),rows)));
+        var found=inputs().collect(job,plan(),outcome(List.of(List.of(),List.of(),List.of(),rows)));
         assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).extracting(u->u.location().path("path").asString()).containsExactly(earlier,later);
     }
     @Test void everySourceRequiredFieldIsCheckedWithoutBorrowingAnotherRowsFields() {
@@ -84,10 +96,10 @@ class GroundingInputsTest {
             var damaged=new HashMap<>(List.of(system,log,span,git).get(kind));damaged.remove(field);
             var rows=new ArrayList<List<Map<String,Object>>>(List.of(List.of(system),List.of(log),List.of(Map.of("traceId","trace","spans",List.of(span))),List.of(git)));
             rows.set(kind,List.of(kind==2?Map.of("traceId","trace","spans",List.of(damaged)):damaged));
-            var found=inputs().collect(job,outcome(rows));assertThat(found.invalidSteps()).as("%s:%s",kind,field).containsExactly("call-"+(kind+1));assertThat(found.units()).hasSize(3);
+            var found=inputs().collect(job,plan(),outcome(rows));assertThat(found.invalidSteps()).as("%s:%s",kind,field).containsExactly("call-"+(kind+1));assertThat(found.units()).hasSize(3);
         }
-        var noTrace=inputs().collect(job,outcome(List.of(List.of(system),List.of(log),List.of(Map.of("spans",List.of(span))),List.of(git))));assertThat(noTrace.invalidSteps()).containsExactly("call-3");
-        var valid=inputs().collect(job,outcome(List.of(List.of(system),List.of(log),List.of(Map.of("traceId","trace","spans",List.of(span))),List.of(git))));
+        var noTrace=inputs().collect(job,plan(),outcome(List.of(List.of(system),List.of(log),List.of(Map.of("spans",List.of(span))),List.of(git))));assertThat(noTrace.invalidSteps()).containsExactly("call-3");
+        var valid=inputs().collect(job,plan(),outcome(List.of(List.of(system),List.of(log),List.of(Map.of("traceId","trace","spans",List.of(span))),List.of(git))));
         assertThat(valid.units().get(2).location().path("startTimeUnixNano").asString()).isEqualTo("1700000000000000000");assertThat(valid.units().get(2).body()).contains("1700000000000000000");
         var location=com.nori.ai.gateway.core.registry.SchemaContracts.JSON.valueToTree(new com.nori.ai.gateway.core.knowledge.DocumentLocation("bucket","a.md","a".repeat(64),"절",3,4));
         for(String field:List.of("bucket","objectKey","revision","section","lineFrom","lineTo")) {
@@ -100,7 +112,7 @@ class GroundingInputsTest {
             var items=status==ResultStatus.EMPTY?List.of():List.of(Map.of("ref","EQP-001","text","설비 상태","values",Map.of()));
             var result=ToolResults.result(tools.getFirst(),scope,status,items,NOW,List.of("missing"),List.of(Warning.RETENTION_UNVERIFIED),List.of(new ToolResultMetadata.MissingRange(NOW.minusSeconds(1),NOW)),null);
             var source=new WorkflowOutcome(List.of(new WorkflowOutcome.Stage("call-1",result,true,items.size())),List.of(),List.of(),new ResultSourceDeps(List.of(),List.of()),List.of(),List.of(),Optional.empty());
-            var found=inputs().collect(job,source);assertThat(found.invalidSteps()).isEmpty();if(status==ResultStatus.EMPTY){assertThat(found.units()).isEmpty();continue;}assertThat(found.units()).singleElement().satisfies(u->{assertThat(u.status()).isEqualTo(status.name());assertThat(u.observedAt()).isEqualTo(NOW.toString());assertThat(u.missingFields()).containsExactly("missing");assertThat(u.warnings()).containsExactly("RETENTION_UNVERIFIED");assertThat(u.retentionMeta().path("missingRanges")).hasSize(1);assertThat(u.retentionMeta().path("unverifiedRanges")).isEmpty();});
+            var found=inputs().collect(job,plan(),source);assertThat(found.invalidSteps()).isEmpty();assertThat(found.units()).singleElement().satisfies(u->{assertThat(u.status()).isEqualTo(status.name());assertThat(u.observedAt()).isEqualTo(NOW.toString());assertThat(u.missingFields()).containsExactly("missing");assertThat(u.warnings()).containsExactly("RETENTION_UNVERIFIED");assertThat(u.retentionMeta().path("missingRanges")).hasSize(1);assertThat(u.retentionMeta().path("unverifiedRanges")).isEmpty();});
         }
     }
 

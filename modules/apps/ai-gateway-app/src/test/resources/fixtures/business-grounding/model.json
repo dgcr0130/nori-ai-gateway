@@ -1,0 +1,366 @@
+{
+  "status": "SUCCESS",
+  "missingFields": [],
+  "items": [
+    {
+      "ref": "77",
+      "text": "[모델 정의]\n조회 조건 > 설비(eqp): CLN_001\n모델 버전 키(modelVersionKey): 77\n모델 키(modelKey): 44\n모델 이름(modelName): DEMO_MAKER_MODEL_T02_admin\n상위 모델(parentModel): DEMO_MAKER_MODEL\n모델 버전(modelVersion): 26.07.09.0000\n통신 방식(commInterface): SOCKET\n상태(status): DEPRECATED\n설명(description): 18차\n제조사(maker): NORI\n생성 시각(createdAt): 2026-07-08T23:31:46.478Z\n수정 시각(updatedAt): 2026-07-13T03:54:32.169Z\n생성자(createdBy): admin\n수정자(updatedBy): admin",
+      "values": {
+        "modelVersionKey": 77,
+        "modelKey": 44,
+        "modelName": "DEMO_MAKER_MODEL_T02_admin",
+        "parentModel": "DEMO_MAKER_MODEL",
+        "modelVersion": "26.07.09.0000",
+        "commInterface": "SOCKET",
+        "status": "DEPRECATED",
+        "description": "18차",
+        "maker": "NORI",
+        "createdAt": "2026-07-08T23:31:46.478Z",
+        "updatedAt": "2026-07-13T03:54:32.169Z",
+        "createdBy": "admin",
+        "updatedBy": "admin"
+      }
+    },
+    {
+      "ref": "77:model-parameter:349",
+      "text": "[모델 파라미터]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): model-parameter\n내용 > 모델 파라미터 키(modelParamKey): 349\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > 파라미터 이름(paramName): MODEL_TYPE\n내용 > 파라미터 값(paramValue): A10\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.530Z",
+      "values": {
+        "detailType": "model-parameter",
+        "row": {
+          "modelParamKey": 349,
+          "modelVersionKey": 77,
+          "paramName": "MODEL_TYPE",
+          "paramValue": "A10",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.530Z"
+        }
+      }
+    },
+    {
+      "ref": "77:model-parameter:350",
+      "text": "[모델 파라미터]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): model-parameter\n내용 > 모델 파라미터 키(modelParamKey): 350\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > 파라미터 이름(paramName): PORTCOUNT\n내용 > 파라미터 값(paramValue): 4\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.546Z",
+      "values": {
+        "detailType": "model-parameter",
+        "row": {
+          "modelParamKey": 350,
+          "modelVersionKey": 77,
+          "paramName": "PORTCOUNT",
+          "paramValue": "4",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.546Z"
+        }
+      }
+    },
+    {
+      "ref": "77:model-parameter:351",
+      "text": "[모델 파라미터]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): model-parameter\n내용 > 모델 파라미터 키(modelParamKey): 351\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > 파라미터 이름(paramName): PROCESS_TYPE\n내용 > 파라미터 값(paramValue): DEMO\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.547Z",
+      "values": {
+        "detailType": "model-parameter",
+        "row": {
+          "modelParamKey": 351,
+          "modelVersionKey": 77,
+          "paramName": "PROCESS_TYPE",
+          "paramValue": "DEMO",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.547Z"
+        }
+      }
+    },
+    {
+      "ref": "77:model-parameter:352",
+      "text": "[모델 파라미터]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): model-parameter\n내용 > 모델 파라미터 키(modelParamKey): 352\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > 파라미터 이름(paramName): USE_WORK\n내용 > 파라미터 값(paramValue): Y\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.548Z",
+      "values": {
+        "detailType": "model-parameter",
+        "row": {
+          "modelParamKey": 352,
+          "modelVersionKey": 77,
+          "paramName": "USE_WORK",
+          "paramValue": "Y",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.548Z"
+        }
+      }
+    },
+    {
+      "ref": "77:model-parameter:353",
+      "text": "[모델 파라미터]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): model-parameter\n내용 > 모델 파라미터 키(modelParamKey): 353\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > 파라미터 이름(paramName): WAFER_MODE\n내용 > 파라미터 값(paramValue): SINGLE\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.549Z",
+      "values": {
+        "detailType": "model-parameter",
+        "row": {
+          "modelParamKey": 353,
+          "modelVersionKey": 77,
+          "paramName": "WAFER_MODE",
+          "paramValue": "SINGLE",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.549Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:802",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 802\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): EQP_CONDITION_CHECK_REPLY\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.552Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 802,
+          "modelVersionKey": 77,
+          "socketMsgName": "EQP_CONDITION_CHECK_REPLY",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.552Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:803",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 803\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): EQP_PORT_STATUS_CHG\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.553Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 803,
+          "modelVersionKey": 77,
+          "socketMsgName": "EQP_PORT_STATUS_CHG",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.553Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:804",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 804\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_CAR_LOAD\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.554Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 804,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_CAR_LOAD",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.554Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:805",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 805\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_CAR_UNLOAD_COMP_REQ\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.555Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 805,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_CAR_UNLOAD_COMP_REQ",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.555Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:806",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 806\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_CAR_UNLOAD_REQ\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.556Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 806,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_CAR_UNLOAD_REQ",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.556Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:807",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 807\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_EQP_COMPLETE\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.557Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 807,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_EQP_COMPLETE",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.557Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:808",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 808\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_EQP_ENDED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.558Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 808,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_EQP_ENDED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.558Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:809",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 809\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_EQP_STARTED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.559Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 809,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_EQP_STARTED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.559Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:810",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 810\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_PROCESS_ENDED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.559Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 810,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_PROCESS_ENDED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.559Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:811",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 811\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_PROCESS_STARTED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.560Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 811,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_PROCESS_STARTED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.560Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:812",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 812\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_WORK_ENDED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.561Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 812,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_WORK_ENDED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.561Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:813",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 813\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_WORK_INFORM\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.562Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 813,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_WORK_INFORM",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.562Z"
+        }
+      }
+    },
+    {
+      "ref": "77:socket-message:814",
+      "text": "[SOCKET 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): socket-message\n내용 > SOCKET 메시지 키(socketMsgKey): 814\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > SOCKET 메시지 이름(socketMsgName): WO_WORK_STARTED\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.563Z",
+      "values": {
+        "detailType": "socket-message",
+        "row": {
+          "socketMsgKey": 814,
+          "modelVersionKey": 77,
+          "socketMsgName": "WO_WORK_STARTED",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.563Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:346",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 346\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): EQP_CONDITION_CHECK\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.565Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 346,
+          "modelVersionKey": 77,
+          "mesMsgName": "EQP_CONDITION_CHECK",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.565Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:347",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 347\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): MAT_DATACOLL_REPLY\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.566Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 347,
+          "modelVersionKey": 77,
+          "mesMsgName": "MAT_DATACOLL_REPLY",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.566Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:348",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 348\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): MAT_DCSPEC_REPLY\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.567Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 348,
+          "modelVersionKey": 77,
+          "mesMsgName": "MAT_DCSPEC_REPLY",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.567Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:349",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 349\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): WO_EQP_COMPLETE_REPLY\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.568Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 349,
+          "modelVersionKey": 77,
+          "mesMsgName": "WO_EQP_COMPLETE_REPLY",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.568Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:350",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 350\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): WO_EQP_START_REQ\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.569Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 350,
+          "modelVersionKey": 77,
+          "mesMsgName": "WO_EQP_START_REQ",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.569Z"
+        }
+      }
+    },
+    {
+      "ref": "77:mes-message:351",
+      "text": "[MES 메시지 정의]\n조회 조건 > 설비(eqp): CLN_001\n상세 종류(detailType): mes-message\n내용 > MES 메시지 키(mesMsgKey): 351\n내용 > 모델 버전 키(modelVersionKey): 77\n내용 > MES 메시지 이름(mesMsgName): WO_JOBRESERVE\n내용 > 설명(description): 없음\n내용 > 수정 시각(updatedAt): 2026-07-08T23:31:46.570Z",
+      "values": {
+        "detailType": "mes-message",
+        "row": {
+          "mesMsgKey": 351,
+          "modelVersionKey": 77,
+          "mesMsgName": "WO_JOBRESERVE",
+          "description": null,
+          "updatedAt": "2026-07-08T23:31:46.570Z"
+        }
+      }
+    }
+  ]
+}

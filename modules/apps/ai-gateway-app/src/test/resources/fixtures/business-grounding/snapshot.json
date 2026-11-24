@@ -1,0 +1,41 @@
+{
+  "status": "PARTIAL",
+  "missingFields": [],
+  "items": [
+    {
+      "ref": "CLN_001",
+      "text": "{\"eqp\":{\"eqpKey\":25,\"eqpId\":\"CLN_001\",\"lineKey\":1,\"commInterface\":\"SOCKET\",\"commMode\":\"PASSIVE\",\"isDev\":true,\"routePartition\":0,\"eqpIp\":\"0.0.0.0\",\"eqpPort\":6100,\"modelVersionKey\":77,\"appliedParamVersion\":\"26.04.28.0000\",\"gatewayJarKey\":null,\"businessJarKey\":null,\"enabled\":true,\"createdAt\":\"2026-04-28T05:02:28.248019Z\",\"updatedAt\":\"2026-07-08T23:32:51.263184Z\",\"createdBy\":\"SYSTEM\",\"updatedBy\":\"admin\"},\"runtimeState\":{\"controlState\":\"OFFLINE\",\"eqpState\":\"DOWN\",\"connectionState\":\"OFFLINE\",\"desiredState\":\"ENDED\"},\"activeWorks\":[],\"lotStatus\":\"UNKNOWN\",\"currentLot\":null}",
+      "values": {
+        "eqp": {
+          "eqpId": "CLN_001",
+          "eqpIp": "0.0.0.0",
+          "isDev": true,
+          "eqpKey": 25,
+          "enabled": true,
+          "eqpPort": 6100,
+          "lineKey": 1,
+          "commMode": "PASSIVE",
+          "createdAt": "2026-04-28T05:02:28.248019Z",
+          "createdBy": "SYSTEM",
+          "updatedAt": "2026-07-08T23:32:51.263184Z",
+          "updatedBy": "admin",
+          "commInterface": "SOCKET",
+          "gatewayJarKey": null,
+          "businessJarKey": null,
+          "routePartition": 0,
+          "modelVersionKey": 77,
+          "appliedParamVersion": "26.04.28.0000"
+        },
+        "lotStatus": "UNKNOWN",
+        "currentLot": null,
+        "activeWorks": [],
+        "runtimeState": {
+          "eqpState": "DOWN",
+          "controlState": "OFFLINE",
+          "desiredState": "ENDED",
+          "connectionState": "OFFLINE"
+        }
+      }
+    }
+  ]
+}

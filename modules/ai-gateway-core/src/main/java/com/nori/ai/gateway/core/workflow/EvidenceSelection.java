@@ -29,8 +29,8 @@ public final class EvidenceSelection {
         for(var round:rounds)for(var answer:round.verified())for(var hit:answer.parents())parents.putIfAbsent(hit.parent().id().toString(),EvidenceUnit.document(hit,children.get(hit.parent().id())));
         for(var score:ranked)parents.putIfAbsent(score.hit().parent().id().toString(),EvidenceUnit.document(score.hit(),children.get(score.hit().parent().id())));
         var units=new ArrayList<EvidenceUnit>();int documents=0;
-        for(var unit:parents.values())if(documents<settings.evidenceLimit()&&fits(units,unit,fits)){units.add(unit);documents++;}
         boolean truncated=false;for(var unit:other)if(fits(units,unit,fits))units.add(unit);else truncated=true;
+        for(var unit:parents.values())if(documents<settings.evidenceLimit()&&fits(units,unit,fits)){units.add(unit);documents++;}
         return new Selected(units,json(units),truncated);
     }
     private boolean fits(List<EvidenceUnit> selected,EvidenceUnit next,java.util.function.Predicate<List<EvidenceUnit>> fits) { var copy=new ArrayList<>(selected);copy.add(next);return fits.test(List.copyOf(copy)); }

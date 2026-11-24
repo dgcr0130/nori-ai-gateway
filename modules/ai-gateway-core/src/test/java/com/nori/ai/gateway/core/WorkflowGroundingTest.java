@@ -19,7 +19,7 @@ class WorkflowGroundingTest {
             Map.of("taskType",task.name(),"toolCalls",List.of(),"targets",List.of(),"searchQuery",question,"retryQuery",question+" 재검색"),new JobRequestInput("message",1,question,Map.of()));
         var definition=new WorkflowDefinition(scope.boundSystem(),task,List.of(),WorkflowDefinition.AnswerSource.TOOL_RESULTS,null);
         var plan=new WorkflowExecutionPlan(definition,new PlanEnvelope(job.jobId(),"conversation",question,List.of(),task,List.of()),List.of(),new WorkflowExecutionPlan.DocumentSearch(task!=TaskType.LIVE_QUERY,question,question+" 재검색"));
-        var inputs=new WorkflowGrounding.Inputs(){public WorkflowGrounding.SourceUnits collect(JobContext ignored,WorkflowOutcome outcome){return new WorkflowGrounding.SourceUnits(units,Set.of());}public Map<String,String> glossary(JobContext ignored){return Map.of();}};
+        var inputs=new WorkflowGrounding.Inputs(){public WorkflowGrounding.SourceUnits collect(JobContext ignored,WorkflowExecutionPlan executedPlan,WorkflowOutcome outcome){assertThat(executedPlan).isSameAs(plan);return new WorkflowGrounding.SourceUnits(units,Set.of());}public Map<String,String> glossary(JobContext ignored){return Map.of();}};
         SearchLanguage language=text->Arrays.stream(text.split(" ")).map(t->new SearchLanguage.Term(t,t.matches("[가-힣]+")?"NNG":"SL")).toList();
         return new Fixture(new WorkflowGrounding(search,language,SearchSettings.defaults(),new EvidenceSelection(String::length,10000),inputs,DomainFixtures.CLOCK,new ExpiryCheckpoint()),job,plan);
     }

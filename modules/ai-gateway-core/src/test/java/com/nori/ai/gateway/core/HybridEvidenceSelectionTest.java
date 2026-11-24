@@ -54,7 +54,7 @@ class HybridEvidenceSelectionTest {
         for(int limit:List.of(1,6,10)) {
             var settings=new SearchSettings(20,20,20,60,limit,3,.9,.35,4,1);
             var result=new EvidenceSelection(String::length,100000).select(List.of(round),List.of(other("비문서 1"),other("비문서 2")),settings);
-            assertThat(result.units()).hasSize(limit+2);assertThat(result.units().getFirst().body()).isEqualTo(hits.get(11).parent().bodyMasked());
+            assertThat(result.units()).hasSize(limit+2);assertThat(result.units()).extracting(EvidenceUnit::body).startsWith("비문서 1","비문서 2",hits.get(11).parent().bodyMasked());
             assertThat(result.units().stream().filter(u->u.sourceType().equals("DOCUMENT")).map(EvidenceUnit::parentKey)).doesNotHaveDuplicates();
             if(limit>1){var parent=result.units().stream().filter(u->first.parent().id().toString().equals(u.parentKey())).findFirst().orElseThrow();assertThat(parent.body()).isEqualTo(first.parent().bodyMasked());assertThat(parent.childLocations()).contains(first.child().location(),child.location());}
         }
@@ -65,7 +65,28 @@ class HybridEvidenceSelectionTest {
         var result=new EvidenceSelection(String::length,exact).select(List.of(round(List.of(big,small),List.of(),List.of())),List.of(),SearchSettings.defaults());
         assertThat(result.units()).containsExactly(unit);assertThat(result.json().length()).isEqualTo(exact);
         assertThat(new EvidenceSelection(String::length,exact-1).select(List.of(round(List.of(small),List.of(),List.of())),List.of(),SearchSettings.defaults()).units()).isEmpty();
-        var truncated=new EvidenceSelection(String::length,exact).select(List.of(round(List.of(small),List.of(),List.of())),List.of(other("비문서")),SearchSettings.defaults());assertThat(truncated.truncatedItems()).isTrue();
+        var source=other("비문서");var truncated=new EvidenceSelection(String::length,exact).select(List.of(round(List.of(small),List.of(),List.of())),List.of(source),SearchSettings.defaults());assertThat(truncated.units()).containsExactly(source);assertThat(truncated.truncatedItems()).isFalse();
+    }
+    @Test void businessRowsFromModelQueryPrecedeDocumentsAndOnlyMissingOtherRowsMarkTruncation() {
+        // 143245-b48a1d30.log와 143300-532ffa76.log의 SYSTEM_RESPONSE items 25행(ref·text·values·순서)이 같아 model.json을 공유합니다.
+        var business=BusinessEvidenceFixtures.units("model","tc.model.read");
+        var documents=round(List.of(hit(0,"문서 후보 하나"),hit(1,"문서 후보 둘")),List.of(),List.of());
+        assertThat(business).hasSize(25);
+        var selection=new EvidenceSelection(String::length,1000000);
+        var limited=selection.select(List.of(documents),business,SearchSettings.defaults(),units->units.size()<=2);
+        assertThat(limited.units()).containsExactlyElementsOf(business.subList(0,2));assertThat(limited.truncatedItems()).isTrue();
+        var allBusiness=new EvidenceSelection(String::length,EvidenceSelection.json(business).length()).select(List.of(documents),business,SearchSettings.defaults());
+        assertThat(allBusiness.units()).containsExactlyElementsOf(business);assertThat(allBusiness.truncatedItems()).isFalse();
+        var withDocument=selection.select(List.of(documents),business,SearchSettings.defaults(),units->units.size()<=26);
+        assertThat(withDocument.units().subList(0,25)).containsExactlyElementsOf(business);
+        assertThat(withDocument.units().getLast().sourceType()).isEqualTo("DOCUMENT");assertThat(withDocument.truncatedItems()).isFalse();
+    }
+    @Test void allNonDocumentKindsKeepTheirInputOrderBeforeTheRankedDocuments() {
+        var other=new ArrayList<EvidenceUnit>();
+        for(String kind:List.of("TRACE","SYSTEM","GIT","LOG"))other.add(new EvidenceUnit(kind,null,SchemaContracts.JSON.createObjectNode(),"",kind,List.of("READ"),"SUCCESS","2026-11-24T00:00:00Z",List.of(),SchemaContracts.JSON.createObjectNode(),List.of(),List.of()));
+        var selected=new EvidenceSelection(String::length,100000).select(List.of(round(List.of(hit(0,"문서")),List.of(),List.of())),other,SearchSettings.defaults());
+        assertThat(selected.units()).extracting(EvidenceUnit::sourceType).containsExactly("TRACE","SYSTEM","GIT","LOG","DOCUMENT");
+        assertThat(selected.truncatedItems()).isFalse();
     }
     @Test void evidenceJsonSortsAllObjectKeysByUtf8AndNeverReordersArrays() {
         var node=SchemaContracts.JSON.createObjectNode();node.put("\uD800\uDC00",1).put("\uE000",2);node.putArray("array").add("Z").add("A");

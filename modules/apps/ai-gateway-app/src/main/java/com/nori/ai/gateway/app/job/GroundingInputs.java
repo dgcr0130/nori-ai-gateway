@@ -4,6 +4,7 @@ import static com.nori.ai.gateway.core.logging.DiagnosticLog.*;
 import static java.lang.System.Logger.Level.*;
 import com.nori.ai.gateway.app.config.GatewaySystemsProperties;
 import com.nori.ai.gateway.core.job.JobContext;
+import com.nori.ai.gateway.core.plan.PlanStep;
 import com.nori.ai.gateway.core.registry.*;
 import com.nori.ai.gateway.core.sanitize.ContentSanitizer;
 import com.nori.ai.gateway.core.workflow.*;
@@ -39,17 +40,28 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
         }
         return List.copyOf(result);
     }
-    @Override public WorkflowGrounding.SourceUnits collect(JobContext job,WorkflowOutcome outcome) {
+    @Override public WorkflowGrounding.SourceUnits collect(JobContext job,WorkflowExecutionPlan plan,WorkflowOutcome outcome) {
         var units=new ArrayList<EvidenceUnit>();var invalid=new HashSet<String>();var system=systems.systems().get(job.scope().boundSystem().name());
+        var businessTargets=new LinkedHashSet<String>();boolean hasBusinessTargets=true;
         for(var stage:outcome.stages()) {
             var manifest=registry.find(job.scope(),stage.result().capabilityId()).orElse(null);
             if(manifest==null||manifest.toolKind()==ToolKind.KNOWLEDGE||!stage.observed())continue;
+            var step=plan.toolPlan().plan().stream().filter(value->value.stepId().equals(stage.stepId())&&value.capabilityId().equals(manifest.capabilityId())).findFirst().orElse(null);
+            if(manifest.toolKind()==ToolKind.BUSINESS) {
+                // 관측된 업무 단계만 결속하며 대상 없는 조회를 질문이나 분류 값으로 채우지 않습니다.
+                if(step==null||step.resources().isEmpty())hasBusinessTargets=false;
+                else step.resources().forEach(resource->businessTargets.add(resource.ref()));
+            }
             var local=new ArrayList<EvidenceUnit>();
             try {
                 if(!Set.of("SUCCESS","EMPTY","PARTIAL","STALE","CONFLICT").contains(stage.result().status().name())||stage.result().observedAt()==null)throw invalid();
                 var rows=new ArrayList<JsonNode>();for(var block:stage.result().blocks()) {
                     if(block.content()==null||!block.content().path("items").isArray())throw invalid();
                     for(var item:block.content().get("items"))rows.add(item);
+                }
+                if(manifest.toolKind()==ToolKind.BUSINESS&&rows.isEmpty()) {
+                    if(step==null)throw invalid();
+                    local.add(resultSummary(stage,manifest,step));
                 }
                 for(var row:rows) {
                     if(manifest.toolKind()==ToolKind.TRACE) {
@@ -97,7 +109,20 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
             }catch(IllegalArgumentException|java.time.DateTimeException malformed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GroundingInputs.class.getName()),"GROUNDING_INPUTS_FAILED",malformed);invalid.add(stage.stepId());}
         }
         body(System.getLogger(getClass().getName()),INFO,"GROUNDING_INPUT",SchemaContracts.JSON.writeValueAsString(units),"jobId",job.jobId(),"invalidSteps",invalid);
-        return new WorkflowGrounding.SourceUnits(units,invalid);
+        return new WorkflowGrounding.SourceUnits(units,invalid,hasBusinessTargets?List.copyOf(businessTargets):List.of());
+    }
+    private EvidenceUnit resultSummary(WorkflowOutcome.Stage stage,CapabilityManifest manifest,PlanStep step) {
+        var result=stage.result();var arguments=step.arguments();if(arguments==null)arguments=SchemaContracts.JSON.createObjectNode();
+        var body=new StringBuilder("[조회 결과 요약]\n도구(toolId): ").append(manifest.capabilityId());
+        for(String key:new TreeSet<>(arguments.propertyNames())) {
+            var value=arguments.get(key);body.append("\n조회 조건 > ").append(key).append(": ").append(value.isString()?value.asString():canonical(value));
+        }
+        body.append("\n조회 상태(status): ").append(result.status().name()).append("\n결과 건수(count): 0\n누락 항목(missingFields): ")
+            .append(result.missingFields().isEmpty()?"없음":String.join(", ",result.missingFields()));
+        var location=SchemaContracts.JSON.createObjectNode().put("toolId",manifest.capabilityId()).put("ref",manifest.capabilityId()+":result-summary").put("observedAt",result.observedAt().toString());
+        var values=SchemaContracts.JSON.createObjectNode().put("toolId",manifest.capabilityId()).put("status",result.status().name()).put("count",0);
+        values.set("arguments",arguments);values.set("missingFields",SchemaContracts.JSON.valueToTree(result.missingFields()));
+        return unit(stage,"SYSTEM",location,body.toString(),manifest.requiredPermission()).withValues(WorkflowContent.mask(values,sanitizer));
     }
     private EvidenceUnit unit(WorkflowOutcome.Stage stage,String type,JsonNode location,String body,List<String> permissions) {
         var result=stage.result();var retention=SchemaContracts.JSON.createObjectNode();

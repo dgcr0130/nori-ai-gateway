@@ -72,7 +72,7 @@ class GroundedQuestionBudgetTest {
             var hit=new DocumentSearch.Hit(parent,child,Set.of("READ"));
             DocumentSearch search=(bound,query,targets,settings)->new DocumentSearch.Round(scenario==Case.PARENT_OVERFLOW?List.of(hit):List.of(),List.of(),List.of(),List.of());
             var inputs=new WorkflowGrounding.Inputs() {
-                public WorkflowGrounding.SourceUnits collect(JobContext ignored,WorkflowOutcome outcome){return new WorkflowGrounding.SourceUnits(List.of(),Set.of());}
+                public WorkflowGrounding.SourceUnits collect(JobContext ignored,WorkflowExecutionPlan executedPlan,WorkflowOutcome outcome){return new WorkflowGrounding.SourceUnits(List.of(),Set.of());}
                 public Map<String,String> glossary(JobContext ignored){return Map.of();}
             };
             var grounding=new WorkflowGrounding(search,language,SearchSettings.defaults(),new EvidenceSelection(tokens::countText,policy.evidenceTokens()),inputs,Clock.systemUTC(),expiry,composer::fitsGrounded);
