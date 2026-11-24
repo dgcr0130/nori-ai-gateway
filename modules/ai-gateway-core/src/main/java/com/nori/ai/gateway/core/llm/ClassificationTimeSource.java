@@ -1,6 +1,7 @@
 package com.nori.ai.gateway.core.llm;
 
 import com.nori.ai.gateway.core.plan.InputValidator;
+import com.nori.ai.gateway.core.time.QuestionPeriodResolver;
 import tools.jackson.databind.JsonNode;
 import java.time.*;
 import java.util.*;
@@ -8,7 +9,7 @@ import java.util.regex.Pattern;
 
 /** 기준 시각 없는 상대 기간을 달력의 임의 날짜로 바꾸지 않습니다. 시스템 시계는 사용하지 않습니다. */
 final class ClassificationTimeSource {
-    private static final Pattern ABSOLUTE = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\\.[0-9]{1,9})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?");
+    private static final Pattern ABSOLUTE = QuestionPeriodResolver.ABSOLUTE;
     private ClassificationTimeSource() {}
 
     static boolean present(JsonNode context,String literal) {
