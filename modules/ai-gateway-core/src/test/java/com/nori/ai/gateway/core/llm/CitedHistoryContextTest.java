@@ -17,9 +17,8 @@ class CitedHistoryContextTest {
     static final String QUESTION = "그 설정에서 CODE-7 조건은 무엇인가요?";
     static final DocumentLocation LOCATION = new DocumentLocation("bucket", "guide.md", "a".repeat(64), "설정", 10, 20);
     static final CitedHistoryContext.Pair PAIR = new CitedHistoryContext.Pair("H1", "previous", "설정을 설명해 주세요", "이전 답변은 사실 근거가 아니다", List.of(LOCATION));
-    static StructuredOutput base() { return ClassificationOutputSchema.create(new RegistryView(OwnerSystem.TC, List.of()), false); }
-    static String raw(String ref) { var node = SchemaContracts.JSON.valueToTree(Map.of("taskType", "KNOWLEDGE_QUERY", "toolCalls", List.of(), "targets", List.of(), "searchQuery", "CODE-7 설정", "retryQuery", "CODE-7 조건", "historyRef", ref));
-        ((tools.jackson.databind.node.ObjectNode) node).putNull("timeWindow"); return SchemaContracts.JSON.writeValueAsString(node); }
+    static StructuredOutput base() { return new StructuredOutput(SchemaContracts.JSON.writeValueAsString(Map.of("type","object","additionalProperties",false,"required",List.of("needs"),"properties",Map.of("needs",Map.of("type","array","minItems",1,"maxItems",4,"items",Map.of("type","object","additionalProperties",false,"required",List.of("intent","subject"),"properties",Map.of("intent",Map.of("enum",List.of("document")),"subject",Map.of("type","null")))))))); }
+    static String raw(String ref) { var node=(tools.jackson.databind.node.ObjectNode)SchemaContracts.parse(IntentTestFixtures.wire("document",null)); node.put("historyRef",ref);return node.toString(); }
     static EvidenceUnit unit(DocumentLocation location, List<String> permissions, String body) { return new EvidenceUnit("DOCUMENT", "parent", SchemaContracts.JSON.valueToTree(location), "설정", body, permissions, "SUCCESS", null, List.of(), SchemaContracts.JSON.createObjectNode(), List.of(), List.of()); }
     static CitedHistoryContext.Bound bound() { return CitedHistoryContext.decode(base(), QUESTION, List.of(PAIR), Set.of(), raw("H1")).reference().orElseThrow(); }
 
@@ -47,9 +46,9 @@ class CitedHistoryContextTest {
         assertThat(CitedHistoryContext.decode(base(), "새 질문의 CODE-7 상태는 무엇인가요?", List.of(PAIR), Set.of(), independent.toString()).reference()).isEmpty();
     }
 
-    @Test void projectionPreservesTheSixFieldsAndOriginalQuestionForTheirExistingDecoder() {
+    @Test void projectionPreservesNeedsAndOriginalQuestionForTheIntentDecoder() {
         var decoded = CitedHistoryContext.decode(base(), QUESTION, List.of(PAIR), Set.of(), raw("H1"));
-        assertThat(SchemaContracts.JSON.readTree(decoded.classificationJson()).size()).isEqualTo(6);
+        assertThat(SchemaContracts.JSON.readTree(decoded.classificationJson())).isEqualTo(SchemaContracts.parse(IntentTestFixtures.wire("document",null)));
         assertThat(decoded.reference().orElseThrow().originalQuestion()).isEqualTo(QUESTION);
         assertThat(decoded.reference().orElseThrow().pair().answer()).isEqualTo(PAIR.answer());
     }

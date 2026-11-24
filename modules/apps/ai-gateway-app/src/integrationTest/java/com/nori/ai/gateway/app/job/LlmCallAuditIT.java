@@ -46,7 +46,7 @@ class LlmCallAuditIT extends LlmStubSupport {
             assertThat(row.get("tool_id")).isNull(); assertThat(row.get("task_type")).isNull();
             assertThat((String) row.get("row")).doesNotContain("AUDITQZ", wrong, "COMPOSEDQZ", "상태 알려줘", "연결 중이다");
         }
-        assertThat(json.readTree((String) rows.get(0).get("versions")).path("prompt").asString()).isEqualTo("classify-v3");
+        assertThat(json.readTree((String) rows.get(0).get("versions")).path("prompt").asString()).isEqualTo("classify-v4");
         assertThat(json.readTree((String) rows.get(1).get("versions")).path("prompt").asString()).isEqualTo("compose-v1");
         assertThat(json.readTree((String) rows.get(0).get("reduction"))).isEmpty();
         assertThat(json.readTree((String) rows.get(1).get("reduction")).isArray()).isTrue();
@@ -72,7 +72,7 @@ class LlmCallAuditIT extends LlmStubSupport {
         store.select("composer-oversize");
         try {
             var job = admitScripted("llm-audit-oversize", "EQP-001 상태와 적용 모델 정의 알려줘", windowOnly(),
-                List.of(classify(wire("LQ", "EQP-001", null, null, null, List.of("S", "N"), "B")), compose("대체 서술 FALLBACKQZ")), Optional.empty(), null);
+                List.of(classify(wire("LQ", "EQP-001", null, null, null)), compose("대체 서술 FALLBACKQZ")), Optional.empty(), null);
             assertThat(terminal(job)).isEqualTo("PARTIAL");
             assertThat(result(job.jobId())).containsEntry("status","PARTIAL").containsEntry("error_code",null);
             assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");

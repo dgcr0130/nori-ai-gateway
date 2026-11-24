@@ -23,7 +23,7 @@ class HybridSearchIT extends LlmStubSupport {
         try(var prepared=index.prepare(scope,store.load(scope,bundle.id()))){store.activate(scope,bundle);index.install(scope,prepared);}
     }
     private String classification(String task) {
-        return "{\"taskType\":\""+task+"\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\"설비 상태 T3\",\"retryQuery\":\"설비 T3 상태 설정\"}";
+        return intentWire(task.equals("LIVE_QUERY")?"status":"document",null);
     }
     @Test void activeCorpusFlowsThroughTheActualJobAndProtectsStoredResultWithDocumentDependencies()throws Exception {
         seed();var job=admitScripted("hybrid-document","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),composeSelection("C1")),Optional.empty(),null);
@@ -40,8 +40,8 @@ class HybridSearchIT extends LlmStubSupport {
         var job=admitScripted("hybrid-error","설비 상태 T3",Map.of(),List.of(classify(classification("KNOWLEDGE_QUERY")),compose("사용 금지")),Optional.empty(),null);
         assertThat(terminal(job)).isEqualTo("FAILED");assertThat(result(job.jobId())).containsEntry("status","SOURCE_UNAVAILABLE").containsEntry("error_code",null);assertThat(stub.count("/v1/embeddings")).isEqualTo(1);assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isZero();assertThat(payload(job.jobId()).toString()).doesNotContain("private-source-error");assertThat(payload(job.jobId()).path("toolSummary").get(0).path("status").asString()).isEqualTo("SOURCE_UNAVAILABLE");
     }
-    @Test void liveWithNoToolUnitsDoesNotReadAnAvailableDocumentCorpus()throws Exception {
+    @Test void liveWithoutSubjectClarifiesWithoutReadingAnAvailableDocumentCorpus()throws Exception {
         seed();var job=admitScripted("hybrid-live","설비 상태 T3",Map.of(),List.of(classify(classification("LIVE_QUERY")),compose("사용 금지")),Optional.empty(),null);
-        assertThat(terminal(job)).isEqualTo("SUCCEEDED");assertThat(result(job.jobId())).containsEntry("status","EMPTY");assertThat(stub.count("/v1/embeddings")).isZero();assertThat(payload(job.jobId()).path("toolSummary")).isEmpty();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isZero();
+        assertThat(terminal(job)).isEqualTo("FAILED");assertClarification(job.jobId(),"PLAN_INVALID",List.of("eqp"));assertThat(stub.count("/v1/embeddings")).isZero();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isZero();
     }
 }

@@ -1,6 +1,7 @@
 package com.nori.ai.gateway.app.config;
 
 import com.nori.ai.gateway.core.registry.SchemaContracts;
+import com.nori.ai.gateway.core.llm.ClassificationIntent;
 import com.nori.ai.gateway.core.scope.OwnerSystem;
 import java.net.URI;
 import java.util.*;
@@ -64,7 +65,11 @@ public record GatewaySystemsProperties(Map<String, SystemConfig> systems) {
     public record SystemConfig(String issuer, String serviceTokenSha256File, String actorJwksFile,
             String backendUrl, String gatewayTokenFile, List<Tool> tools, List<Document> documents,
             List<App> apps, List<Repository> repositories, List<Trace> traces,
-            String reviewPermission, Map<String,String> glossary) {
+            String reviewPermission, Map<String,String> glossary, List<ClassificationIntent> intents) {
+        public SystemConfig(String issuer,String serviceTokenSha256File,String actorJwksFile,String backendUrl,String gatewayTokenFile,List<Tool> tools,List<Document> documents,List<App> apps,List<Repository> repositories,List<Trace> traces,String reviewPermission,Map<String,String> glossary){
+            this(issuer,serviceTokenSha256File,actorJwksFile,backendUrl,gatewayTokenFile,tools,documents,apps,repositories,traces,reviewPermission,glossary,List.of());
+        }
+        @org.springframework.boot.context.properties.bind.ConstructorBinding
         public SystemConfig {
             text(issuer, 128); text(serviceTokenSha256File, 4096); text(actorJwksFile, 4096); permission(reviewPermission);
             tools = list(tools); documents = list(documents); apps = list(apps);
@@ -76,6 +81,10 @@ public record GatewaySystemsProperties(Map<String, SystemConfig> systems) {
                         || url.getRawQuery() != null || url.getRawFragment() != null || !url.getRawPath().isEmpty()) throw invalid();
             }
             if (tools.stream().map(Tool::id).distinct().count() != tools.size()) throw invalid();
+            intents=ClassificationIntent.checked(intents);
+            var available=new HashSet<String>();tools.forEach(tool->available.add(tool.id()));
+            if(!apps.isEmpty())available.add("logs.search");if(!traces.isEmpty())available.add("trace.search");if(!repositories.isEmpty())available.add("git.searchCode");
+            for(var intent:intents)if(!available.containsAll(intent.toolIds()))throw invalid();
             for (int i = 0; i < documents.size(); i++) for (int j = i + 1; j < documents.size(); j++) {
                 var a = documents.get(i); var b = documents.get(j);
                 if (a.bucket().equals(b.bucket()) && (a.prefix().startsWith(b.prefix()) || b.prefix().startsWith(a.prefix()))) throw invalid();

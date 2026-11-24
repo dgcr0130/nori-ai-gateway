@@ -4,7 +4,7 @@ import com.nori.ai.gateway.core.knowledge.*;
 import java.util.*;
 /** 검색 후보가 아닌 실제 예산 안에 담긴 본문만 충분성 근거로 사용합니다. */
 public final class EvidenceCoverageEvaluator {
-    public boolean requiresDocuments(TaskType task){return task==TaskType.KNOWLEDGE_QUERY||task==TaskType.INCIDENT_ANALYSIS;}
+    public boolean requiresDocuments(TaskType task){return task==TaskType.KNOWLEDGE_QUERY;}
     private static final Set<String> FUNCTIONS=Set.of("질문","답변","설명","방법","무엇","알려줘");
     public List<String> coreTerms(String question,SearchLanguage language,int limit) {
         return language.analyze(question).stream().filter(t->Set.of("NNG","NNP").contains(t.tag()))

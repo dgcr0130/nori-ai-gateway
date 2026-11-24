@@ -13,11 +13,11 @@ public final class CitedHistoryContext {
     public static final int MAX_DOCUMENT_CITATIONS = 10;
     private static final Pattern REFERENTIAL = Pattern.compile("^(?:그렇게|그중|그런(?=\\s)|그것|그거|그(?=\\s)|해당(?=\\s)|앞서(?=\\s)|이전(?=\\s)).*", Pattern.DOTALL);
     public static final String INSTRUCTION = """
-        추가 내부 필드 historyRef는 null 또는 historyReferences에 제공된 ref 하나다. 응답은 기존 여섯 필드와 historyRef만 갖는다.
-        현재 question을 다시 쓰지 않는다. 현재 질문이 앞선 대상을 가리키며 그 문맥이 꼭 필요한 문서 질문일 때만 historyRef를 고른다. 독립 질문이면 null이다.
-        historyReferences는 같은 접근 가능한 대화 쌍의 인용 위치 참조이고 사실의 정답이 아니다. 이전 답변을 사실 근거로 쓰지 않으며 현재 문서가 실제 선택돼야 한다.
-        참조한 구성 요소·화면·개념을 리소스 targets로 만들지 않는다. 참조가 있는 문서 전용 질문에서 targets는 현재 question 또는 검증된 context.resourceRefs의 실제 대상만 쓴다. 그런 대상이 없으면 []다.
-        historyRef가 있으면 taskType은 KNOWLEDGE_QUERY, toolCalls는 []다. 주어진 ref나 인용 위치를 만들거나 고치지 않는다.
+        추가 내부 필드 historyRef는 null 또는 historyReferences에 제공된 ref 하나다. 응답은 needs와 historyRef만 갖는다.
+        현재 question을 다시 쓰지 않는다. 현재 질문이 앞선 대상을 가리키며 그 문맥이 꼭 필요한 문서 전용 질문일 때만 historyRef를 고른다. 독립 질문이면 null이다.
+        historyReferences는 접근 가능한 대화 쌍의 인용 위치 참조이고 사실의 정답이 아니다. 이전 답변을 사실 근거로 쓰지 않으며 현재 문서가 실제 선택돼야 한다.
+        subject는 subjectCandidates의 실제 식별자 또는 null만 쓴다. 화면·개념 이름을 새 대상으로 만들지 않는다.
+        historyRef를 고르면 문서 전용 의도만 선택한다. 주어진 ref나 인용 위치를 만들거나 고치지 않는다.
         """;
 
     public record Pair(String ref, String sourceJobId, String question, String answer, List<DocumentLocation> citations) {
@@ -46,8 +46,8 @@ public final class CitedHistoryContext {
     public static boolean referential(String question) { return question != null && REFERENTIAL.matcher(question.strip()).matches(); }
 
     public static String classificationPrompt(String base) {
-        return base.replace("응답은 taskType, toolCalls, targets, timeWindow, searchQuery, retryQuery 여섯 필수 필드만 가진 JSON 객체 한 개다.",
-            "응답은 taskType, toolCalls, targets, timeWindow, searchQuery, retryQuery, historyRef 일곱 필수 필드만 가진 JSON 객체 한 개다.") + INSTRUCTION;
+        return base.replace("응답은 needs 필수 필드만 가진 JSON 객체 한 개다.",
+            "응답은 needs와 historyRef 두 필수 필드만 가진 JSON 객체 한 개다.") + INSTRUCTION;
     }
 
     /** H 번호는 해당 호출의 순번이므로 새 접근 검사에서는 원래 source Job·질문/답변·인용의 동일성을 확인합니다. */
@@ -70,10 +70,10 @@ public final class CitedHistoryContext {
         return result;
     }
 
-    public static StructuredOutput output(StructuredOutput sixFields, String question, List<Pair> available) {
+    public static StructuredOutput output(StructuredOutput needsOutput, String question, List<Pair> available) {
         validatePairs(available);
-        var root = (ObjectNode) SchemaContracts.JSON.readTree(sixFields.schema());
-        if (!root.path("properties").isObject() || root.path("properties").size() != 6 || root.path("properties").has("historyRef")) throw invalid();
+        var root = (ObjectNode) SchemaContracts.JSON.readTree(needsOutput.schema());
+        if (!root.path("properties").isObject() || root.path("properties").size() != 1 || !root.path("properties").has("needs") || root.path("properties").has("historyRef")) throw invalid();
         var refs = new ArrayList<Object>(); refs.add(null);
         if (referential(question)) available.forEach(pair -> refs.add(pair.ref()));
         ((ObjectNode) root.get("properties")).set("historyRef", SchemaContracts.JSON.valueToTree(Map.of("enum", refs)));
@@ -81,20 +81,19 @@ public final class CitedHistoryContext {
         return new StructuredOutput(SchemaContracts.JSON.writeValueAsString(root));
     }
 
-    /** 여섯 기존 필드를 복구·수정하지 않고 기존 decoder로 넘길 수 있게 내부 참조만 검증·분리합니다. */
-    public static Decoded decode(StructuredOutput sixFields, String question, List<Pair> available, Set<String> verifiedCurrentRefs, String response) {
-        if (!output(sixFields, question, available).accepts(response)) throw invalid();
+    /** needs를 복구·수정하지 않고 내부 참조만 검증·분리합니다. 의도의 문서 전용 여부는 분류기가 선언과 대조합니다. */
+    public static Decoded decode(StructuredOutput needsOutput, String question, List<Pair> available, Set<String> verifiedCurrentRefs, String response) {
+        if (!output(needsOutput, question, available).accepts(response)) throw invalid();
         var value = (ObjectNode) SchemaContracts.JSON.readTree(response);
         var ref = value.remove("historyRef");
         Optional<Bound> selected = Optional.empty();
         if (!ref.isNull()) {
             var pair = available.stream().filter(p -> p.ref().equals(ref.asString())).findFirst().orElseThrow(CitedHistoryContext::invalid);
-            if (!value.path("taskType").asString().equals("KNOWLEDGE_QUERY") || !value.path("toolCalls").isEmpty()) throw invalid();
-            // 대상의 리터럴 출처는 실제 남은 대화만 받는 기존 여섯 필드 decoder가 검사합니다.
+            // 대상 후보는 실제 보존 이력만 받는 분류 decoder가 검사합니다.
             selected = Optional.of(new Bound(question, pair));
         }
         String projected = SchemaContracts.JSON.writeValueAsString(value);
-        if (!sixFields.accepts(projected)) throw invalid();
+        if (!needsOutput.accepts(projected)) throw invalid();
         return new Decoded(projected, selected);
     }
 

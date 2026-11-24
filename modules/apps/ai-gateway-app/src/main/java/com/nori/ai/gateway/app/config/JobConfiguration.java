@@ -43,7 +43,7 @@ public class JobConfiguration {
     @Bean JobWorker jobWorker(JobDelegationReader delegations,ScopeAssembler scopes,GatewaySystemsProperties systems,WorkflowExecutor workflow,JobTerminalCommitter terminal,JobRepository jobs,InferenceModeProperties inference,Optional<StructuredClassificationHook> hook,Optional<PausePointRegistry> pauses,Optional<FaultInjector> faults,SlotLedger slots,com.nori.ai.gateway.core.port.JobRequestInputReader inputs,Optional<com.nori.ai.gateway.core.llm.ClassificationService> classifier){return new JobWorker(delegations,scopes,systems,workflow,terminal,jobs,inference,hook,pauses,faults,slots,inputs,classifier);}
     @Bean ClassificationInputs classificationInputs(GatewaySystemsProperties systems,com.nori.ai.gateway.core.registry.CapabilityRegistry registry,MessageRepository messages,com.nori.ai.gateway.app.web.ResultResponseAssembler access,Environment environment,JobRepository jobs,com.nori.ai.gateway.core.feedback.ReviewedGlossary glossary){return new ClassificationInputs(systems,registry,messages,access,environment.getProperty("ai.gateway.classification.historyPairs",Integer.class,2),jobs,glossary);}
     @Bean com.nori.ai.gateway.app.knowledge.FeedbackKnowledge feedbackKnowledge(FeedbackRepository feedback,DocumentIndexRepository indexes,com.nori.ai.gateway.core.knowledge.DocumentKeywordIndex keywords,GatewaySystemsProperties systems,ScopeAssembler scopes,com.nori.ai.gateway.app.security.SecurityCredentialFiles credentials,org.springframework.beans.factory.ObjectProvider<ReadinessGate> gate){return new com.nori.ai.gateway.app.knowledge.FeedbackKnowledge(feedback,indexes,keywords,systems,scopes,credentials,gate);}
-    static final String CLASSIFY_PROMPT="prompts/classify-v3.txt";
+    static final String CLASSIFY_PROMPT="prompts/classify-v4.txt";
     /**
      * LLM 호출 시도 감사(SPEC §14.5·§12.3). 분류·Composer 가 같은 빈을 쓰고, 버전 값은 생성 모델 이름과 각 서비스가 읽는 Prompt 자원 이름이다.
      */
@@ -52,7 +52,7 @@ public class JobConfiguration {
         return new com.nori.ai.gateway.app.job.LlmCallAuditRecorder(audit,endpoint.settings().generationModel(),
             java.util.Map.of(com.nori.ai.gateway.core.budget.CallType.CLASSIFY,version(CLASSIFY_PROMPT),com.nori.ai.gateway.core.budget.CallType.COMPOSER,version(com.nori.ai.gateway.app.job.WorkflowExecutionConfiguration.COMPOSE_PROMPT)));
     }
-    /** "prompts/classify-v3.txt" → "classify-v3". */
+    /** "prompts/classify-v4.txt" → "classify-v4". */
     static String version(String path){return path.substring(path.lastIndexOf('/')+1,path.lastIndexOf('.'));}
     static String resource(String path){
         try(var input=JobConfiguration.class.getClassLoader().getResourceAsStream(path)){

@@ -17,11 +17,11 @@ class CitedHistoryRuntimeTest {
         var location=new DocumentLocation("bucket","guide.md","a".repeat(64),"설정",1,5);
         var dropped=new CitedHistoryContext.Pair("H1","first","OLD_SENTINEL MODEL-8 설정","이전 답변",List.of(location));
         var retained=new CitedHistoryContext.Pair("H2","second","MODEL-7 설정","최근 답변",List.of(location));
-        var context=new ClassificationService.Context(new RegistryView(OwnerSystem.TC,List.of()),List.of(new ClassificationService.HistoryPair(dropped.question(),dropped.answer()),new ClassificationService.HistoryPair(retained.question(),retained.answer())),Map.of(),2,List.of(dropped,retained));
+        var context=new ClassificationService.Context(new RegistryView(OwnerSystem.TC,List.of()),List.of(new ClassificationService.HistoryPair(dropped.question(),dropped.answer()),new ClassificationService.HistoryPair(retained.question(),retained.answer())),Map.of(),2,List.of(dropped,retained),IntentTestFixtures.INTENTS);
         var request=new ClassificationService.Request(SCOPE,"conversation","job",new CancellationToken(),new JobRequestInput("m",3,"그 모델 설정은 무엇인가요?",Map.of()));
         for(String target:List.of("MODEL-7","INVENTED-9","MODEL-8")) {
             var wire=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(CitedHistoryContextTest.raw("H2"));
-            wire.put("searchQuery",target+" 설정").put("retryQuery",target+" 설정 조건");wire.set("targets",SchemaContracts.JSON.valueToTree(List.of(Map.of("type","model","ref",target))));
+            ((tools.jackson.databind.node.ObjectNode)wire.path("needs").get(0)).put("subject",target);
             var client=new ScriptedClient(reply(wire.toString()));
             var service=new ClassificationService(client,TokenBudgetPolicy.current(),CODEPOINTS,messages->messages.getLast().content().contains("OLD_SENTINEL")?6000:100,new ExpiryCheckpoint(),LlmCallObserver.NONE,attempt->{},"분류",ignored->context);
             var result=service.classify(request);
@@ -33,11 +33,11 @@ class CitedHistoryRuntimeTest {
             assertThat(client.sent).hasSize(1);assertThat(client.sent.getFirst().messages().getLast().content()).doesNotContain("OLD_SENTINEL");
         }
     }
-    @Test void tokenReductionKeepsOnlyTheActuallySentReferenceAndIndependentInterjectionKeepsSixFields() {
+    @Test void tokenReductionKeepsOnlyTheActuallySentReferenceAndIndependentInterjectionKeepsNeeds() {
         var location=new DocumentLocation("bucket","guide.md","a".repeat(64),"현재 설정",1,5);
         var first=new CitedHistoryContext.Pair("H1","first","OLD_SENTINEL 질문","이전 답변",List.of(location));
         var second=new CitedHistoryContext.Pair("H2","second","현재 설정 질문","최근 답변",List.of(location));
-        var context=new ClassificationService.Context(new RegistryView(OwnerSystem.TC,List.of()),List.of(new ClassificationService.HistoryPair(first.question(),first.answer()),new ClassificationService.HistoryPair(second.question(),second.answer())),Map.of(),2,List.of(first,second));
+        var context=new ClassificationService.Context(new RegistryView(OwnerSystem.TC,List.of()),List.of(new ClassificationService.HistoryPair(first.question(),first.answer()),new ClassificationService.HistoryPair(second.question(),second.answer())),Map.of(),2,List.of(first,second),IntentTestFixtures.INTENTS);
         var captured=new ArrayList<List<ChatMessage>>();var outputs=new ArrayList<StructuredOutput>();
         String response=CitedHistoryContextTest.raw("H2");
         var client=new InferenceClient(){

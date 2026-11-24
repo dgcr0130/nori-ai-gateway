@@ -25,7 +25,7 @@ public final class QuestionPeriodResolver {
         public Unresolvable { Objects.requireNonNull(expression); }
     }
 
-    // 분류의 시각 출처 검사와 질문 기간 해석이 같은 절대 시각 문법을 사용합니다.
+    // 절대 범위와 불완전한 기간 표현은 같은 시각 문법으로 구분합니다.
     public static final Pattern ABSOLUTE = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\\.[0-9]{1,9})?)?(?:Z|[+-][0-9]{2}:[0-9]{2})?");
     private static final Pattern PERIOD = Pattern.compile(
         "(?<range>(?<from>" + ABSOLUTE.pattern() + ")\\s*부터\\s*(?<to>" + ABSOLUTE.pattern() + ")\\s*까지)"

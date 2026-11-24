@@ -42,7 +42,7 @@ import static org.mockito.Mockito.*;
 class HybridSearchHttpTest {
     @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp;
     @TestFactory Stream<DynamicTest> actualClassificationSearchSelectionAndComposerUseOnlyLocalHttp() {
-        return Stream.of("retry","insufficient","embedding-error","dimension-error","question-dimension-error","count-error","verified","same-query","live","general","seven","large","all-removed","partial","http-fail","non-json","truncated-all-removed","source-http-fail","source-non-json","stale-log")
+        return Stream.of("retry","insufficient","embedding-error","dimension-error","question-dimension-error","count-error","verified","same-query","general","seven","large","all-removed","partial","http-fail","non-json","truncated-all-removed","source-http-fail","source-non-json","stale-log")
             .map(mode->DynamicTest.dynamicTest(mode,()->run(mode)));
     }
     @Test void missingOptionalTokenizerAllowsPlainGuardButRejectsStructuredCalls() {
@@ -72,7 +72,7 @@ class HybridSearchHttpTest {
                         int count=mode.equals("count-error")?requested.size()-1:requested.size();
                         for(int i=0;i<count;i++) {
                             String input=requested.get(i).asString();
-                            String vector=mode.equals("dimension-error")||mode.equals("question-dimension-error")&&i==1?"[1]":input.equals("설비 T3")?"[1,0]":input.equals("상태 T3")?"[-1,0]":"[0,1]";
+                            String vector=mode.equals("dimension-error")||mode.equals("question-dimension-error")&&i==0?"[1]":input.equals("설비 상태 T3 상태")?"[-1,0]":mode.equals("verified")?"[0,1]":"[1,0]";
                             data.addObject().put("object","embedding").put("index",i).set("embedding",SchemaContracts.JSON.readTree(vector));
                         }
                         body.putObject("usage").put("prompt_tokens",1).put("total_tokens",1);response=body.toString();
@@ -81,11 +81,9 @@ class HybridSearchHttpTest {
                     var request=SchemaContracts.JSON.readTree(raw);var messages=new ArrayList<ChatMessage>();for(var message:request.path("messages"))messages.add(new ChatMessage(ChatMessage.Role.valueOf(message.path("role").asString().toUpperCase(Locale.ROOT)),message.path("content").asString()));
                     boolean classify=sent.stream().filter(s->s.startsWith("/v1/chat/completions")).count()==1;
                     String task=Set.of("live","seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)?"LIVE_QUERY":mode.equals("general")?"GENERAL_QUERY":"KNOWLEDGE_QUERY";
-                    String query=mode.equals("same-query")?"설비 상태 T3":"설비 T3";
-                    String text=classify?"{\"taskType\":\""+task+"\",\"toolCalls\":[],\"targets\":[],\"timeWindow\":null,\"searchQuery\":\""+query+"\",\"retryQuery\":\"상태 T3\"}":literalAnswer(messages,mode.equals("retry"));
-                    if(classify&&Set.of("seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)) {
-                        var wire=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(text);wire.putArray("toolCalls").addObject().put("toolId","asset.read").putObject("arguments");text=wire.toString();
-                    }
+                    String intent=task.equals("LIVE_QUERY")?"fixture-read":task.equals("GENERAL_QUERY")?"help":"document";
+                    var selection=SchemaContracts.JSON.createObjectNode();selection.putArray("needs").addObject().put("intent",intent).putNull("subject");
+                    String text=classify?selection.toString():literalAnswer(messages,mode.equals("retry"));
                     if(!classify&&Set.of("all-removed","truncated-all-removed").contains(mode))text="{\"selectedIds\":[\"UNKNOWN\"]}";
                     if(!classify&&mode.equals("partial")) {
                         var answer=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(text);
@@ -110,7 +108,7 @@ class HybridSearchHttpTest {
                 context.registerBean(io.micrometer.core.instrument.MeterRegistry.class,io.micrometer.core.instrument.simple.SimpleMeterRegistry::new);
                 context.register(InferenceAdapterModuleConfiguration.class);context.refresh();context.getBean(InferenceReadinessService.class).stop();
                 var now=Instant.now();var scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("READ"),"a".repeat(64),now.minusSeconds(60),now.plusSeconds(3600),"job");
-                var first=doc("a.md",mode.equals("partial")?"설비 상태 T3\n부가 설명이다.":Set.of("verified","same-query","all-removed","http-fail","non-json").contains(mode)?"설비 상태 T3":"설비 T3",1);var second=doc("b.md",mode.equals("insufficient")?"통신 T3":"상태 T3",-1);
+                var first=doc("a.md",mode.equals("partial")?"설비 상태 T3\n부가 설명이다.":Set.of("verified","same-query","all-removed","http-fail","non-json").contains(mode)?"설비 상태 T3":"설비 T3",mode.equals("verified")?0:1);var second=doc("b.md",mode.equals("insufficient")?"통신 T3":"상태 T3",-1);
                 var exactId=new UUID(2,1);var answers=mode.equals("verified")?List.of(
                     new DocumentCorpus.Answer(exactId,"설비 상태 T3",List.of(first.parents().getFirst().location()),Set.of("READ"),new float[]{0,1}),
                     new DocumentCorpus.Answer(new UUID(2,2),"다른 질문",List.of(first.parents().getFirst().location()),Set.of("READ"),new float[]{1,0})):List.<DocumentCorpus.Answer>of();
@@ -119,7 +117,12 @@ class HybridSearchHttpTest {
                 var store=mock(DocumentIndexRepository.class);when(store.searchState(any())).thenReturn(Optional.of(bundle));
                 var config=new CoreBeansConfiguration();var client=context.getBean(InferenceClient.class);var expiry=new ExpiryCheckpoint();var business=ConfiguredTool.create(OwnerSystem.TC,"asset.read","설비 상태 조회",mode.equals("stale-log")?ToolKind.LOG:ToolKind.BUSINESS,SchemaContracts.parse("{\"type\":\"object\",\"additionalProperties\":false}"),SchemaContracts.parse("{\"type\":\"object\"}"),List.of("READ"),10000);
                 var versions=new ContractVersionPolicy();var registry=new CapabilityRegistry(Set.of("seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)?List.of(business):List.of(),Set.of(ImplementationPhase.PHASE_1),versions);
-                var inputs=mock(ClassificationInputs.class);when(inputs.load(any())).thenReturn(new ClassificationService.Context(registry.view(scope),List.of(),Map.of(),2));
+                var declarations=List.of(
+                    new ClassificationIntent("fixture-read","로컬 자료 조회",List.of("asset.read"),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.LIVE_QUERY,false),
+                    new ClassificationIntent("document","문서",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.KNOWLEDGE_QUERY,true),
+                    new ClassificationIntent("help","도움말",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.GENERAL_QUERY,false));
+                var glossary=mode.equals("same-query")?Map.<String,String>of():Map.of("T3","상태");
+                var inputs=mock(ClassificationInputs.class);when(inputs.load(any())).thenReturn(new ClassificationService.Context(registry.view(scope),List.of(),glossary,2,List.of(),declarations));
                 var classification=config.classificationService(client,policy,context.getBean(HfTokenizerCounter.class),context.getBean(PromptTokenCounting.class),expiry,Optional.empty(),audits::add,inputs);
                 var request=new JobRequestInput("message",1,"설비 상태 T3",Map.of());var cancellation=new CancellationToken();
                 var result=classification.classify(new ClassificationService.Request(scope,"conversation","job",cancellation,request));assertThat(result).isInstanceOf(ClassificationService.Classified.class);
@@ -141,13 +144,13 @@ class HybridSearchHttpTest {
                     @Override public ToolResultEnvelope execute(com.nori.ai.gateway.core.plan.PlanStep step,CapabilityManifest manifest,VerifiedSystemScope current,ExecutionContext execution){return staleLog(manifest,current,now);}
                 }:new BusinessToolExecutor(systemQuery,Clock.systemUTC());
                 var executor=new com.nori.ai.gateway.core.workflow.WorkflowExecutor(registry,validator,new ToolDispatcher(registry,validator,new ToolResultContractValidator(versions),new DispatchInjectionSeam.NoOp(),List.of(businessExecutor),Clock.systemUTC()),authorization,expiry,Clock.systemUTC(),mock(ToolResultCache.class),new BlockBuilder(new UiSchemaValidator()),mock(com.nori.ai.gateway.core.workflow.WorkflowExecutor.ExecutionRecorder.class),new LogSummarizer(),new GeneralQueryHelpBuilder());
-                var adapter=new WorkflowExecutionAdapter(registry,new WorkflowPlanBuilder(registry),executor,new WorkflowResourceResolverFactory(permissions,registry,expiry),new TimeWindowResolver(),mock(MessageRepository.class),expiry,new ContentSanitizer(),new TerminalOutcomeAssembler(),new ConversationSummaryBuilder(),new com.nori.ai.gateway.core.evidence.EvidenceAssembler(),mock(AuditRecorder.class),Optional.of(composer),new LogSummarizer(),Optional.empty(),Optional.of(grounding));
+                var adapter=new WorkflowExecutionAdapter(registry,new WorkflowPlanBuilder(registry,declarations),executor,new WorkflowResourceResolverFactory(permissions,registry,expiry),new TimeWindowResolver(),mock(MessageRepository.class),expiry,new ContentSanitizer(),new TerminalOutcomeAssembler(),new ConversationSummaryBuilder(),new com.nori.ai.gateway.core.evidence.EvidenceAssembler(),mock(AuditRecorder.class),Optional.of(composer),new LogSummarizer(),Optional.empty(),Optional.of(grounding));
                 var terminal=adapter.execute(job);
                 long embeddings=sent.stream().filter(s->s.startsWith("/v1/embeddings")).count(),chats=sent.stream().filter(s->s.startsWith("/v1/chat/completions")).count();
                 assertThat(audits.stream().filter(a->a.callType()==CallType.CLASSIFY)).hasSize(1);assertThat(embeddings).isLessThanOrEqualTo(2);
                 var embeddingRequests=sent.stream().filter(s->s.startsWith("/v1/embeddings ")).map(s->SchemaContracts.JSON.readTree(s.substring("/v1/embeddings ".length())).path("input")).toList();
                 for(int i=0;i<embeddingRequests.size();i++) {
-                    var expected=mode.equals("same-query")?List.of("설비 상태 T3"):List.of(i==0?"설비 T3":"상태 T3","설비 상태 T3");
+                    var expected=i==0?List.of("설비 상태 T3"):List.of("설비 상태 T3 상태","설비 상태 T3");
                     assertThat(embeddingRequests.get(i)).isEqualTo(SchemaContracts.JSON.valueToTree(expected));
                 }
                 switch(mode) {
@@ -199,7 +202,7 @@ class HybridSearchHttpTest {
         return new ToolResultEnvelope("log-1",manifest.capabilityId(),manifest.contractVersion(),manifest.schemaDigest(),scope.boundSystem(),ResultStatus.STALE,ref,List.of(),at,null,List.of(),List.of(),null,"log-trace",new ToolResultMetadata(source,"LIVE",false,List.of()),null,List.of(new ResultBlock("table",ref,content)),List.of(),List.of(evidence),List.of(),List.of());
     }
     private DocumentCorpus.Document doc(String key,String text,int x) {
-        var location=new DocumentLocation("bucket",key,"a".repeat(64),"설정",3,5);var child=new DocumentCorpus.Child(UUID.randomUUID(),0,location,"운영 > 설정",text,List.of("t3"),new float[]{x,0});
+        var location=new DocumentLocation("bucket",key,"a".repeat(64),"설정",3,5);var child=new DocumentCorpus.Child(UUID.randomUUID(),0,location,"운영 > 설정",text,List.of("t3"),x==0?new float[]{0,1}:new float[]{x,0});
         var parent=new DocumentCorpus.Parent(UUID.randomUUID(),location,"운영 > 설정",text,"b".repeat(64),List.of(child));return new DocumentCorpus.Document(UUID.randomUUID(),"bucket",key,"a".repeat(64),"운영",Set.of("READ"),List.of(),List.of(parent));
     }
 }

@@ -135,7 +135,7 @@ final class GoldenClassificationAdapter implements AutoCloseable {
 
         var observedPlan = new AtomicReference<WorkflowExecutionPlan>();
         var preparation = new AtomicReference<PlanValidator.Preparation>();
-        var builder = spy(new WorkflowPlanBuilder(registry));
+        var builder = spy(new WorkflowPlanBuilder(registry,systems.systems().get("TC").intents()));
         doAnswer(invocation -> {
             var plan = (WorkflowExecutionPlan) invocation.callRealMethod();
             observedPlan.set(plan);

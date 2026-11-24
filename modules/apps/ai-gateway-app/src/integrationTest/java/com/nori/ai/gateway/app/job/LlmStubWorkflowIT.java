@@ -51,7 +51,7 @@ class LlmStubWorkflowIT extends LlmStubSupport {
 
     @Test @Tag("AC-22-STUB-TOOL") @Tag("AC-22-STUB-SYSTEM") void unregisteredToolOrForeignSystemFieldsAreRejectedAsPlanInvalidAndBoundSystemStaysTc() throws Exception {
         var output=(tools.jackson.databind.node.ObjectNode)com.nori.ai.gateway.core.registry.SchemaContracts.parse(wire("LQ","EQP-001",null,null,null));
-        ((tools.jackson.databind.node.ObjectNode)output.path("toolCalls").get(0)).put("toolId","tc.unknown.tool");var tool=classify(output.toString());
+        ((tools.jackson.databind.node.ObjectNode)output.path("needs").get(0)).put("intent","not-declared");var tool=classify(output.toString());
         output=(tools.jackson.databind.node.ObjectNode)com.nori.ai.gateway.core.registry.SchemaContracts.parse(wire("LQ","EQP-001",null,null,null));output.put("systemId","WM");var system=classify(output.toString());
         for (var reply : List.of(tool, system)) {
             calls().reset();

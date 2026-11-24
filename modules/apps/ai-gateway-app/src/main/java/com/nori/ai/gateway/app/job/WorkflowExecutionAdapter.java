@@ -41,10 +41,11 @@ public final class WorkflowExecutionAdapter implements com.nori.ai.gateway.core.
         var context=object(job.requestInput().requestFields().get("context"));
         TimeWindowResolver.Resolved resolved;
         try {
-            resolved=windows.resolve(job.classification(),context,()->{
+            java.util.function.Supplier<Optional<Map<String,Object>>> previous=()->{
                 try{return messages.findPreviousResolvedTimeWindow(job.scope(),job.jobId(),job.requestInput().messageId());}
                 catch(RuntimeException failure){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",failure);expiry.assertLive(job.cancellation());throw failure;}
-            },definition);
+            };
+            resolved=builder.usesIntents(job)?builder.resolveWindow(job,previous):windows.resolve(job.classification(),context,previous,definition);
         }catch(TimeWindowResolver.Failure invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(WorkflowExecutionAdapter.class.getName()),"WORKFLOW_EXECUTION_ADAPTER_FAILED",invalid);return finishClarification(job,invalid.code(),List.of("timeWindow"));}
         if(resolved.window().isPresent()) {
             try {

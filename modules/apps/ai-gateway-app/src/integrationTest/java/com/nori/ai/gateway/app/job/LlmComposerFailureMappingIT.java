@@ -88,10 +88,15 @@ class LlmComposerFailureMappingIT extends LlmStubSupport {
 
     @Test void sourceTextReachesTheComposerPromptOnlyAfterMaskingInTheActualPath() throws Exception {
         var server = context.getBean(WorkflowSourceFixture.Server.class);
-        server.logText = "EQP-001 EQUIPMENT_ERROR operator-x@example.com 원문표지QZ";
+        // snapshot을 사용하지 않는 장애 계획에서도 로그 자체가 질문의 충분성을 충족해야 마스킹 전송을 검증할 수 있습니다.
+        server.logText = "EQP-001 장애 원인 EQUIPMENT_ERROR operator-x@example.com 원문표지QZ";
         var watch = Optional.of(new TestHookRegistry.PromptWatch(List.of("operator-x@example.com", "EQUIPMENT_ERROR", "원문표지QZ")));
         var job = admitScripted("source-mask", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), compose("장애 로그가 확인되었다[e1].")), watch, null);
         assertThat(terminal(job)).isIn("SUCCEEDED", "PARTIAL");
+        assertThat(scripts().scriptedCalls(job.jobId(),CallType.CLASSIFY)).isOne();
+        var summary=payload(job.jobId()).path("toolSummary");var ids=new ArrayList<String>();summary.forEach(row->ids.add(row.path("capabilityId").asString()));
+        assertThat(ids).containsExactly("logs.search","trace.search");assertThat(summary.get(0).path("status").asString()).isEqualTo("SUCCESS");
+        assertThat(calls().requests).isEmpty();
         var rows = scripts().promptWatch(job.jobId()).orElseThrow();
         // matchCount는 sentinel을 담은 호출 수입니다. 여러 로그 단위가 있어도 작성 호출 한 번은 1로 셉니다.
         assertThat(rows).contains(new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 0, 0), new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 1, 1), new LlmScriptRegistry.WatchRow(CallType.COMPOSER, 2, 1));

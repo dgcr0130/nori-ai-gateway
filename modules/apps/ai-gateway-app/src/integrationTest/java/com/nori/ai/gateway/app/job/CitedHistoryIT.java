@@ -55,8 +55,8 @@ class CitedHistoryIT extends LlmStubSupport {
         store.saveBuilding(scope,bundle);try(var prepared=index.prepare(scope,store.load(scope,bundle.id()))){store.activate(scope,bundle);index.install(scope,prepared);}
     }
     private String wire(boolean reference,String ref) {
-        var value=SchemaContracts.JSON.createObjectNode().put("taskType","KNOWLEDGE_QUERY").put("searchQuery",reference?"기억한 값 지우기":"로그인 화면 아이디 저장").put("retryQuery",reference?"값 삭제":"로그인 저장 동작");
-        value.putArray("toolCalls");value.putArray("targets");value.putNull("timeWindow");if(reference)value.put("historyRef",ref);return value.toString();
+        var value=(tools.jackson.databind.node.ObjectNode)SchemaContracts.parse(intentWire("document",null));
+        if(reference)value.put("historyRef",ref);return value.toString();
     }
     private JobAdmissionService.Accepted first(String key,String question,String conversation)throws Exception {
         var job=admitScripted(key,question,Map.of(),List.of(classify(wire(false,null)),composeSelection(2,"C1")),Optional.empty(),conversation);
@@ -91,14 +91,15 @@ class CitedHistoryIT extends LlmStubSupport {
 
     @Test void independentInterjectionDoesNotRequestAHistoryReference()throws Exception {
         seed("a".repeat(64),Set.of("AI_DOC_READ"));var prior=first("independent-first","로그인 화면 아이디 저장은 무엇인가요?",null);
-        var independent=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(wire(false,null));independent.put("searchQuery","새 권한 코드").put("retryQuery","다른 업무 권한");
+        var independent=(tools.jackson.databind.node.ObjectNode)SchemaContracts.JSON.readTree(wire(false,null));
         var job=admitScripted("independent","그런데 다른 독립 질문: 새 권한 코드는 무엇인가요?",Map.of(),List.of(classify(independent.toString()),composeSelection(2,"C1")),Optional.empty(),prior.conversationId());
         assertSucceeded(job);assertThat(payload(job.jobId()).path("answer").path("kind").asString()).isEqualTo("NO_EVIDENCE");
         assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isZero();
     }
 
     @Test void longStoredHistoryDropsOldestReferenceAndKeepsOnlyTheMatchedPairInComposer()throws Exception {
-        seed("a".repeat(64),Set.of("AI_DOC_READ"));String padding="뺡".repeat(850);
+        // v4의 간결한 분류 입력에서도 두 쌍은 넘치고 최신 한 쌍은 남도록 fixture 길이를 확보합니다.
+        seed("a".repeat(64),Set.of("AI_DOC_READ"));String padding="뺡".repeat(1100);
         String firstQuestion="로그인 화면 아이디 저장 FIRSTHISTORYQZ "+padding,secondQuestion="로그인 화면 아이디 저장 SECONDHISTORYQZ "+padding;
         var first=first("long-first",firstQuestion,null);var second=first("long-second",secondQuestion,first.conversationId());
         var previous=context.getBean(JobRepository.class).findRequestInput(scope("actor"),second.jobId()).orElseThrow();
@@ -106,7 +107,16 @@ class CitedHistoryIT extends LlmStubSupport {
         var loaded=context.getBean(ClassificationInputs.class).load(probe);
         var assembler=ClassificationService.class.getDeclaredMethod("messages",ClassificationService.Request.class,ClassificationService.Context.class,List.class);assembler.setAccessible(true);
         @SuppressWarnings("unchecked")var messages=(List<com.nori.ai.gateway.core.budget.ChatMessage>)assembler.invoke(context.getBean(ClassificationService.class),probe,loaded,loaded.history());
-        assertThat(context.getBean(com.nori.ai.gateway.core.budget.PromptTokenCounting.class).count(messages)).isGreaterThan(5120);
+        var counter=context.getBean(com.nori.ai.gateway.core.budget.PromptTokenCounting.class);
+        var policy=context.getBean(com.nori.ai.gateway.core.budget.TokenBudgetPolicy.class);var budget=policy.budget(CallType.CLASSIFY);
+        assertThat(loaded.history()).hasSize(2);assertThat(loaded.references()).extracting(CitedHistoryContext.Pair::ref).containsExactly("H1","H2");
+        int fullTokens=counter.count(messages);
+        assertThat(fullTokens).as("두 대화 쌍을 포함한 CLASSIFY 입력").isGreaterThan(budget.inputLimit());
+        assertThat(policy.violations(CallType.CLASSIFY,fullTokens,budget.requestMaxTokens())).contains(com.nori.ai.gateway.core.budget.TokenBudgetPolicy.Violation.INPUT_LIMIT);
+        @SuppressWarnings("unchecked")var retainedMessages=(List<com.nori.ai.gateway.core.budget.ChatMessage>)assembler.invoke(context.getBean(ClassificationService.class),probe,loaded,List.of(loaded.history().getLast()));
+        int retainedTokens=counter.count(retainedMessages);
+        assertThat(retainedTokens).as("최신 대화 한 쌍을 포함한 CLASSIFY 입력").isLessThanOrEqualTo(budget.inputLimit());
+        assertThat(policy.violations(CallType.CLASSIFY,retainedTokens,budget.requestMaxTokens())).isEmpty();
         var watch=Optional.of(new TestHookRegistry.PromptWatch(List.of("FIRSTHISTORYQZ","SECONDHISTORYQZ")));
         var job=follow("long-follow",second.conversationId(),"H2",watch);assertSucceeded(job);
         assertThat(payload(job.jobId()).path("answer").path("text").asString()).isEqualTo(SECOND+"[1]");

@@ -118,13 +118,13 @@ class AppContextWiringIT extends StackContextSupport {
         assertThat(context.getBean(DispatchInjectionSeam.class)).isExactlyInstanceOf(DispatchInjectionSeam.NoOp.class);
         assertThat(context.getBeansOfType(ToolExecutor.class).values()).extracting(ToolExecutor::toolKind).containsExactlyInAnyOrder(ToolKind.BUSINESS,ToolKind.LOG,ToolKind.TRACE,ToolKind.GIT);
         var loader=context.getBean(ManifestLoader.class);var manifests=context.getBean(CapabilityRegistry.class).all();
-        assertThat(manifests).hasSize(6);
+        assertThat(manifests).hasSize(7);assertThat(manifests).extracting(CapabilityManifest::capabilityId).contains("tc.eqp.readRegistration");
         var now=Instant.now();var scope=new VerifiedSystemScope(OwnerSystem.TC,"service",new ActorRef("actor"),"actor",Set.of("EQP_READ","DLQ_READ","MODEL_READ","AI_LOG_READ","AI_TRACE_READ","AI_CODE_READ","AI_DOC_READ"),"digest",now.minusSeconds(1),now.plusSeconds(60),"request");
         var registry=context.getBean(CapabilityRegistry.class);var view=registry.view(scope);
         assertThat(view.ownerSystem()).isEqualTo(scope.boundSystem());
         var snapshot=manifests.stream().filter(m -> m.capabilityId().equals("tc.eqp.getOperationalSnapshot")).findFirst().orElseThrow();
         assertThat(view.find(snapshot.capabilityId())).contains(snapshot);
-        assertThat(view.capabilities()).hasSize(5).allSatisfy(m -> {
+        assertThat(view.capabilities()).hasSize(6).allSatisfy(m -> {
             assertThat(m.ownerSystem()).isEqualTo(scope.boundSystem());assertThat(m.availability()).isEqualTo(Availability.IMPLEMENTED);
             assertThat(context.getBean(ContractVersionPolicy.class).accepts(m.contractVersion(),m.schemaDigest())).isTrue();
         });

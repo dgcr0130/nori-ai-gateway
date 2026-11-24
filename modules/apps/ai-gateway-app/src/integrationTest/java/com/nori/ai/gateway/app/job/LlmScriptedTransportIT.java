@@ -78,16 +78,17 @@ class LlmScriptedTransportIT extends LlmStubSupport {
         assertThat(scripts().scriptedCalls(truncated.jobId(), CallType.COMPOSER)).as("잘림 감지는 재시도하지 않는 호출 실패").isOne();
     }
 
-    @Test void anIncidentExecutesOnlyItsSelectedListAndAggregatesAsSuccess() throws Exception {
+    @Test void anIncidentExecutesOnlyLogsAndTracesAndAggregatesAsSuccess() throws Exception {
         perms = Set.of("EQP_READ", "COMM_LOG_READ", "DLQ_READ", "AI_LOG_READ", "AI_TRACE_READ");
-        // 단일 업무 자료와 4개 앱의 로그 행, 빈 trace fixture가 만든 5후보를 모두 판정합니다.
-        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), composeSelection(5,"C1")), Optional.empty(), null);
+        // 장애 의도의 4개 앱 로그 행과 빈 trace를 사용하며 업무 snapshot은 추가하지 않습니다.
+        context.getBean(WorkflowSourceFixture.Server.class).logText="EQP-001 장애 원인 관측 자료";
+        var job = admitScripted("omitted-only", "EQP-001 장애 원인 찾아줘", workflowFields(), List.of(classify(wire("INC", "EQP-001", null, null, null)), composeSelection(4,"C1")), Optional.empty(), null);
         assertThat(terminal(job)).isEqualTo("SUCCEEDED");
         var trace = new ArrayList<String>();
         payload(job.jobId()).path("trace").forEach(value -> trace.add(value.path("outcome").asString()));
         assertThat(trace).isEmpty();
-        assertThat(jdbc().sql("SELECT capability_id FROM gw.tool_execution WHERE job_id=:id").param("id",job.jobId()).query(String.class).list()).containsExactlyInAnyOrder("tc.eqp.getOperationalSnapshot","logs.search","trace.search");
+        assertThat(jdbc().sql("SELECT capability_id FROM gw.tool_execution WHERE job_id=:id").param("id",job.jobId()).query(String.class).list()).containsExactlyInAnyOrder("logs.search","trace.search");
         assertThat(result(job.jobId())).containsEntry("status", "SUCCESS").containsEntry("error_code", null);
-        assertThat(jdbc().sql("SELECT jsonb_array_length(evidence) FROM kn.answer_snapshot WHERE job_id=:job").param("job",job.jobId()).query(Integer.class).single()).isEqualTo(5);
+        assertThat(jdbc().sql("SELECT jsonb_array_length(evidence) FROM kn.answer_snapshot WHERE job_id=:job").param("job",job.jobId()).query(Integer.class).single()).isEqualTo(4);
     }
 }

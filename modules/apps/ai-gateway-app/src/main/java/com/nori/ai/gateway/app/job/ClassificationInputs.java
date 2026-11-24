@@ -39,6 +39,6 @@ public final class ClassificationInputs implements ClassificationService.Context
             CitedHistoryInputs.fromAccess("H"+(i+1),request,candidate.pair(),candidate.input(),candidate.access()).ifPresent(references::add);
         }
         body(System.getLogger(getClass().getName()),INFO,"CLASSIFICATION_HISTORY_INPUT",com.nori.ai.gateway.core.registry.SchemaContracts.JSON.writeValueAsString(pairs),"jobId",request.jobId(),"conversationId",request.conversationId());
-        return new ClassificationService.Context(registry.view(request.scope()),pairs,glossary.current(request.scope(),system.glossary()),limit,references);
+        return new ClassificationService.Context(registry.view(request.scope()),pairs,glossary.current(request.scope(),system.glossary()),limit,references,system.intents());
     }
 }

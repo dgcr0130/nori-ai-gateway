@@ -28,23 +28,18 @@ import java.util.List;
 import java.util.Map;
 import static org.assertj.core.api.Assertions.*;
 
-/**
- * SPEC §27.2 AC-32-NEEDS ⓞ: eqp 64 CODEPOINT(JSON escape 포함)·from/to 각 35자·qRef·n 6코드·a 를 모두 채운 최대 분류 wire v3 를 pin tokenizer 로 계수하고,
- * 운영 classify-v3 프롬프트·Registry 참고 정보로 조립한 실제 분류 입력과 함께 예산(답변 768·요청 2,048·입력+요청 ≤ 8192)을 확인한다(Plan §16.3 R5).
- */
+/** 최대 길이 대상과 4개 needs를 실제 tokenizer로 계수합니다. */
 class ClassificationWireV3TokenBudgetTest {
     private static final Instant NOW = Instant.parse("2026-11-05T00:00:00Z");
 
     private static String resource(String path) throws Exception {
         try (var input = ClassificationWireV3TokenBudgetTest.class.getClassLoader().getResourceAsStream(path)) { assertThat(input).as(path).isNotNull(); return new String(input.readAllBytes(), StandardCharsets.UTF_8); }
     }
-    @Test void maximumWireV3FitsTheAnswerLimitAndTheAssembledInputFitsTheContextWithTheRequestMaxTokens() throws Exception {
+    @Test void maximumNeedsWireFitsTheAnswerLimitAndTheAssembledInputFitsTheContextWithTheRequestMaxTokens() throws Exception {
         String eqp = "설비\"경계\\" + "가".repeat(54) + "EQP0";
         assertThat(eqp.codePointCount(0, eqp.length())).isEqualTo(64);
-        String time = "2026-10-03T00:00:00.123456789+09:00";
-        assertThat(time.length()).isEqualTo(35);
-        var wire=SchemaContracts.JSON.createObjectNode().put("taskType","INCIDENT_ANALYSIS").put("searchQuery",eqp).put("retryQuery",eqp+" 재검색");
-        wire.putArray("toolCalls");wire.putArray("targets").addObject().put("type","EQP").put("ref",eqp);wire.set("timeWindow",SchemaContracts.JSON.valueToTree(Map.of("from",time,"to","2026-10-04T00:00:00.123456789+09:00")));
+        var wire=SchemaContracts.JSON.createObjectNode();var needs=wire.putArray("needs");
+        for(int i=0;i<4;i++)needs.addObject().put("intent","document").put("subject",eqp);
         String content = wire.toString();
         assertThat(content).contains("\\\"", "\\\\");
         var policy = TokenBudgetPolicy.current();
@@ -64,8 +59,8 @@ class ClassificationWireV3TokenBudgetTest {
                 @Override public List<float[]> embed(List<String> inputs) { throw new UnsupportedOperationException(); }
             };
             var service = new ClassificationService(client, policy, tokenizer::countText, new PromptTokenCounter(com.nori.ai.gateway.integration.testing.InferenceFixtures.renderer(),tokenizer)::count, new ExpiryCheckpoint(),
-                LlmCallObserver.NONE, attempt -> {}, resource("prompts/classify-v3.txt"), ignored->new ClassificationService.Context(new com.nori.ai.gateway.core.registry.RegistryView(OwnerSystem.TC,List.of()),List.of(),Map.of(),2));
-            var context = Map.<String,Object>of("context", Map.of("timezone", "+09:00", "referenceTime", "2026-10-20T10:00:00+09:00"));
+                LlmCallObserver.NONE, attempt -> {}, resource("prompts/classify-v4.txt"), ignored->new ClassificationService.Context(new com.nori.ai.gateway.core.registry.RegistryView(OwnerSystem.TC,List.of()),List.of(),Map.of(),2,List.of(),com.nori.ai.gateway.app.SystemConfigFixtures.intents()));
+            var context = Map.<String,Object>of("context", Map.of("timezone", "+09:00", "referenceTime", "2026-10-20T10:00:00+09:00"),"resourceRefs",List.of(Map.of("type","EQP","ref",eqp)));
             var result = service.classify(new ClassificationService.Request(new com.nori.ai.gateway.core.scope.VerifiedSystemScope(OwnerSystem.TC, "svc", new com.nori.ai.gateway.core.scope.ActorRef("actor"), "actor",
                 java.util.Set.of("EQP_READ"), "a".repeat(64), NOW.minusSeconds(1), NOW.plusSeconds(60), "job-1"), "conversation", "job-1", new CancellationToken(), new JobRequestInput("message", 1, question, context)));
             assertThat(result).as("최대 wire 는 절삭 없이 통과").isInstanceOf(ClassificationService.Classified.class);

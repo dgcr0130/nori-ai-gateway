@@ -61,7 +61,7 @@ class SystemConfigurationTest {
         for(var properties:loader.load("initial",source)) env.getPropertySources().addLast(properties);
         var tc=bind(env).systems().get("TC");
         assertThat(tc.reviewPermission()).isEqualTo("AI_REVIEW");
-        assertThat(tc.tools()).hasSize(4);assertThat(tc.documents()).hasSize(2).allSatisfy(d->assertThat(d.bucket()).isEqualTo("nori-tc"));assertThat(tc.documents()).extracting(GatewaySystemsProperties.Document::prefix).containsExactly("00.rag/user/","00.rag/admin/");assertThat(tc.documents().get(0).requiredPermissions()).containsExactly("AI_DOC_READ");assertThat(tc.documents().get(1).requiredPermissions()).containsExactly("AI_DOC_READ","AI_ADMIN_DOC_READ");
+        assertThat(tc.tools()).hasSize(5);assertThat(tc.tools()).extracting(GatewaySystemsProperties.Tool::id).contains("tc.eqp.readRegistration");assertThat(tc.documents()).hasSize(2).allSatisfy(d->assertThat(d.bucket()).isEqualTo("nori-tc"));assertThat(tc.documents()).extracting(GatewaySystemsProperties.Document::prefix).containsExactly("00.rag/user/","00.rag/admin/");assertThat(tc.documents().get(0).requiredPermissions()).containsExactly("AI_DOC_READ");assertThat(tc.documents().get(1).requiredPermissions()).containsExactly("AI_DOC_READ","AI_ADMIN_DOC_READ");
         assertThat(tc.tools().getFirst().inputSchema()).containsKey("properties");
         String duplicate="ai:\n  gateway:\n    systems:\n      New: {}\n      New: {}\n";
         assertThatThrownBy(()->loader.load("duplicate",new org.springframework.core.io.ByteArrayResource(duplicate.getBytes(java.nio.charset.StandardCharsets.UTF_8)))).isInstanceOf(RuntimeException.class);

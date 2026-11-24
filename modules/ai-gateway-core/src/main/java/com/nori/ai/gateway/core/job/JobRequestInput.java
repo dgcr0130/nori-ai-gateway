@@ -37,20 +37,28 @@ public record JobRequestInput(String messageId, long jobSeq, String maskedQuesti
             if(context.get("timeWindow")!=null) {var window=object(context.get("timeWindow"));
                 if(!times.parseTime(text(window.get("from")),zone).isBefore(times.parseTime(text(window.get("to")),zone)))throw new IllegalArgumentException("시간 구간이 잘못되었습니다");}
         }
-        if(fields.get("resourceRefs")!=null) {
-            if(!(fields.get("resourceRefs") instanceof List<?> refs))throw new IllegalArgumentException("리소스 목록이 잘못되었습니다");
-            for(var value:refs){var ref=object(value);text(ref.get("type"));text(ref.get("ref"));}
-        }
+        validateRefs(fields.get("resourceRefs"));
+        if(fields.get("context") instanceof Map<?,?> context)validateRefs(context.get("resourceRefs"));
         if(fields.get("options")!=null) {
             var options=object(fields.get("options"));
             for(String key:List.of("allowTools","allowKnowledge"))if(options.get(key)!=null&&!(options.get(key) instanceof Boolean))throw new IllegalArgumentException("옵션 값이 잘못되었습니다");
         }
     }
+    private static void validateRefs(Object value) {
+        if(value==null)return;
+        if(!(value instanceof List<?> refs))throw new IllegalArgumentException("리소스 목록이 잘못되었습니다");
+        for(var item:refs){var ref=object(item);text(ref.get("type"));text(ref.get("ref"));}
+    }
     private static Map<?,?> object(Object value) {if(!(value instanceof Map<?,?> map))throw new IllegalArgumentException("입력 객체가 잘못되었습니다");return map;}
     private static String text(Object value) {if(!(value instanceof String text)||text.isBlank())throw new IllegalArgumentException("입력 문자열이 잘못되었습니다");return text;}
     public List<ResourceRef> selectedResourceRefs() {
-        if (!(requestFields.get("resourceRefs") instanceof List<?> refs)) return List.of();
-        return refs.stream().map(value -> { var ref = (Map<?,?>)value; return new ResourceRef((String)ref.get("type"),(String)ref.get("ref")); }).toList();
+        var result=new ArrayList<ResourceRef>();
+        addRefs(result,requestFields.get("resourceRefs"));
+        if(requestFields.get("context") instanceof Map<?,?> context)addRefs(result,context.get("resourceRefs"));
+        return List.copyOf(result);
+    }
+    private static void addRefs(Collection<ResourceRef> result,Object raw) {
+        if(raw instanceof List<?> refs)for(var value:refs){var ref=(Map<?,?>)value;result.add(new ResourceRef((String)ref.get("type"),(String)ref.get("ref")));}
     }
     @Override public String toString() { return "JobRequestInput[보호됨]"; }
 }

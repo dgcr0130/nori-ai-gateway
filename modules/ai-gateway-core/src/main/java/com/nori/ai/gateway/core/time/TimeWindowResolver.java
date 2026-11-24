@@ -21,6 +21,20 @@ public final class TimeWindowResolver {
     }
     private final InputValidator parser=new InputValidator();
     private record Selection(Map<String,Object> selected,ZoneId zone,Instant reference,boolean conflict) {}
+    /** 기간 표현이 있으면 context·이전 턴보다 먼저 해석하며 미해석 표현을 기본 창으로 덮지 않습니다. */
+    public Resolved resolveQuestion(String question,boolean acceptsPeriod,Map<String,Object> context,Supplier<Optional<Map<String,Object>>> previousTurnWindow,WorkflowDefinition workflow) {
+        if(!acceptsPeriod)return new Resolved(Optional.empty(),Map.of(),false);
+        final ZoneId zone;final Instant reference;
+        try {
+            zone=context.get("timezone")==null?null:ZoneId.of((String)context.get("timezone"));
+            reference=context.get("referenceTime")==null?null:parser.parseTime((String)context.get("referenceTime"),zone);
+        }catch(java.time.DateTimeException|ClassCastException|IllegalArgumentException invalid){throw new Failure(ErrorCode.PLAN_INVALID);}
+        var period=new QuestionPeriodResolver().resolve(question,reference,zone);
+        if(period instanceof QuestionPeriodResolver.Unresolvable)throw new Failure(ErrorCode.TIME_WINDOW_REQUIRED);
+        Map<String,Object> extraction=period instanceof QuestionPeriodResolver.Resolved resolved
+            ?Map.of("timeWindow",Map.of("from",resolved.window().startAt().toString(),"to",resolved.window().endAt().toString())):Map.of();
+        return resolve(extraction,context,previousTurnWindow,workflow);
+    }
     public Resolved resolve(Map<String,Object> extraction,Map<String,Object> context,Supplier<Optional<Map<String,Object>>> previousTurnWindow,WorkflowDefinition workflow) {
         boolean required=workflow.defaultWindowLength()!=null && workflow.answerSource()!=WorkflowDefinition.AnswerSource.REGISTRY_VIEW;
         if (workflow.answerSource()==WorkflowDefinition.AnswerSource.REGISTRY_VIEW) return new Resolved(Optional.empty(),Map.of(),false);

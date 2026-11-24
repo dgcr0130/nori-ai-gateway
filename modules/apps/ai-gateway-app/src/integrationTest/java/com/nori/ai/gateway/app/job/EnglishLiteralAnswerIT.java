@@ -35,12 +35,11 @@ class EnglishLiteralAnswerIT extends LlmStubSupport {
         try(var prepared=index.prepare(scope,store.load(scope,bundle.id()))){store.activate(scope,bundle);index.install(scope,prepared);}
     }
     private JobAdmissionService.Accepted run(String key,String... ids) throws Exception {
-        var value=SchemaContracts.JSON.createObjectNode().put("taskType","KNOWLEDGE_QUERY").put("searchQuery","저장 검증 성공").put("retryQuery","저장 성공 안내");
-        value.putArray("toolCalls");value.putArray("targets");value.putNull("timeWindow");
-        var job=admitScripted(key,QUESTION,Map.of(),List.of(classify(value.toString()),composeSelection(ids)),Optional.empty(),null);
+        String value=intentWire("document",null);
+        var job=admitScripted(key,QUESTION,Map.of(),List.of(classify(value),composeSelection(ids)),Optional.empty(),null);
         assertThat(terminal(job)).as("합성 fixture result=%s payload=%s",result(job.jobId()),payload(job.jobId())).isEqualTo("SUCCEEDED");
         assertThat(scripts().scriptedCalls(job.jobId(),CallType.CLASSIFY)).isOne();assertThat(scripts().scriptedCalls(job.jobId(),CallType.COMPOSER)).isOne();
-        assertThat(stub.received().stream().filter(request->request.path().equals("/v1/embeddings")).map(request->json.readTree(request.body()).path("input").size()).toList()).containsExactly(2);
+        assertThat(stub.received().stream().filter(request->request.path().equals("/v1/embeddings")).map(request->json.readTree(request.body()).path("input").size()).toList()).containsExactly(1);
         return job;
     }
     @Test void sourceValidatedUnrelatedKoreanSaveSuccessCannotSatisfyExplicitEnglishOutput() throws Exception {

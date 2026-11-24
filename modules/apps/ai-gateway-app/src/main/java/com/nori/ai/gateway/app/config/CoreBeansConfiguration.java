@@ -54,7 +54,7 @@ public class CoreBeansConfiguration {
     com.nori.ai.gateway.core.knowledge.DocumentSynchronization documentSynchronization(com.nori.ai.gateway.core.knowledge.DocumentObjectStore objects,com.nori.ai.gateway.core.knowledge.DocumentExtractor extractor,com.nori.ai.gateway.core.knowledge.DocumentIndexStore store,com.nori.ai.gateway.core.knowledge.DocumentKeywordIndex keywords,com.nori.ai.gateway.core.port.InferenceClient inference) {
         return new com.nori.ai.gateway.core.knowledge.DocumentSynchronization(objects,extractor,store,keywords,inference);
     }
-    @Bean com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder workflowPlanBuilder(CapabilityRegistry registry){return new com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder(registry);}
+    @Bean com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder workflowPlanBuilder(CapabilityRegistry registry,GatewaySystemsProperties systems){var intents=new java.util.LinkedHashMap<com.nori.ai.gateway.core.scope.OwnerSystem,java.util.List<com.nori.ai.gateway.core.llm.ClassificationIntent>>();systems.systems().forEach((id,system)->intents.put(com.nori.ai.gateway.core.scope.OwnerSystem.valueOf(id),system.intents()));return new com.nori.ai.gateway.core.workflow.WorkflowPlanBuilder(registry,intents);}
     @Bean com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator evidenceCoverageEvaluator(){return new com.nori.ai.gateway.core.workflow.EvidenceCoverageEvaluator();}
     @Bean com.nori.ai.gateway.core.time.TimeWindowResolver timeWindowResolver(){return new com.nori.ai.gateway.core.time.TimeWindowResolver();}
     @Bean com.nori.ai.gateway.core.blocks.UiSchemaValidator uiSchemaValidator(){return new com.nori.ai.gateway.core.blocks.UiSchemaValidator();}
