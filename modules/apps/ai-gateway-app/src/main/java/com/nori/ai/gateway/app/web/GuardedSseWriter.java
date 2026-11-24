@@ -29,7 +29,7 @@ public final class GuardedSseWriter {
     private boolean write(SseEmitter.SseEventBuilder event) {
         if(closed)return false;
         try(var ignored=com.nori.ai.gateway.app.observability.LogContext.open(logContext)) { emitter.send(event);return true; }
-        catch(IOException|IllegalStateException failure) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GuardedSseWriter.class.getName()),"GUARDED_SSE_WRITER_FAILED",failure); complete();return false; }
+        catch(IOException|IllegalStateException failure) {SseFailureLog.record(System.getLogger(GuardedSseWriter.class.getName()),"GUARDED_SSE_WRITER_FAILED",failure); complete();return false; }
     }
     public synchronized long cursor() { return cursor; }
     public synchronized boolean closed() { return closed; }

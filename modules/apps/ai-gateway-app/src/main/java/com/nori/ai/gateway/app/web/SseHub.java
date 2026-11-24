@@ -27,7 +27,7 @@ public final class SseHub implements AutoCloseable {
         long cursor=replay.cursor(scope,jobId,lastEventId);
         var emitter=new SseEmitter(0L);var writer=new GuardedSseWriter(emitter,cursor);var subscription=new Subscription(scope,jobId,writer,org.slf4j.MDC.getCopyOfContextMap());
         Runnable remove=com.nori.ai.gateway.app.observability.LogContext.capture(()->{event(System.getLogger(getClass().getName()),INFO,"SSE_CONNECTION_REMOVED","jobId",jobId);subscriptions.remove(subscription);});
-        emitter.onCompletion(remove);emitter.onTimeout(()->{writer.complete();remove.run();});emitter.onError(failure->{try(var context=com.nori.ai.gateway.app.observability.LogContext.open(subscription.logContext())){failure(System.getLogger(getClass().getName()),"SSE_CONNECTION_DISCONNECTED",failure,"jobId",jobId);writer.complete();remove.run();}});
+        emitter.onCompletion(remove);emitter.onTimeout(()->{writer.complete();remove.run();});emitter.onError(failure->{try(var context=com.nori.ai.gateway.app.observability.LogContext.open(subscription.logContext())){SseFailureLog.record(System.getLogger(getClass().getName()),"SSE_CONNECTION_DISCONNECTED",failure,"jobId",jobId);writer.complete();remove.run();}});
         subscriptions.add(subscription);
         // 재생할 새 이벤트가 없어도 연결 응답을 즉시 시작합니다.
         if(writer.connected())drain(subscription);else subscriptions.remove(subscription);return emitter;
