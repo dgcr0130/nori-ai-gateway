@@ -15,8 +15,13 @@ public final class EvidenceCoverageEvaluator {
     }
     /** 업무 대상은 실행 계획에서, 기존 어휘 대조 대상은 분류에서 받아 서로 섞지 않습니다. */
     public boolean sufficient(String question,List<String> targets,List<String> businessTargets,List<EvidenceUnit> selected,SearchLanguage language,int limit,Map<String,String> glossary) {
+        return sufficient(question,targets,businessTargets,List.of(),selected,language,limit,glossary);
+    }
+    public boolean sufficient(String question,List<String> targets,List<String> businessTargets,List<String> codeTargets,List<EvidenceUnit> selected,SearchLanguage language,int limit,Map<String,String> glossary) {
         var system=selected.stream().filter(unit->unit.sourceType().equals("SYSTEM")&&Set.of("SUCCESS","EMPTY","PARTIAL","STALE","CONFLICT").contains(unit.status())).toList();
-        if(!businessTargets.isEmpty()&&!system.isEmpty()&&businessTargets.stream().allMatch(target->system.stream().anyMatch(unit->SearchText.containsExact(unit.body(),target))))return true;
+        if(covers(businessTargets,system))return true;
+        var code=selected.stream().filter(unit->unit.sourceType().equals("GIT")&&Set.of("SUCCESS","PARTIAL","STALE","CONFLICT").contains(unit.status())).toList();
+        if(covers(codeTargets,code))return true;
         var identifiers=SearchText.identifiers(question,targets);var nouns=coreTerms(question,language,limit);
         if(selected.isEmpty()||identifiers.isEmpty()&&nouns.isEmpty())return false;
         if(!identifiers.stream().allMatch(id->selected.stream().anyMatch(u->SearchText.containsExact(u.body(),id))))return false;
@@ -30,5 +35,8 @@ public final class EvidenceCoverageEvaluator {
             return false;
         }).count();
         return count>=Math.min(2,nouns.size());
+    }
+    private boolean covers(List<String> targets,List<EvidenceUnit> units) {
+        return !targets.isEmpty()&&targets.stream().allMatch(target->units.stream().anyMatch(unit->SearchText.containsExact(unit.body(),target)));
     }
 }

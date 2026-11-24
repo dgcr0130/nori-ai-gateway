@@ -43,6 +43,7 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
     @Override public WorkflowGrounding.SourceUnits collect(JobContext job,WorkflowExecutionPlan plan,WorkflowOutcome outcome) {
         var units=new ArrayList<EvidenceUnit>();var invalid=new HashSet<String>();var system=systems.systems().get(job.scope().boundSystem().name());
         var businessTargets=new LinkedHashSet<String>();boolean hasBusinessTargets=true;
+        var codeTargets=new LinkedHashSet<String>();
         for(var stage:outcome.stages()) {
             var manifest=registry.find(job.scope(),stage.result().capabilityId()).orElse(null);
             if(manifest==null||manifest.toolKind()==ToolKind.KNOWLEDGE||!stage.observed())continue;
@@ -51,6 +52,10 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
                 // 관측된 업무 단계만 결속하며 대상 없는 조회를 질문이나 분류 값으로 채우지 않습니다.
                 if(step==null||step.resources().isEmpty())hasBusinessTargets=false;
                 else step.resources().forEach(resource->businessTargets.add(resource.ref()));
+            }
+            if(manifest.toolKind()==ToolKind.GIT&&step!=null&&step.arguments()!=null) {
+                var query=step.arguments().path("q");
+                if(query.isString()&&!query.asString().isBlank())codeTargets.add(query.asString());
             }
             var local=new ArrayList<EvidenceUnit>();
             try {
@@ -109,7 +114,7 @@ public final class GroundingInputs implements WorkflowGrounding.Inputs {
             }catch(IllegalArgumentException|java.time.DateTimeException malformed){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(GroundingInputs.class.getName()),"GROUNDING_INPUTS_FAILED",malformed);invalid.add(stage.stepId());}
         }
         body(System.getLogger(getClass().getName()),INFO,"GROUNDING_INPUT",SchemaContracts.JSON.writeValueAsString(units),"jobId",job.jobId(),"invalidSteps",invalid);
-        return new WorkflowGrounding.SourceUnits(units,invalid,hasBusinessTargets?List.copyOf(businessTargets):List.of());
+        return new WorkflowGrounding.SourceUnits(units,invalid,hasBusinessTargets?List.copyOf(businessTargets):List.of(),List.copyOf(codeTargets));
     }
     private EvidenceUnit resultSummary(WorkflowOutcome.Stage stage,CapabilityManifest manifest,PlanStep step) {
         var result=stage.result();var arguments=step.arguments();if(arguments==null)arguments=SchemaContracts.JSON.createObjectNode();

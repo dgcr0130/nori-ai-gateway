@@ -87,9 +87,13 @@ public final class ClassificationService {
         return List.of(new ChatMessage(ChatMessage.Role.SYSTEM,references.isEmpty()?prompt:CitedHistoryContext.classificationPrompt(prompt)),new ChatMessage(ChatMessage.Role.USER,SchemaContracts.JSON.writeValueAsString(user)));
     }
     private static List<String> candidates(Request request,Context context,List<HistoryPair> history){
+        boolean codeTerms=ClassificationIntent.visible(context.intents(),context.tools()).stream().anyMatch(intent->intent.subjectKind()==ClassificationIntent.SubjectKind.CODE_TERM);
+        return candidates(request,context,history,codeTerms);
+    }
+    private static List<String> candidates(Request request,Context context,List<HistoryPair> history,boolean codeTerms){
         var tools=new LinkedHashSet<String>();context.tools().capabilities().forEach(tool->{tools.add(tool.toolId());tools.add(tool.capabilityId());});
         context.intents().forEach(intent->tools.addAll(intent.toolIds()));
-        return ClassificationSubjects.candidates(request.input(),history,tools);
+        return ClassificationSubjects.candidates(request.input(),history,tools,codeTerms);
     }
     static List<CitedHistoryContext.Pair> retainedReferences(Context context,String question,List<HistoryPair> retained) {
         if(!CitedHistoryContext.referential(question))return List.of();
@@ -106,6 +110,7 @@ public final class ClassificationService {
         keys(node,Set.of("needs"));
         var values=node.get("needs");if(!values.isArray()||values.isEmpty()||values.size()>4)throw invalid();
         var candidates=candidates(request,context,history);
+        var eqpCandidates=candidates(request,context,history,false);
         var visible=ClassificationIntent.visible(context.intents(),context.tools());
         var needs=new ArrayList<Classification.Need>();var selected=new ArrayList<ClassificationIntent>();
         var targets=new LinkedHashSet<ResourceRef>();var missing=new LinkedHashSet<String>();
@@ -113,9 +118,10 @@ public final class ClassificationService {
             keys(value,Set.of("intent","subject"));String id=string(value.get("intent"),128);
             var intent=visible.stream().filter(i->i.id().equals(id)).findFirst().orElseThrow(()->invalid(LlmDiagnostic.CLASSIFY_TOOL));
             String subject=value.get("subject").isNull()?null:string(value.get("subject"),256);
-            if(subject!=null&&!candidates.contains(subject))throw invalid(LlmDiagnostic.CLASSIFY_TARGET);
-            if(intent.subjectRequired()&&subject==null)missing.add("eqp");
-            if(subject!=null&&(intent.subjectRequired()||intent.documentSearch()))targets.add(new ResourceRef("EQP",subject));
+            boolean codeTerm=intent.subjectKind()==ClassificationIntent.SubjectKind.CODE_TERM;
+            if(subject!=null&&!(codeTerm?candidates:eqpCandidates).contains(subject))throw invalid(LlmDiagnostic.CLASSIFY_TARGET);
+            if(intent.subjectRequired()&&subject==null)missing.add(intent.subjectField());
+            if(!codeTerm&&subject!=null&&(intent.subjectRequired()||intent.documentSearch()))targets.add(new ResourceRef("EQP",subject));
             needs.add(new Classification.Need(id,subject));selected.add(intent);
         }
         if(!missing.isEmpty()){observer.diagnostic(request.jobId(),CallType.CLASSIFY,LlmDiagnostic.CLASSIFY_MISSING_INPUT);return new Rejected(ErrorCode.PLAN_INVALID,1,List.copyOf(missing));}

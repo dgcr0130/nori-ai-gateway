@@ -154,6 +154,28 @@
         "documentSearchRequired": false,
         "clarificationFields": []
       }
+    },
+    {
+      "id": "G16",
+      "question": "EquipmentContextRegistry 클래스는 어디서 쓰여?",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "git.searchCode", "args": {"q": "EquipmentContextRegistry"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
+    },
+    {
+      "id": "G17",
+      "question": "EQP_PORT_STATUS_CHG 메시지는 어디서 처리해?",
+      "historyPairs": [],
+      "expected": {
+        "kind": "PLAN",
+        "toolCalls": [{"toolId": "git.searchCode", "args": {"q": "EQP_PORT_STATUS_CHG"}}],
+        "documentSearchRequired": false,
+        "clarificationFields": []
+      }
     }
   ]
 }

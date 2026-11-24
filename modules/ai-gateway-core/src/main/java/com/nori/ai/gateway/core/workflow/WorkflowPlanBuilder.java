@@ -91,7 +91,7 @@ public final class WorkflowPlanBuilder {
         if(definition.taskType()!=ClassificationIntent.taskType(selected))throw new Invalid(List.of("taskType"));
         for(int i=0;i<needs.size();i++){
             var intent=selected.get(i);if(!intent.visible(view))throw new Invalid(List.of("intent"));
-            if(intent.subjectRequired()&&needs.get(i).subject()==null)throw new Invalid(List.of("eqp"));
+            if(intent.subjectRequired()&&needs.get(i).subject()==null)throw new Invalid(List.of(intent.subjectField()));
         }
         // 앱에서 전달한 창은 동일 요청의 확인된 이전 턴 후보이며 질문·context가 항상 우선합니다.
         var resolved=resolveWindow(job,()->window.isEmpty()?Optional.empty():Optional.of(window));
@@ -100,11 +100,11 @@ public final class WorkflowPlanBuilder {
         var targets=new LinkedHashSet<ResourceRef>();
         var steps=new ArrayList<WorkflowExecutionPlan.ExecutionStep>();var declarations=new ArrayList<WorkflowDefinition.Step>();var tools=new ArrayList<PlanStep>();var unique=new HashSet<String>();
         for(int i=0;i<needs.size();i++){
-            var need=needs.get(i);var intent=selected.get(i);boolean targeted=need.subject()!=null&&intent.subjectRequired();if(targeted)targets.add(new ResourceRef("EQP",need.subject()));
+            var need=needs.get(i);var intent=selected.get(i);boolean targeted=need.subject()!=null&&intent.subjectRequired()&&intent.subjectKind()==ClassificationIntent.SubjectKind.EQP;if(targeted)targets.add(new ResourceRef("EQP",need.subject()));
             for(String id:intent.toolIds()){
                 var manifest=view.find(id).orElse(null);if(manifest==null)continue;
                 var args=SchemaContracts.JSON.createObjectNode();var properties=manifest.inputSchema().path("properties");
-                if(intent.subjectRequired()&&need.subject()!=null&&properties.has("eqp"))args.put("eqp",need.subject());
+                if(intent.subjectRequired()&&need.subject()!=null&&properties.has(intent.subjectField()))args.put(intent.subjectField(),need.subject());
                 if(intent.periodRequirement()!=ClassificationIntent.PeriodRequirement.NONE)for(String bound:List.of("from","to"))if(properties.has(bound)&&resolved.values().get(bound) instanceof String time)args.put(bound,new InputValidator().parseTime(time,zone).toString());
                 var missing=new ArrayList<String>();for(var field:manifest.inputSchema().path("required"))if(!args.hasNonNull(field.asString()))missing.add(field.asString());if(!missing.isEmpty())throw new Invalid(missing);
                 String key=id+"\n"+SchemaContracts.canonicalize(args.toString());if(!unique.add(key))continue;

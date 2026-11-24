@@ -117,9 +117,9 @@ class HybridSearchHttpTest {
                 var config=new CoreBeansConfiguration();var client=context.getBean(InferenceClient.class);var expiry=new ExpiryCheckpoint();var business=ConfiguredTool.create(OwnerSystem.TC,"asset.read","설비 상태 조회",mode.equals("stale-log")?ToolKind.LOG:ToolKind.BUSINESS,SchemaContracts.parse("{\"type\":\"object\",\"additionalProperties\":false}"),SchemaContracts.parse("{\"type\":\"object\"}"),List.of("READ"),10000);
                 var versions=new ContractVersionPolicy();var registry=new CapabilityRegistry(Set.of("seven","large","truncated-all-removed","source-http-fail","source-non-json","stale-log").contains(mode)?List.of(business):List.of(),Set.of(ImplementationPhase.PHASE_1),versions);
                 var declarations=List.of(
-                    new ClassificationIntent("fixture-read","로컬 자료 조회",List.of("asset.read"),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.LIVE_QUERY,false,false),
-                    new ClassificationIntent("document","문서",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.KNOWLEDGE_QUERY,true,false),
-                    new ClassificationIntent("help","도움말",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.GENERAL_QUERY,false,false));
+            new ClassificationIntent("fixture-read","로컬 자료 조회",List.of("asset.read"),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.LIVE_QUERY,false,false,null),
+            new ClassificationIntent("document","문서",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.KNOWLEDGE_QUERY,true,false,null),
+            new ClassificationIntent("help","도움말",List.of(),false,ClassificationIntent.PeriodRequirement.NONE,TaskType.GENERAL_QUERY,false,false,null));
                 var glossary=mode.equals("same-query")?Map.<String,String>of():Map.of("T3","상태");
                 var inputs=mock(ClassificationInputs.class);when(inputs.load(any())).thenReturn(new ClassificationService.Context(registry.view(scope),List.of(),glossary,2,List.of(),declarations));
                 var classification=config.classificationService(client,policy,context.getBean(HfTokenizerCounter.class),context.getBean(PromptTokenCounting.class),expiry,Optional.empty(),audits::add,inputs);

@@ -12,15 +12,17 @@ public final class DeploymentEvidenceResolver {
     }
     private final ObjectProvider<GitLabPipelineLineageReader> reader;
     public DeploymentEvidenceResolver(ObjectProvider<GitLabPipelineLineageReader> reader){this.reader=reader;}
-    public Resolution resolve(SourceReadAccess.Request request,String service,String version,List<GitLabSourcePolicy.LineageEntry> entries) {
-        if(version==null||!version.matches("[1-9][0-9]*"))return unknown();
-        final long pipeline;try{pipeline=Long.parseLong(version);}catch(NumberFormatException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(DeploymentEvidenceResolver.class.getName()),"DEPLOYMENT_EVIDENCE_RESOLVER_FAILED",invalid);return unknown();}
-        var selected=entries.stream().filter(entry->entry.service().equals(service)).toList();if(selected.size()!=1)return unknown();
-        var actual=reader.getIfAvailable();if(actual==null)return unknown();
-        var lineage=actual.siblingCommits(request,selected.getFirst(),pipeline);
+    public List<Resolution> resolve(SourceReadAccess.Request request,String service,String version,List<GitLabSourcePolicy.LineageEntry> entries) {
+        if(version==null||!version.matches("[1-9][0-9]*"))return List.of();
+        final long pipeline;try{pipeline=Long.parseLong(version);}catch(NumberFormatException invalid){com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(DeploymentEvidenceResolver.class.getName()),"DEPLOYMENT_EVIDENCE_RESOLVER_FAILED",invalid);return List.of();}
+        var actual=reader.getIfAvailable();if(actual==null)return List.of();
+        // 같은 이미지 파이프라인이 읽은 모든 sibling을 설정 순서대로 판독합니다.
+        return entries.stream().filter(entry->entry.service().equals(service))
+            .map(entry->resolution(actual.siblingCommits(request,entry,pipeline))).toList();
+    }
+    private Resolution resolution(GitLabPipelineLineageReader.Lineage lineage) {
         return lineage.status()==GitLabPipelineLineageReader.Status.VERIFIED&&lineage.commitSha()!=null&&lineage.commitSha().matches("[0-9a-f]{40}")
             ?new Resolution(Optional.of(lineage),lineage.commitSha(),List.of("plugin JAR digest","effectiveConfig"),"DEPLOYED_SOURCE_COMMIT")
             :new Resolution(Optional.of(lineage),"UNKNOWN",List.of("deployed source commit","plugin JAR digest","effectiveConfig"),"CURRENT_APPROVED_REF");
     }
-    private Resolution unknown(){return new Resolution(Optional.empty(),"UNKNOWN",List.of("deployed source commit","plugin JAR digest","effectiveConfig"),"CURRENT_APPROVED_REF");}
 }

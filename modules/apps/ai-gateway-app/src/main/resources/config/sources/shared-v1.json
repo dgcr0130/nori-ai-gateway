@@ -1,5 +1,24 @@
 {
   "loki": {"baseUrl": "http://loki.monitoring.svc:3100", "serviceTargetVerified": true},
   "tempo": {"baseUrl": "http://tempo.monitoring.svc:3200", "serviceTargetVerified": true},
-  "gitlab": {"repositories": [], "deployLineage": [], "readTokenFile": null, "serviceTargetVerified": false}
+  "gitlab": {
+    "baseUrl": "http://gitlab-webservice-default.gitlab-system.svc:8181",
+    "serviceTargetVerified": true,
+    "readTokenFile": "/app/config/gitlab-read-token",
+    "repositories": [
+      {"projectId": 26, "sourceRepo": "nori-tc-common", "refs": ["main"], "pathPrefixes": ["common", "db", "messaging"], "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"projectId": 28, "sourceRepo": "nori-tc-gateway", "refs": ["main"], "pathPrefixes": ["gateway"], "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"projectId": 24, "sourceRepo": "nori-tc-business", "refs": ["main"], "pathPrefixes": ["business"], "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"projectId": 31, "sourceRepo": "nori-tc-ui-backend", "refs": ["main"], "pathPrefixes": ["ui"], "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"projectId": 32, "sourceRepo": "nori-tc-ui-front", "refs": ["main"], "pathPrefixes": ["src"], "approvalRef": "tc-code-read-approved-2026-11-24"}
+    ],
+    "deployLineage": [
+      {"service": "tc-gateway", "sourceRepo": "nori-tc-gateway", "siblingProjectId": 28, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"service": "tc-gateway", "sourceRepo": "nori-tc-common", "siblingProjectId": 26, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"service": "tc-business", "sourceRepo": "nori-tc-business", "siblingProjectId": 24, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"service": "tc-business", "sourceRepo": "nori-tc-common", "siblingProjectId": 26, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"service": "tc-ui-backend", "sourceRepo": "nori-tc-ui-backend", "siblingProjectId": 31, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"},
+      {"service": "tc-ui-backend", "sourceRepo": "nori-tc-common", "siblingProjectId": 26, "execProjectId": 27, "packageJobName": "package", "method": "SIBLING_CLONE_LOG", "approvalRef": "tc-code-read-approved-2026-11-24"}
+    ]
+  }
 }

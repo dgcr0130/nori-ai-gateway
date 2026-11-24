@@ -287,9 +287,10 @@ class AppContextWiringIT extends StackContextSupport {
         var snapshot = context.getBean(com.nori.ai.gateway.app.config.SourceConnectorConfiguration.SourceSnapshot.class);
         assertThat(snapshot.loki().serviceTargetVerified()).isTrue();
         assertThat(snapshot.tempo().baseUrl()).contains(java.net.URI.create("http://tempo.monitoring.svc:3200"));
-        assertThat(snapshot.gitlab().baseUrl()).isEmpty();
-        assertThat(snapshot.gitlab().tokenPath()).isEmpty();
-        assertThat(snapshot.repositories()).isEmpty();
+        assertThat(snapshot.gitlab().baseUrl()).contains(java.net.URI.create("http://gitlab-webservice-default.gitlab-system.svc:8181"));
+        assertThat(snapshot.gitlab().tokenPath()).contains(java.nio.file.Path.of("/app/config/gitlab-read-token"));
+        assertThat(snapshot.repositories()).hasSize(5);
+        assertThat(snapshot.deployLineage()).hasSize(6);
         assertThat(snapshot.toString()).doesNotContain("monitoring", "http");
         var scheduler = context.getBean(com.nori.ai.gateway.app.ops.SourceRetentionProbeScheduler.class);
         long deadline = System.nanoTime() + java.time.Duration.ofSeconds(15).toNanos();

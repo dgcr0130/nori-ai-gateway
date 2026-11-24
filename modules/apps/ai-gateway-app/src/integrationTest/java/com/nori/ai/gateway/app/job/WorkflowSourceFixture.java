@@ -36,6 +36,7 @@ public class WorkflowSourceFixture {
         volatile List<String> spanIds=List.of();
         volatile String logText="EQP-001 정상 관측";
         volatile String spanName="equipment";
+        volatile String codeText;
         volatile int commitStatus=200;
         final AtomicBoolean blockNextStop=new AtomicBoolean();
         volatile CountDownLatch entered=new CountDownLatch(1),release=new CountDownLatch(1),ended=new CountDownLatch(1);
@@ -71,7 +72,7 @@ public class WorkflowSourceFixture {
                 } else if(exchange.getRequestURI().getPath().contains("/repository/commits/")) {
                     commits.incrementAndGet();String shortSha=exchange.getRequestURI().getPath().substring(exchange.getRequestURI().getPath().lastIndexOf('/')+1);body="{\"id\":\""+shortSha+"2".repeat(33)+"\"}";
                 } else if(exchange.getRequestURI().getPath().endsWith("/search")) {
-                    String ref=query(exchange.getRequestURI()).get("ref");codeRefs.add(ref);codeSearches.add(query(exchange.getRequestURI()).get("search"));body=SchemaContracts.JSON.writeValueAsString(List.of(Map.of("path","src/main/Equipment.java","data","검증된 코드 "+ref)));
+                    String ref=query(exchange.getRequestURI()).get("ref");codeRefs.add(ref);codeSearches.add(query(exchange.getRequestURI()).get("search"));body=SchemaContracts.JSON.writeValueAsString(List.of(Map.of("path","src/main/Equipment.java","data",codeText==null?"검증된 코드 "+ref:codeText)));
                 } else throw new AssertionError("등록되지 않은 localhost 시험 경로입니다");
                 byte[] bytes=body.getBytes(StandardCharsets.UTF_8);
                 int status=exchange.getRequestURI().getPath().contains("/repository/commits/")?commitStatus:200;

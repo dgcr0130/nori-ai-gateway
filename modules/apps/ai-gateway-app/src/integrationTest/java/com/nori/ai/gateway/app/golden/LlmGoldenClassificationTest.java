@@ -51,8 +51,8 @@ class LlmGoldenClassificationTest {
                     value.path("referenceTime").asString(reference), zone, history, value.get("expected")));
             }
         }
-        assertEquals(15, cases.size(), "승인된 사례를 모두 유지합니다");
-        assertEquals(15, cases.stream().map(GoldenCase::id).distinct().count());
+        assertEquals(17, cases.size(), "기존 15건과 코드 조회 2건을 모두 유지합니다");
+        assertEquals(17, cases.stream().map(GoldenCase::id).distinct().count());
         writeReport();
         return cases.stream().map(value -> DynamicTest.dynamicTest(value.id() + " " + value.question(),
             () -> verifyCase(value)));

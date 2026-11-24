@@ -142,7 +142,9 @@ public class SourceConnectorConfiguration {
             if (text.chars().anyMatch(c -> c < 32 || c == 127)) throw invalid();
             try {
                 Path path = Path.of(text);
-                if (!path.isAbsolute() || !path.normalize().equals(path)) throw invalid();
+                // Linux 컨테이너의 절대경로는 Windows 개발 환경에서도 같은 선언으로 검증합니다.
+                boolean containerAbsolute=text.startsWith("/")&&!text.startsWith("//")&&!text.contains("\\");
+                if ((!path.isAbsolute()&&!containerAbsolute) || !path.normalize().equals(path)) throw invalid();
                 return path;
             } catch (InvalidPathException malformed) {com.nori.ai.gateway.core.logging.DiagnosticLog.failure(System.getLogger(SourceConnectorConfiguration.class.getName()),"SOURCE_CONNECTOR_CONFIGURATION_FAILED",malformed); throw invalid(); }
         }

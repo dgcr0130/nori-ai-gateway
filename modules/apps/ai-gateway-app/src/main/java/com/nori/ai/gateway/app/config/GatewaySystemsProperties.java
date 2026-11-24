@@ -82,9 +82,12 @@ public record GatewaySystemsProperties(Map<String, SystemConfig> systems) {
             }
             if (tools.stream().map(Tool::id).distinct().count() != tools.size()) throw invalid();
             intents=ClassificationIntent.checked(intents);
-            var available=new HashSet<String>();tools.forEach(tool->available.add(tool.id()));
-            if(!apps.isEmpty())available.add("logs.search");if(!traces.isEmpty())available.add("trace.search");if(!repositories.isEmpty())available.add("git.searchCode");
-            for(var intent:intents)if(!available.containsAll(intent.toolIds()))throw invalid();
+            var inputs=SystemTools.inputSchemas(tools,apps,repositories,traces);
+            for(var intent:intents) {
+                if(!inputs.keySet().containsAll(intent.toolIds()))throw invalid();
+                if(intent.subjectKind()==ClassificationIntent.SubjectKind.CODE_TERM
+                        &&intent.toolIds().stream().anyMatch(id->!inputs.get(id).path("properties").has("q")))throw invalid();
+            }
             for (int i = 0; i < documents.size(); i++) for (int j = i + 1; j < documents.size(); j++) {
                 var a = documents.get(i); var b = documents.get(j);
                 if (a.bucket().equals(b.bucket()) && (a.prefix().startsWith(b.prefix()) || b.prefix().startsWith(a.prefix()))) throw invalid();

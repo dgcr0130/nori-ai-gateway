@@ -3,10 +3,18 @@ import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import static org.assertj.core.api.Assertions.*;
 class SourceDeclarationResourceTest {
- @Test void packagedSharedDeclarationLoadsConfirmedMonitoringAddressesWithoutSystemSpecificLocations()throws Exception {
+ @Test void containerAbsoluteTokenPathLoadsOnEveryHostAndRelativeOrTraversalPathsStillFail() {
+  String declaration="{\"loki\":{},\"tempo\":{},\"gitlab\":{\"readTokenFile\":%s}}";
+  var mapper=com.nori.ai.gateway.core.registry.SchemaContracts.JSON;
+  var snapshot=SourceConnectorConfiguration.SourceSnapshot.parse(declaration.formatted(mapper.writeValueAsString("/app/config/gitlab-read-token")));
+  assertThat(snapshot.gitlab().tokenPath()).contains(java.nio.file.Path.of("/app/config/gitlab-read-token"));
+  for(String path:java.util.List.of("gitlab-read-token","config/gitlab-read-token","/app/../gitlab-read-token"))
+   assertThatThrownBy(()->SourceConnectorConfiguration.SourceSnapshot.parse(declaration.formatted(mapper.writeValueAsString(path)))).as(path).isInstanceOf(IllegalStateException.class);
+ }
+ @Test void packagedSharedDeclarationLoadsConfirmedMonitoringAndApprovedGitAddresses()throws Exception {
   var resource=new ClassPathResource(SourceConnectorConfiguration.RESOURCE);assertThat(resource.exists()).isTrue();
   String text=resource.getContentAsString(java.nio.charset.StandardCharsets.UTF_8);var snapshot=SourceConnectorConfiguration.SourceSnapshot.parse(text);
-  assertThat(snapshot.loki().serviceTargetVerified()).isTrue();assertThat(snapshot.tempo().serviceTargetVerified()).isTrue();assertThat(snapshot.loki().baseUrl()).contains(java.net.URI.create("http://loki.monitoring.svc:3100"));assertThat(snapshot.tempo().baseUrl()).contains(java.net.URI.create("http://tempo.monitoring.svc:3200"));assertThat(snapshot.gitlab().serviceTargetVerified()).isFalse();assertThat(snapshot.repositories()).isEmpty();assertThat(text).doesNotContain("tc-gateway","namespace","ownerSystem");
+  assertThat(snapshot.loki().serviceTargetVerified()).isTrue();assertThat(snapshot.tempo().serviceTargetVerified()).isTrue();assertThat(snapshot.loki().baseUrl()).contains(java.net.URI.create("http://loki.monitoring.svc:3100"));assertThat(snapshot.tempo().baseUrl()).contains(java.net.URI.create("http://tempo.monitoring.svc:3200"));assertThat(snapshot.gitlab().serviceTargetVerified()).isTrue();assertThat(snapshot.gitlab().baseUrl()).contains(java.net.URI.create("http://gitlab-webservice-default.gitlab-system.svc:8181"));assertThat(snapshot.gitlab().tokenPath()).contains(java.nio.file.Path.of("/app/config/gitlab-read-token"));assertThat(snapshot.repositories()).hasSize(5);assertThat(snapshot.deployLineage()).hasSize(6);assertThat(text).doesNotContain("namespace","ownerSystem");
  }
  @Test void actualRegistrarCreatesConfirmedSourceClientsWithoutCallingTheirEndpoints(){
   new org.springframework.boot.test.context.runner.ApplicationContextRunner().withUserConfiguration(SourceConnectorConfiguration.class)

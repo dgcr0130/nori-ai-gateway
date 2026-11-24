@@ -19,6 +19,7 @@ ai:
           - {id: document, description: "화면·옵션·설정 항목의 의미와 사용·등록 방법 설명. 특정 설비의 실제 등록값·상태·메시지 기록 조회와 구분.", toolIds: [], subjectRequired: false, periodRequirement: NONE, taskType: KNOWLEDGE_QUERY, documentSearch: true}
           - {id: help, description: "질문 가능한 기능과 지원 범위 안내", toolIds: [], subjectRequired: false, periodRequirement: NONE, taskType: GENERAL_QUERY, documentSearch: false}
           - {id: unsupported, description: "생성·수정·삭제·설정 변경 등 쓰기 실행 요구 또는 등록된 조회·설명 의도로 처리할 수 없는 요청", toolIds: [], subjectRequired: false, periodRequirement: NONE, taskType: UNSUPPORTED_REQUEST, documentSearch: false}
+          - {id: code, description: "프로그램 식별자의 정의·참조·호출 위치와 이벤트·메시지 처리 담당 로직을 소스 파일에서 탐색. subject는 클래스·함수·상수·설정 키 등의 이름.", toolIds: [git.searchCode], subjectRequired: true, subjectKind: CODE_TERM, periodRequirement: NONE, taskType: LIVE_QUERY, documentSearch: false}
         tools:
           - {"id":"tc.eqp.readRegistration","description":"설비 등록 정보 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64}},"required":["eqp"],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["EQP_READ"],"timeoutMs":10000}
           - {"id":"tc.eqp.getOperationalSnapshot","description":"설비 운영 상태 조회","inputSchema":{"type":"object","properties":{"eqp":{"type":"string","minLength":1,"maxLength":64}},"required":["eqp"],"additionalProperties":false},"outputSchema":{"type":"object"},"requiredPermissions":["EQP_READ"],"timeoutMs":10000}
@@ -41,7 +42,14 @@ ai:
           - {service: tc-gateway, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
           - {service: tc-business, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
           - {service: tc-ui-backend, namespace: tc, requiredPermissions: [AI_TRACE_READ]}
-        repositories: []
+        repositories:
+          - {projectId: "26", ref: main, pathPrefix: common, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "26", ref: main, pathPrefix: db, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "26", ref: main, pathPrefix: messaging, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "28", ref: main, pathPrefix: gateway, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "24", ref: main, pathPrefix: business, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "31", ref: main, pathPrefix: ui, requiredPermissions: [AI_CODE_READ]}
+          - {projectId: "32", ref: main, pathPrefix: src, requiredPermissions: [AI_CODE_READ]}
         glossary: {}
     documents:
       s3Endpoint: http://192.168.0.203:8333

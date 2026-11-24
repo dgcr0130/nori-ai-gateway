@@ -28,6 +28,13 @@ netpol:
         app.kubernetes.io/instance: tempo
         app.kubernetes.io/name: tempo
       port: 3200
+    gitlab:
+      namespace: gitlab-system
+      podSelector:
+        app: webservice
+        release: gitlab
+        gitlab.com/webservice-name: default
+      port: 8181
     otlp:
       namespace: monitoring
       podSelector:

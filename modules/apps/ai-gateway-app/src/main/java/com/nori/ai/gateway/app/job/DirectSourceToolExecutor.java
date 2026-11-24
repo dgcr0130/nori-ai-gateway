@@ -84,24 +84,23 @@ public final class DirectSourceToolExecutor implements ToolExecutor {
         }
         if(provenance.isEmpty())provenance.add(Optional.empty());
         String query=step.arguments().path("q").isString()?step.arguments().path("q").asString():step.arguments().path("targetRef").asString("");List<Map<String,Object>> items=new ArrayList<>();List<String> missing=new ArrayList<>();List<Evidence> deploymentEvidence=new ArrayList<>();int observed=0;
-        Map<String,DeploymentEvidenceResolver.Resolution> resolved=new HashMap<>();
+        Map<String,List<DeploymentEvidenceResolver.Resolution>> resolved=new HashMap<>();
         for(var origin:provenance) {
-            DeploymentEvidenceResolver.Resolution resolution;
+            List<DeploymentEvidenceResolver.Resolution> resolutions;
             if(origin.isPresent()&&origin.get().service()!=null&&request.locations().traces().stream().anyMatch(value->value.service().equals(origin.get().service()))) {
                 var value=origin.get();String key=value.service()+"\u0000"+value.serviceVersion();
-                resolver.beforeRead();resolution=resolved.computeIfAbsent(key,ignored->deployments.resolve(request,value.service(),value.serviceVersion(),approved.deployLineage()));
-            } else resolution=new DeploymentEvidenceResolver.Resolution(Optional.empty(),"UNKNOWN",List.of("deployed source commit","plugin JAR digest","effectiveConfig"),"CURRENT_APPROVED_REF");
-            if(resolution.lineage().isPresent()) {
-                var reason=resolution.lineage().get().reason();
-                if(reason==GitLabPipelineLineageReader.Reason.DENIED)return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
-                if(reason==GitLabPipelineLineageReader.Reason.SOURCE_UNAVAILABLE)return unavailable(manifest,scope);
-            }
+                resolver.beforeRead();resolutions=resolved.computeIfAbsent(key,ignored->deployments.resolve(request,value.service(),value.serviceVersion(),approved.deployLineage()));
+            } else resolutions=List.of();
+            var lineages=resolutions.stream().flatMap(value->value.lineage().stream()).toList();
+            if(lineages.stream().anyMatch(value->value.reason()==GitLabPipelineLineageReader.Reason.DENIED))return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
+            if(lineages.stream().anyMatch(value->value.reason()==GitLabPipelineLineageReader.Reason.SOURCE_UNAVAILABLE))return unavailable(manifest,scope);
             for(var location:request.locations().repositories()) {
                 if(!scope.perm().containsAll(location.requiredPermissions()))return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
                 var approvedRepository=approved.repositories().stream().filter(value->value.projectId().equals(location.projectId())).findFirst();
                 if(approvedRepository.isEmpty())return ToolResults.result(manifest,scope,ResultStatus.DENIED,List.of(),clock.instant(),List.of(),Set.of(),List.of(),null);
                 var repository=new GitLabSourcePolicy.Repository(location.projectId(),approvedRepository.get().sourceRepo(),Set.of(location.ref()),Set.of(location.pathPrefix()),"SYSTEM_CONFIG");
-                var lineage=resolution.lineage().filter(value->value.status()==GitLabPipelineLineageReader.Status.VERIFIED&&value.sourceRepo().equals(repository.sourceRepo()));
+                var lineage=resolutions.stream().filter(value->value.codeRefKind().equals("DEPLOYED_SOURCE_COMMIT"))
+                    .flatMap(value->value.lineage().stream()).filter(value->value.status()==GitLabPipelineLineageReader.Status.VERIFIED&&value.sourceRepo().equals(repository.sourceRepo())).findFirst();
                 List<String> refs=lineage.isPresent()?List.of(lineage.get().commitSha()):repository.refs().stream().sorted().toList();
                 for(String ref:refs)for(String prefix:repository.pathPrefixes().stream().sorted().toList()) {
             resolver.beforeRead();var result=connector.searchCode(request,query,new GitLabCodeConnector.CodeScope(repository.sourceRepo(),prefix),ref,lineage);

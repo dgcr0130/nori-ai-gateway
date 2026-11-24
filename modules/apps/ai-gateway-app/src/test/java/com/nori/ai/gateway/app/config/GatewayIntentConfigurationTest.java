@@ -10,11 +10,11 @@ import org.springframework.core.io.FileSystemResource;
 import static org.assertj.core.api.Assertions.*;
 
 class GatewayIntentConfigurationTest {
-    @Test void actualSystemYamlLoadsAllNineIntentDeclarationsAndRegistrationContract()throws Exception {
+    @Test void actualSystemYamlLoadsTenIntentDeclarationsAndRegistrationContract()throws Exception {
         var environment=new StandardEnvironment();
         for(var source:new YamlPropertySourceLoader().load("intent-config",new FileSystemResource(Path.of(System.getProperty("aigw.rootDir")).resolve("config/ai-gateway.yaml"))))environment.getPropertySources().addLast(source);
         var tc=GatewaySystemsProperties.load(environment).systems().get("TC");
-        assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","status","model","dlq","communication","incident","document","help","unsupported");
+        assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","status","model","dlq","communication","incident","document","help","unsupported","code");
         assertThat(tc.intents().stream().filter(i->i.answerTable()).map(i->i.id()).toList()).containsExactly("registration");
         assertThat(tc.intents().stream().filter(i->!i.id().equals("registration"))).allSatisfy(i->assertThat(i.answerTable()).isFalse());
         assertThat(tc.intents()).allSatisfy(intent->assertThat(intent.description()).isNotBlank());

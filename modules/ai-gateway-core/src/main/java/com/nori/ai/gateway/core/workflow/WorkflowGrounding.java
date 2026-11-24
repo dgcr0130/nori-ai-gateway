@@ -13,9 +13,10 @@ import com.nori.ai.gateway.core.llm.*;
 
 /** 분류를 다시 부르지 않고 규칙 검색·재선택·작성 허용을 결정합니다. */
 public final class WorkflowGrounding {
-    public record SourceUnits(List<EvidenceUnit> units,Set<String> invalidSteps,List<String> businessTargets) {
+    public record SourceUnits(List<EvidenceUnit> units,Set<String> invalidSteps,List<String> businessTargets,List<String> codeTargets) {
+        public SourceUnits(List<EvidenceUnit> units,Set<String> invalidSteps,List<String> businessTargets){this(units,invalidSteps,businessTargets,List.of());}
         public SourceUnits(List<EvidenceUnit> units,Set<String> invalidSteps){this(units,invalidSteps,List.of());}
-        public SourceUnits {units=List.copyOf(units);invalidSteps=Set.copyOf(invalidSteps);businessTargets=List.copyOf(businessTargets);}
+        public SourceUnits {units=List.copyOf(units);invalidSteps=Set.copyOf(invalidSteps);businessTargets=List.copyOf(businessTargets);codeTargets=List.copyOf(codeTargets);}
     }
     public interface Inputs {
         SourceUnits collect(JobContext job,WorkflowExecutionPlan plan,WorkflowOutcome outcome);
@@ -23,9 +24,10 @@ public final class WorkflowGrounding {
         default List<String> permissions(JobContext job,String capabilityId){return List.of();}
         default List<CitedHistoryContext.Pair> history(JobContext job){return List.of();}
     }
-    /** 계획을 다시 받지 않는 refresh에서도 최초 관측 업무 대상의 판정을 유지합니다. */
-    public record Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient,Optional<ClassificationService.HistoryPair> history,List<String> businessTargets) {
-        public Prepared {businessTargets=List.copyOf(businessTargets);}
+    /** 계획을 다시 받지 않는 refresh에서도 최초 관측 업무·코드 대상의 판정을 유지합니다. */
+    public record Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient,Optional<ClassificationService.HistoryPair> history,List<String> businessTargets,List<String> codeTargets) {
+        public Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient,Optional<ClassificationService.HistoryPair> history,List<String> businessTargets){this(outcome,selected,sufficient,history,businessTargets,List.of());}
+        public Prepared {businessTargets=List.copyOf(businessTargets);codeTargets=List.copyOf(codeTargets);}
         public Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient,Optional<ClassificationService.HistoryPair> history){this(outcome,selected,sufficient,history,List.of());}
         public Prepared(WorkflowOutcome outcome,EvidenceSelection.Selected selected,boolean sufficient){this(outcome,selected,sufficient,Optional.empty());}
     }
@@ -67,7 +69,7 @@ public final class WorkflowGrounding {
                     var verifiedHistory=currentHistory(job);
                     var verified=found.verified().stream().filter(answer->{
                         var candidate=select(job,List.of(new DocumentSearch.Round(List.of(),List.of(),List.of(),List.of(answer))),List.of(),verifiedHistory);
-                        return sufficient(job,targets,List.of(),candidate.units(),verifiedHistory);
+                        return sufficient(job,targets,List.of(),List.of(),candidate.units(),verifiedHistory);
                     }).toList();
                     found=new DocumentSearch.Round(found.semantic(),found.keyword(),found.identifier(),verified);rounds.add(found);
                     var collected=new HashSet<UUID>();for(var hit:RankFusion.fuse(List.of(found),settings.rrfK()))collected.add(hit.hit().child().id());
@@ -77,12 +79,12 @@ public final class WorkflowGrounding {
                     stages.add(documentStage(job,round,ResultStatus.SOURCE_UNAVAILABLE,0));break;
                 }
                 history=currentHistory(job);selected=select(job,rounds,source.units(),history);
-                sufficient=sufficient(job,targets,source.businessTargets(),selected.units(),history);
+                sufficient=sufficient(job,targets,source.businessTargets(),source.codeTargets(),selected.units(),history);
                 if(sufficient)break;
             }
-        } else sufficient=sufficient(job,targets,source.businessTargets(),selected.units(),history);
+        } else sufficient=sufficient(job,targets,source.businessTargets(),source.codeTargets(),selected.units(),history);
         // 실패 뒤에도 이전 회차의 선택과 자료 상태를 보존합니다.
-        history=currentHistory(job);selected=select(job,rounds,source.units(),history);sufficient=sufficient(job,targets,source.businessTargets(),selected.units(),history);
+        history=currentHistory(job);selected=select(job,rounds,source.units(),history);sufficient=sufficient(job,targets,source.businessTargets(),source.codeTargets(),selected.units(),history);
         // 스냅샷의 실제 선택 본문과 결속할 수 있는 해시/개수만 남기며 검색식·대상·근거 원문은 로깅하지 않습니다.
         var diagnostic=System.getLogger(WorkflowGrounding.class.getName());
         if(diagnostic.isLoggable(System.Logger.Level.DEBUG))diagnostic.log(System.Logger.Level.DEBUG,
@@ -102,15 +104,15 @@ public final class WorkflowGrounding {
         }
         var blocks=outcome.blocks().stream().filter(b->!invalidRefs.contains(b.dataRef())).toList();
         var evidence=outcome.evidence().stream().filter(e->!invalidEvidence.contains(e.evidenceId())).toList();
-        return new Prepared(new WorkflowOutcome(stages,blocks,evidence,deps,traces,outcome.toolExecutionRefs(),outcome.rejection(),outcome.coverage()),selected,sufficient,matchedHistory(job,targets,selected.units(),history),source.businessTargets());
+        return new Prepared(new WorkflowOutcome(stages,blocks,evidence,deps,traces,outcome.toolExecutionRefs(),outcome.rejection(),outcome.coverage()),selected,sufficient,matchedHistory(job,targets,selected.units(),history),source.businessTargets(),source.codeTargets());
     }
     private List<CitedHistoryContext.Pair> currentHistory(JobContext job){return CitedHistoryContext.reference(job).isEmpty()?List.of():inputs.history(job);}
     private List<String> targets(JobContext job){return SchemaContracts.JSON.convertValue(job.classification().getOrDefault("targets",List.of()),new tools.jackson.core.type.TypeReference<List<ResourceRef>>(){}).stream().map(ResourceRef::ref).toList();}
     private Optional<ClassificationService.HistoryPair> matchedHistory(JobContext job,List<String> targets,List<EvidenceUnit> units,List<CitedHistoryContext.Pair> available) {
         return CitedHistoryContext.reference(job).flatMap(bound->CitedHistoryContext.composerHistory(bound,job.requestInput().maskedQuestion(),targets,available,units,job.scope().perm()));
     }
-    private boolean sufficient(JobContext job,List<String> targets,List<String> businessTargets,List<EvidenceUnit> units,List<CitedHistoryContext.Pair> available) {
-        return coverage.sufficient(job.requestInput().maskedQuestion(),targets,businessTargets,units,language,settings.coreTermLimit(),inputs.glossary(job))||matchedHistory(job,targets,units,available).isPresent();
+    private boolean sufficient(JobContext job,List<String> targets,List<String> businessTargets,List<String> codeTargets,List<EvidenceUnit> units,List<CitedHistoryContext.Pair> available) {
+        return coverage.sufficient(job.requestInput().maskedQuestion(),targets,businessTargets,codeTargets,units,language,settings.coreTermLimit(),inputs.glossary(job))||matchedHistory(job,targets,units,available).isPresent();
     }
     private boolean fits(JobContext job,List<EvidenceUnit> units,List<CitedHistoryContext.Pair> available) {
         try {
@@ -124,11 +126,11 @@ public final class WorkflowGrounding {
     /** 검색 뒤 작성 직전의 현재 접근을 다시 확인하며 과거 답변을 근거로 사용하지 않습니다. */
     public Prepared refresh(JobContext job,Prepared prepared) {
         var available=currentHistory(job);var targets=targets(job);var history=matchedHistory(job,targets,prepared.selected().units(),available);
-        boolean sufficient=sufficient(job,targets,prepared.businessTargets(),prepared.selected().units(),available)&&fits(job,prepared.selected().units(),available);
+        boolean sufficient=sufficient(job,targets,prepared.businessTargets(),prepared.codeTargets(),prepared.selected().units(),available)&&fits(job,prepared.selected().units(),available);
         var debug=System.getLogger(WorkflowGrounding.class.getName());
         if(debug.isLoggable(System.Logger.Level.DEBUG))debug.log(System.Logger.Level.DEBUG,"GROUNDING_HISTORY job={0} sourceJob={1} citationSha={2} matched={3} sufficient={4}",job.jobId(),
             CitedHistoryContext.reference(job).map(ref->ref.pair().sourceJobId()).orElse("NONE"),CitedHistoryContext.reference(job).map(ref->AnswerSnapshot.sha(SchemaContracts.JSON.writeValueAsString(ref.pair().citations()))).orElse("NONE"),history.isPresent(),sufficient);
-        return new Prepared(prepared.outcome(),prepared.selected(),sufficient,history,prepared.businessTargets());
+        return new Prepared(prepared.outcome(),prepared.selected(),sufficient,history,prepared.businessTargets(),prepared.codeTargets());
     }
     private WorkflowOutcome.Stage documentStage(JobContext job,int round,ResultStatus status,int count) {
         boolean observed=status==ResultStatus.SUCCESS||status==ResultStatus.EMPTY;
