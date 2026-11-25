@@ -50,7 +50,7 @@ public final class SentenceEvidenceCheck {
         var notices=Map.of("PARTIAL","일부 자료를 확인할 수 없습니다.","STALE","최신 자료가 아닐 수 있습니다.","CONFLICT","서로 맞지 않는 자료가 있어 하나로 확정할 수 없습니다.");
         boolean partial=kept.size()!=root.get("sentences").size();
         for(String status:List.of("PARTIAL","STALE","CONFLICT"))if(states.contains(status)){partial=true;rendered.add(notices.get(status));}
-        var citations=cited.stream().map(n->new GroundedAnswer.Citation(n,"e"+n,units.get(n-1).sourceType(),units.get(n-1).location())).toList();
+        var citations=cited.stream().map(n->GroundedAnswerAssembly.citation(n,units.get(n-1))).toList();
         return new GroundedAnswer(partial?"PARTIAL":"ANSWER",String.join("\n",rendered),citations,kept);
     }
     private boolean facts(String text,String body) {return FactTokens.extract(body,language).containsAll(FactTokens.extract(text,language));}

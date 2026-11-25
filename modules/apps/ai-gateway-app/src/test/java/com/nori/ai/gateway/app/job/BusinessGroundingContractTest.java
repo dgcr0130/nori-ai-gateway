@@ -129,7 +129,7 @@ class BusinessGroundingContractTest {
         assertThat(f.grounding().refresh(f.job(),prepared).sufficient()).isTrue();
         var composer=mock(ComposerService.class);when(composer.groundedQuestionFits(any())).thenReturn(true);
         when(composer.configurationSha256()).thenReturn("a".repeat(64));
-        var unit=prepared.selected().units().getFirst();var answer=new GroundedAnswer("ANSWER","[모델 정의][1]",List.of(new GroundedAnswer.Citation(1,null,"SYSTEM",unit.location())),List.of(new GroundedAnswer.Sentence("[모델 정의]",List.of(1))));
+        var unit=prepared.selected().units().getFirst();var answer=new GroundedAnswer("ANSWER","[모델 정의][1]",List.of(new GroundedAnswer.Citation(1,null,"SYSTEM",unit.location(),"모델 정의")),List.of(new GroundedAnswer.Sentence("[모델 정의]",List.of(1))));
         when(composer.compose(any(),any())).thenReturn(new ComposerService.Result(ComposerOutcome.COMPOSED,Optional.of(answer.text()),1,0,0,List.of(),Optional.of(answer)));
         var builder=mock(WorkflowPlanBuilder.class);when(builder.definition(f.job())).thenReturn(f.plan().definition());when(builder.build(any(),any(),any(),any())).thenReturn(f.plan());
         var executor=mock(com.nori.ai.gateway.core.workflow.WorkflowExecutor.class);when(executor.run(any(),any(),any(),any())).thenReturn(f.outcome());

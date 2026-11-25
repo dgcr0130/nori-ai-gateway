@@ -52,6 +52,19 @@ class GroundedCompositionTest {
         assertThat(answer.citations()).extracting(GroundedAnswer.Citation::evidenceId).containsExactly("e1","e2");
         assertThat(answer.citations().getFirst().location()).isEqualTo(units.getFirst().location());
     }
+    @Test void citationTitlesComeFromEachSourcesOwnHeadingHeaderOrLocation() {
+        var registration=unit(TABLE,"asset.registration","SUCCESS");
+        var result=compose(rows(row("CLN_001의 포트는 6100입니다.","e1"),row("CLN_001 상태는 OFFLINE입니다.","e2")),List.of(registration,unit("CLN_001 OFFLINE","asset.snapshot","SUCCESS")));
+        // 업무 시스템 본문은 첫 줄 [제목]을 이름으로 쓰고, 제목 줄이 없으면 첫 줄을 그대로 씁니다.
+        assertThat(result.answer().orElseThrow().citations()).extracting(GroundedAnswer.Citation::title).containsExactly("설비 등록 정보","CLN_001 OFFLINE");
+        var empty=SchemaContracts.JSON.createObjectNode();
+        var document=new EvidenceUnit("DOCUMENT","parent",empty,"운영 안내 > 설비 등록","본문",List.of("READ"),"SUCCESS",null,List.of(),empty,List.of(),List.of());
+        var git=new EvidenceUnit("GIT",null,SchemaContracts.JSON.createObjectNode().put("sourceRepo","nori-tc-gateway").put("path","gateway/A.java").put("ref","main"),"","{}",List.of("AI_CODE_READ"),"SUCCESS",null,List.of(),empty,List.of(),List.of());
+        var log=new EvidenceUnit("LOG",null,SchemaContracts.JSON.createObjectNode().put("app","tc-gateway").put("namespace","tc").put("occurredAt","2026-11-24T01:37:32Z"),"","오류",List.of("AI_LOG_READ"),"SUCCESS",null,List.of(),empty,List.of(),List.of());
+        var trace=new EvidenceUnit("TRACE",null,SchemaContracts.JSON.createObjectNode().put("service","tc-business").put("traceId","t"),"","{}",List.of("AI_TRACE_READ"),"SUCCESS",null,List.of(),empty,List.of(),List.of());
+        assertThat(List.of(document,git,log,trace)).extracting(GroundedAnswerAssembly::title).containsExactly("운영 안내 > 설비 등록","gateway/A.java","tc-gateway","tc-business");
+        assertThat(GroundedAnswerAssembly.title(unit("[조회 결과 요약]\n도구(toolId): asset.empty","asset.empty","SUCCESS"))).isEqualTo("조회 결과 요약");
+    }
     @Test void actualWireUsesWholeFactsKstWithoutValuesAndOptionalMatchedHistory() {
         var units=List.of(unit(TABLE,"asset.registration","SUCCESS").withValues(SchemaContracts.parse("{\"privateValueOnly\":987654}")));
         var history=Optional.of(new ClassificationService.HistoryPair("앞선 질문","앞선 답변"));

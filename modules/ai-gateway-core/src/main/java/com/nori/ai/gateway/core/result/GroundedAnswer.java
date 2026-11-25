@@ -8,7 +8,8 @@ public record GroundedAnswer(String kind,String text,List<Citation> citations,Li
     public record Sentence(String text,List<Integer> citations) {
         public Sentence { citations=List.copyOf(citations); }
     }
-    public record Citation(int number,String evidenceId,String sourceType,JsonNode location) {}
+    /** title은 참고 자료 목록에 보일 근거 이름이며 근거가 이미 가진 제목·헤더·경로에서만 만듭니다. */
+    public record Citation(int number,String evidenceId,String sourceType,JsonNode location,String title) {}
     public GroundedAnswer { citations=List.copyOf(citations);sentences=List.copyOf(sentences); }
     public static GroundedAnswer noEvidence(){return new GroundedAnswer("NO_EVIDENCE","근거 없음",List.of(),List.of());}
     @Override public String toString(){return "GroundedAnswer[보호됨]";}

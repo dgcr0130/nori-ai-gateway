@@ -39,7 +39,21 @@ final class GroundedAnswerAssembly {
         return new GroundedAnswer("PARTIAL",FALLBACK,citations(units,all),List.of());
     }
     private static List<GroundedAnswer.Citation> citations(List<EvidenceUnit> units,SortedSet<Integer> numbers) {
-        return numbers.stream().map(n->new GroundedAnswer.Citation(n,"e"+n,units.get(n-1).sourceType(),units.get(n-1).location())).toList();
+        return numbers.stream().map(n->citation(n,units.get(n-1))).toList();
+    }
+    static GroundedAnswer.Citation citation(int number,EvidenceUnit unit) {
+        return new GroundedAnswer.Citation(number,"e"+number,unit.sourceType(),unit.location(),title(unit));
+    }
+    /** 업무 시스템 본문은 첫 줄을 [제목]으로 시작하므로 그 제목을 쓰고, 다른 근거는 헤더·파일 경로·앱·서비스 이름을 씁니다. */
+    static String title(EvidenceUnit unit) {
+        return switch(unit.sourceType()) {
+            case "SYSTEM" -> {String first=unit.body().split("\n",2)[0].strip();yield first.length()>2&&first.startsWith("[")&&first.endsWith("]")?first.substring(1,first.length()-1):first;}
+            case "DOCUMENT" -> unit.header();
+            case "GIT" -> unit.location().path("path").asString();
+            case "LOG" -> unit.location().path("app").asString();
+            case "TRACE" -> unit.location().path("service").asString();
+            default -> throw new IllegalArgumentException("근거 종류가 잘못되었습니다: "+unit.sourceType());
+        };
     }
     private static String summaryText(EvidenceUnit unit,Map<String,String> descriptions) {
         var values=unit.values();

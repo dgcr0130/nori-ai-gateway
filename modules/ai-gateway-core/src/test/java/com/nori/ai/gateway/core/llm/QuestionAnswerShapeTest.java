@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.*;
 class QuestionAnswerShapeTest {
     private GroundedAnswer answer(String kind,String... sentences) {
         return new GroundedAnswer(kind,String.join("\n",sentences)+"\n최신 자료가 아닐 수 있습니다.",
-            List.of(new GroundedAnswer.Citation(1,"e1","DOCUMENT",SchemaContracts.JSON.valueToTree(Map.of("objectKey","english-file.md")))),
+            List.of(new GroundedAnswer.Citation(1,"e1","DOCUMENT",SchemaContracts.JSON.valueToTree(Map.of("objectKey","english-file.md")),"english-file")),
             Arrays.stream(sentences).map(text->new GroundedAnswer.Sentence(text,List.of(1))).toList());
     }
     @Test void explicitEnglishLiteralWithoutLatinInValidatedSentencesBecomesEmptyNoEvidence() {
