@@ -15,4 +15,9 @@ class GeneralQueryHelpBuilderTest {
         assertThat(builder.build(view,Set.of("EQP_READ")).getFirst().content().get("rows")).hasSize(1);assertThat(builder.build(view,Set.of()).getFirst().content().get("rows")).isEmpty();
         assertThat(builder.build(view,Set.of("EQP_READ")).getFirst().content().get("rows").get(0).get("description").asString()).isEqualTo(implemented.description());
     }
+    @Test void helpTableShowsOnlyCapabilityIdAndDescription() {
+        var content=new GeneralQueryHelpBuilder().build(new RegistryView(OwnerSystem.TC,List.of(manifest())),Set.of("EQP_READ")).getFirst().content();
+        assertThat(content.get("columns")).isEqualTo(SchemaContracts.JSON.valueToTree(List.of("capabilityId","description")));
+        assertThat(content.get("rows").get(0).propertyNames()).containsExactlyInAnyOrder("capabilityId","description");
+    }
 }
