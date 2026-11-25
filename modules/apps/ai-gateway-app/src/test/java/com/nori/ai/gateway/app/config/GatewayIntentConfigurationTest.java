@@ -10,11 +10,33 @@ import org.springframework.core.io.FileSystemResource;
 import static org.assertj.core.api.Assertions.*;
 
 class GatewayIntentConfigurationTest {
-    @Test void actualSystemYamlLoadsTenIntentDeclarationsAndRegistrationContract()throws Exception {
+    @Test void connectionIntentUsesDedicatedEqpReadWithoutLotScope() throws Exception {
+        var environment = new StandardEnvironment();
+        for (var source : new YamlPropertySourceLoader().load("connection-config", new FileSystemResource(
+                Path.of(System.getProperty("aigw.rootDir")).resolve("config/ai-gateway.yaml")))) {
+            environment.getPropertySources().addLast(source);
+        }
+        var tc = GatewaySystemsProperties.load(environment).systems().get("TC");
+        var connection = tc.intents().stream().filter(i -> i.id().equals("connection")).findFirst();
+        assertThat(connection).as("연결만 묻는 질문에는 LOT 조회가 필요 없는 의도가 등록되어야 합니다").isPresent();
+        assertThat(connection.orElseThrow().toolIds()).containsExactly("tc.eqp.getConnectionState");
+        assertThat(connection.orElseThrow().subjectRequired()).isTrue();
+        assertThat(connection.orElseThrow().periodRequirement().name()).isEqualTo("NONE");
+        var tool = tc.tools().stream().filter(t -> t.id().equals("tc.eqp.getConnectionState")).findFirst().orElseThrow();
+        assertThat(tool.requiredPermissions()).containsExactly("EQP_READ");
+        var schema = SchemaContracts.JSON.valueToTree(tool.inputSchema());
+        assertThat(schema.path("required")).isEqualTo(SchemaContracts.JSON.valueToTree(List.of("eqp")));
+        assertThat(schema.path("properties").propertyNames()).containsExactly("eqp");
+        assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
+        var status = tc.intents().stream().filter(i -> i.id().equals("status")).findFirst().orElseThrow();
+        assertThat(status.toolIds()).containsExactly("tc.eqp.getOperationalSnapshot");
+        assertThat(status.description()).contains("LOT");
+    }
+    @Test void actualSystemYamlLoadsIntentDeclarationsAndRegistrationContract()throws Exception {
         var environment=new StandardEnvironment();
         for(var source:new YamlPropertySourceLoader().load("intent-config",new FileSystemResource(Path.of(System.getProperty("aigw.rootDir")).resolve("config/ai-gateway.yaml"))))environment.getPropertySources().addLast(source);
         var tc=GatewaySystemsProperties.load(environment).systems().get("TC");
-        assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","status","model","dlq","communication","incident","document","help","unsupported","code");
+        assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","connection","status","model","dlq","communication","incident","document","help","unsupported","code");
         // 본문은 대화체 문장만 두고 조회 원문은 참고 자료로 보이므로 TC는 서버 표를 붙이는 의도가 없습니다.
         assertThat(tc.intents()).allSatisfy(i->assertThat(i.answerTable()).as(i.id()).isFalse());
         assertThat(tc.intents()).allSatisfy(intent->assertThat(intent.description()).isNotBlank());

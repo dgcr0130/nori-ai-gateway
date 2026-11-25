@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.*;
 
 /** 근거 작성 전용 검사이며 피드백 문서의 SentenceEvidenceCheck 계약은 변경하지 않습니다. */
 class FactCheckTest {
-    static final String FALLBACK="확인된 조회 결과를 문장으로 정리하지 못했습니다. 참고 자료의 근거 원문을 확인해 주세요.";
+    static final String FALLBACK="확인된 조회 결과를 문장으로 정리하지 못했습니다. 필요한 항목을 구체적으로 지정해 다시 질문해 주세요.";
     final SearchLanguage language=text->List.of("건","명","연결","설비","상태","생성","일시").stream().filter(text::contains)
         .map(term->new SearchLanguage.Term(term,"NNG")).toList();
     final FactCheck check=new FactCheck(language);

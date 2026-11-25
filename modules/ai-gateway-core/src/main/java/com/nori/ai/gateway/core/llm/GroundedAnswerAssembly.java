@@ -6,7 +6,7 @@ import java.util.*;
 
 /** 요약·표의 값은 설정과 선택된 근거에서만 가져옵니다. */
 final class GroundedAnswerAssembly {
-    static final String FALLBACK="확인된 조회 결과를 문장으로 정리하지 못했습니다. 참고 자료의 근거 원문을 확인해 주세요.";
+    static final String FALLBACK="확인된 조회 결과를 문장으로 정리하지 못했습니다. 필요한 항목을 구체적으로 지정해 다시 질문해 주세요.";
     private static final Map<String,String> NOTICES=Map.of("PARTIAL","일부 자료를 확인할 수 없습니다.","STALE","최신 자료가 아닐 수 있습니다.","CONFLICT","서로 맞지 않는 자료가 있어 하나로 확정할 수 없습니다.");
     private GroundedAnswerAssembly() {}
     static boolean summary(EvidenceUnit unit) {
