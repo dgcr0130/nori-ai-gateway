@@ -19,7 +19,7 @@ public final class TerminalOutcomeAssembler {
     public TerminalSpec assemble(WorkflowOutcome outcome,ComposerOutcome composer,InferenceMode inference) {
         return assemble(outcome,composer,Optional.empty(),inference);
     }
-    /** Composer 성공 서술은 집계 결과를 바꾸지 않고 payload {@code answer} 에만 싣는다(SPEC §5.4 ③). */
+    /** Composer 성공 서술은 집계 결과를 바꾸지 않고 payload {@code answer}의 {kind,text,citations,sentences}에만 싣는다(SPEC §5.4 ③). */
     public TerminalSpec assemble(WorkflowOutcome outcome,ComposerOutcome composer,Optional<String> narrative,InferenceMode inference) {
         if(inference==InferenceMode.DISABLED&&composer!=ComposerOutcome.NOT_INVOKED)throw new IllegalArgumentException("비활성 서술 상태가 잘못되었습니다");
         if(narrative.isPresent()!=(composer==ComposerOutcome.COMPOSED))throw new IllegalArgumentException("서술 결과 조합이 잘못되었습니다");
@@ -60,7 +60,8 @@ public final class TerminalOutcomeAssembler {
         }
         if(inference==InferenceMode.ENABLED&&composer==ComposerOutcome.INPUT_BUDGET_EXCEEDED){status=ResultStatus.FAILED;error=ErrorCode.INPUT_BUDGET_EXCEEDED;}
         if(inference==InferenceMode.ENABLED&&composer==ComposerOutcome.LLM_UNAVAILABLE){status=outcome.blocks().isEmpty()&&outcome.evidence().isEmpty()?ResultStatus.FAILED:ResultStatus.PARTIAL;error=ErrorCode.LLM_UNAVAILABLE;payload.put("missingFields",List.of("answer"));}
-        narrative.ifPresent(value->payload.put("answer",value));
+        // 일반 도움말 서술도 사실 답변과 같은 공개 answer 구조로 싣는다. 도움말은 인용할 근거가 없다.
+        narrative.ifPresent(value->payload.put("answer",Map.of("kind","ANSWER","text",value,"citations",List.of(),"sentences",List.of())));
         payload.put("status",status.name());
         JobStatus job=status==ResultStatus.PARTIAL?JobStatus.PARTIAL:Set.of(ResultStatus.FAILED,ResultStatus.DENIED,ResultStatus.SOURCE_UNAVAILABLE).contains(status)?JobStatus.FAILED:JobStatus.SUCCEEDED;
         String event=job==JobStatus.PARTIAL?"job.partial":job==JobStatus.FAILED?"job.failed":"job.completed";

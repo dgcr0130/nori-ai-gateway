@@ -54,7 +54,7 @@ terminal 상태·이벤트 집계의 정본은 승인 Spec §5.4의 표입니다
 
 ## 사실 답변과 영구 스냅샷
 
-사실 답변의 `result.payload.answer`는 `{kind,text,citations,sentences}`입니다. `kind`는 `ANSWER`, `PARTIAL`, `NO_EVIDENCE`이고 `sentences`는 대조를 통과한 `{text,citations:[번호]}`만 보존합니다. 인용 목록은 `{number,evidenceId,sourceType,location}`이며 문서 위치는 bucket·objectKey·revision·section·lineFrom·lineTo, 비문서 위치는 해당 조회 항목의 위치입니다. 화면용 text에는 문장 뒤 `[1]` 형식 인용을 붙입니다. 일반 도움말은 기존 평문입니다.
+사실 답변의 `result.payload.answer`는 `{kind,text,citations,sentences}`입니다. `kind`는 `ANSWER`, `PARTIAL`, `NO_EVIDENCE`이고 `sentences`는 대조를 통과한 `{text,citations:[번호]}`만 보존합니다. 인용 목록은 `{number,evidenceId,sourceType,location,title}`이며 문서 위치는 bucket·objectKey·revision·section·lineFrom·lineTo, 비문서 위치는 해당 조회 항목의 위치입니다. 화면용 text에는 문장 뒤 `[1]` 형식 인용을 붙입니다. 일반 도움말 답변도 같은 구조이며 `kind`는 `ANSWER`, `text`는 도움말 평문, `citations`·`sentences`는 빈 배열입니다.
 
 문장은 1~20개, 문장 text는 1~1000 코드포인트·줄바꿈 금지, 문장별 인용은 1~6개입니다. 잘못된 인용·수치·식별자·이름을 포함한 문장은 제거합니다. 일부 제거 또는 통과 문장이 PARTIAL·STALE·CONFLICT 근거를 인용하면 kind는 PARTIAL입니다. 고정 문구는 그 순서로 각각 한 번 공개 text 끝에만 붙이고 sentences에는 넣지 않습니다. 통과 문장 0개나 불충분은 `{kind:"NO_EVIDENCE",text:"근거 없음",citations:[],sentences:[]}`입니다. 정상 자료 부족은 EMPTY·SUCCEEDED이며 장애·부분·절삭은 실제 집계를 보존합니다. 생성 장애는 블록·근거가 모두 없으면 FAILED, 하나라도 있으면 PARTIAL이며 errorCode는 LLM_UNAVAILABLE입니다. 미검증 답변·스냅샷은 저장하지 않습니다.
 

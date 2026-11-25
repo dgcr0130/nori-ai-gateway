@@ -28,7 +28,7 @@ class ClassifiedArgumentsWorkflowTest {
         var outcome = new WorkflowOutcome(List.of(), List.of(), List.of(), new ResultSourceDeps(List.of(), List.of()), List.of(), List.of(), Optional.empty());
         var spec = assembler.assemble(outcome, ComposerOutcome.COMPOSED, Optional.of("서술[e1]"), InferenceMode.ENABLED);
         assertThat(spec.resultStatus()).isEqualTo(ResultStatus.SUCCESS);
-        assertThat(spec.resultPayload()).containsEntry("answer", "서술[e1]");
+        assertThat(spec.resultPayload()).containsEntry("answer", Map.of("kind", "ANSWER", "text", "서술[e1]", "citations", List.of(), "sentences", List.of()));
         assertThat(assembler.assemble(outcome, ComposerOutcome.NOT_INVOKED, InferenceMode.ENABLED).resultPayload()).doesNotContainKey("answer");
         assertThatThrownBy(() -> assembler.assemble(outcome, ComposerOutcome.COMPOSED, InferenceMode.ENABLED)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> assembler.assemble(outcome, ComposerOutcome.LLM_UNAVAILABLE, Optional.of("x"), InferenceMode.ENABLED)).isInstanceOf(IllegalArgumentException.class);

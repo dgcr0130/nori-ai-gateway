@@ -37,8 +37,9 @@ class LlmScriptedTransportIT extends LlmStubSupport {
         pauses().release(PausePointRegistry.Point.DISPATCH_HOLD, "*");
         assertThat(terminal(armed)).isEqualTo("SUCCEEDED");
         assertThat(terminal(live)).isEqualTo("SUCCEEDED");
-        assertThat(payload(armed.jobId()).path("answer").asString()).isEqualTo("스크립트 서술이다.");
-        assertThat(payload(live.jobId()).path("answer").asString()).isEqualTo("라이브 서술이다.");
+        assertThat(payload(armed.jobId()).path("answer").path("kind").asString()).isEqualTo("ANSWER");assertThat(payload(armed.jobId()).path("answer").path("citations")).isEmpty();
+        assertThat(payload(armed.jobId()).path("answer").path("text").asString()).isEqualTo("스크립트 서술이다.");
+        assertThat(payload(live.jobId()).path("answer").path("text").asString()).isEqualTo("라이브 서술이다.");
         assertThat(scripts().scriptedCalls(armed.jobId(), CallType.CLASSIFY) + scripts().scriptedCalls(armed.jobId(), CallType.COMPOSER)).isEqualTo(2);
         assertThat(scripts().scriptedCalls(live.jobId(), CallType.CLASSIFY) + scripts().scriptedCalls(live.jobId(), CallType.COMPOSER)).isZero();
         assertThat(chats).as("LIVE endpoint 수신 = 결속 없는 Job 의 분류 1 + Composer 1").hasValue(2);

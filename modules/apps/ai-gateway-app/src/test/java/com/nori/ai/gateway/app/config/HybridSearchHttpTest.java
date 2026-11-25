@@ -170,7 +170,7 @@ class HybridSearchHttpTest {
                         var blocks=SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("blocks"));if(data){assertThat(embeddings).isZero();assertThat(blocks).isNotEmpty();assertThat(commit.evidence()).isNotEmpty();}else{assertThat(blocks).isEmpty();assertThat(commit.evidence()).isEmpty();}
                         assertThat(audits.stream().filter(a->a.callType()==CallType.COMPOSER)).hasSize(1);
                     }
-                    case "general"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);assertThat(terminal.resultPayload().get("answer")).isEqualTo("등록된 기능을 안내합니다.");}
+                    case "general"->{assertThat(embeddings).isZero();assertThat(chats).isEqualTo(2);assertThat(SchemaContracts.JSON.valueToTree(terminal.resultPayload().get("answer")).path("text").asString()).isEqualTo("등록된 기능을 안내합니다.");}
                     case "verified"->{
                         assertThat(embeddings).isEqualTo(1);assertThat(chats).isEqualTo(2);
                         // 대역 단위 벡터의 내적에서 질문·완전 일치 답변은 1, 질문·검색 질의 방향 답변은 0입니다.
