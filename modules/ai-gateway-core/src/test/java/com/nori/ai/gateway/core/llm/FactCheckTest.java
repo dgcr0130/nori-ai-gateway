@@ -18,6 +18,11 @@ class FactCheckTest {
         return new EvidenceUnit("SYSTEM",null,SchemaContracts.JSON.createObjectNode().put("toolId","asset.snapshot").put("ref","CLN_001"),"",body,
             List.of("READ"),"SUCCESS","2026-11-24T01:37:32Z",List.of(),SchemaContracts.JSON.createObjectNode(),List.of(),List.of());
     }
+    static EvidenceUnit git(String path,String text) {
+        var body=SchemaContracts.JSON.createObjectNode().put("codeRefKind","CURRENT_APPROVED_REF").put("deployedSourceCommit","UNKNOWN").put("text",text);
+        return new EvidenceUnit("GIT",null,SchemaContracts.JSON.createObjectNode().put("path",path).put("ref","main").put("sourceRepo","nori-tc-gateway"),"",
+            SchemaContracts.JSON.writeValueAsString(body),List.of("AI_CODE_READ"),"SUCCESS","2026-11-24T01:37:32Z",List.of(),SchemaContracts.JSON.createObjectNode(),List.of(),List.of());
+    }
     static Map<String,Object> row(String text,String... ids){return Map.of("text",text,"factIds",List.of(ids));}
     static String rows(Map<String,Object>... rows){return SchemaContracts.JSON.writeValueAsString(Map.of("sentences",List.of(rows)));}
     GroundedAnswer run(String text,List<EvidenceUnit> units,List<String> targets){return check.check(text,units,targets);}
@@ -64,6 +69,23 @@ class FactCheckTest {
     @Test void conversationalKoreanNounsAreNotRequiredToAppearInMixedLanguageEvidence() {
         var answer=run(rows(row("CLN_001의 연결 상태는 OFFLINE이며 설비 상태는 DOWN입니다.","e1")),List.of(unit("{\"eqpId\":\"CLN_001\",\"connectionState\":\"OFFLINE\",\"eqpState\":\"DOWN\"}")),List.of("CLN_001"));
         assertThat(answer.kind()).isEqualTo("ANSWER");assertThat(answer.sentences()).hasSize(1);
+    }
+    @Test void codeSentencesNameOnlyIdentifiersFoundInCitedSnippetsOrTheirRepositoryPaths() {
+        var units=List.of(git("gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+                "import com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\n    private final EquipmentContextRegistry contextRegistry;\n"),
+            git("gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlSupport.java",
+                "    GatewayUiRuntimeControlSupport(\n            final EquipmentContextRegistry contextRegistry,\n"));
+        // 경로의 파일 이름·경로 조각과 조각 안의 전체 이름이 근거입니다. 이름의 앞부분만 쓰는 것은 기존처럼 인정하지 않습니다.
+        for(String valid:List.of("EquipmentContextRegistry는 GatewayEquipmentService에서 필드로 사용됩니다.",
+                "GatewayEquipmentService.java와 kafka 어댑터의 GatewayUiRuntimeControlSupport가 EquipmentContextRegistry를 받습니다.",
+                "GatewayEquipmentService.java는 com.nori.tc.gateway.core.context.service.EquipmentContextRegistry를 가져옵니다."))
+            assertThat(run(rows(row(valid,"e1","e2")),units,List.of()).sentences()).as(valid).hasSize(1);
+        // 인용한 근거 어디에도 없는 클래스 이름이 있으면 문장을 제거합니다.
+        var diagnostics=new ArrayList<LlmDiagnostic>();
+        var checked=check.evaluate(rows(row("EquipmentContextRegistry는 EquipmentStateManager에서 사용됩니다.","e1","e2")),units,List.of(),diagnostics::add);
+        assertThat(checked.sentences()).isEmpty();assertThat(diagnostics).containsExactly(LlmDiagnostic.SENTENCE_NAME);
+        // 인용하지 않은 근거의 파일 이름은 근거가 아닙니다.
+        assertThat(run(rows(row("EquipmentContextRegistry는 GatewayUiRuntimeControlSupport에서 사용됩니다.","e1")),units,List.of()).sentences()).isEmpty();
     }
     @Test void allRemovedOrEmptyOutputIsPartialWithAllFactReferencesAndFixedFallback() {
         var units=List.of(unit("CLN_001"),unit("PHOTO_001"));

@@ -1,0 +1,1683 @@
+{
+  "status": "SUCCESS",
+  "missingFields": [],
+  "items": [
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentContextRegistry.java",
+      "ref": "main",
+      "text": "package com.nori.tc.gateway.core.context.service;\n\nimport com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.model.EquipmentDesiredState;\nimport com.nori.tc.gateway.core.context.model.EquipmentRuntimeState;\nimport org.slf4j.Logger;\nimport org.slf4j.LoggerFactory;\nimport org.springframework.stereotype.Component;\n\nimport java.util.Collection;\nimport java.util.Map;\nimport java.util.Objects;\nimport java.util.Optional;\nimport java.util.concurrent.ConcurrentHashMap;\n\n/**\n * 설비 컨텍스트 인메모리 저장소입니다.\n *\n * <p>3차 패키지 분해 후 이 클래스는 {@code context.service} 계층에 위치하며,\n * 상태 저장/조회/갱신 조정 책임을 담당합니다.</p>\n * <p>eqpId를 키로 EquipmentContext를 관리합니다.</p>\n * <p>Gateway 인스턴스 로컬 상태이므로 멀티 인스턴스 공유는 별도 저장소(예: Redis)로 확장합니다.</p>\n */\n@Component\np",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.port.EquipmentContextProfileProvider;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.domain.type.CommInterfaceType;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+      "ref": "main",
+      "text": " * <p>역할:</p>\n * <p>- EquipmentInfoProvider: 통신 라우팅/연결 판단에 필요한 핵심 정보 조회</p>\n * <p>- EquipmentContextProfileProvider: EquipmentContextRegistry 초기화/갱신용 상세 프로파일 조회</p>\n */\n@Service\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+      "ref": "main",
+      "text": "\n    private final TcEqpStore eqpStore;\n    private final EquipmentContextRegistry contextRegistry;\n    private final KafkaShardOwnership shardOwnership;\n    private final TcEqpHsmsStore hsmsStore;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+      "ref": "main",
+      "text": "    public GatewayEquipmentService(\n            final TcEqpStore eqpStore,\n            final EquipmentContextRegistry contextRegistry,\n            final KafkaShardOwnership shardOwnership,\n            final TcEqpHsmsStore hsmsStore,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java",
+      "ref": "main",
+      "text": "     *\n     * @param eqp tc_eqp 공통 설비 행\n     * @return EquipmentContextRegistry에 적재할 설비 프로파일 스냅샷\n     */\n    private EquipmentContextProfile toProfile(final TcEqp eqp) {\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlService.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.EquipmentStatePersistencePort;\nimport com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.coordination.GatewayAppliedRevisionRegistry;\nimport com.nori.tc.gateway.core.coordination.GatewayCoordinationLedgerPort;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlService.java",
+      "ref": "main",
+      "text": "    private static final String COMMAND_PHASE_PREPARE = \"PREPARE\";\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final EquipmentStatePersistencePort statePersistencePort;\n    private final EquipmentChannelRegistry channelRegistry;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlService.java",
+      "ref": "main",
+      "text": "\n    public GatewayUiRuntimeControlService(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final ObjectProvider<EquipmentStatePersistencePort> statePersistencePortProvider,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlSupport.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentDesiredState;\nimport com.nori.tc.gateway.core.context.port.EquipmentRuntimeCatalog;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlSupport.java",
+      "ref": "main",
+      "text": "\n    private static final Logger log = LoggerFactory.getLogger(GatewayUiRuntimeControlSupport.class);\n    private final EquipmentContextRegistry contextRegistry;\n    private final EquipmentRuntimeCatalog runtimeCatalog;\n    private final EquipmentChannelRegistry channelRegistry;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/main/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlSupport.java",
+      "ref": "main",
+      "text": "\n    GatewayUiRuntimeControlSupport(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final EquipmentChannelRegistry channelRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiCommunicationSettingsTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.config.props.GatewaySocketProperties;\nimport com.nori.tc.gateway.core.context.port.EquipmentRuntimeCatalog;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.runtime.channel.EquipmentChannelRegistry;\nimport com.nori.tc.gateway.core.runtime.channel.GatewayConnectionControlPort;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiCommunicationSettingsTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void updateSnapshotCarriesCommunicationSettingsIntoRuntimeInfo() {\n        var support = new GatewayUiRuntimeControlSupport(mock(EquipmentContextRegistry.class),\n                mock(EquipmentRuntimeCatalog.class), mock(EquipmentChannelRegistry.class),\n                mock(GatewayConnectionControlPort.class), new GatewayLifecycleProperties(),\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.EquipmentRuntimeCatalog;\nimport com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void deleteRuntimeContextUnbindsPlcSpec() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void deleteRuntimeContextDoesNotUnbindForNonPlc() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void ownershipReleaseUnbindsPlcSpec() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    void plcSnapshotGroupsMapThroughIngestionSeam() {\n        final GatewayUiRuntimeControlSupport support = newControlSupport(\n                Mockito.mock(EquipmentContextRegistry.class),\n                Mockito.mock(EquipmentRuntimeCatalog.class),\n                Mockito.mock(EquipmentChannelRegistry.class),\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void prepareCommandValidatesWithoutMutatingActiveState() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void applyCommandMutatesActiveState() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void applyRecordsLocalAppliedRevision() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void prepareDoesNotRecordAppliedRevision() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void applyDeleteRecordsLocalAppliedRevision() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void prepareDeleteDoesNotRemoveContext() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void coordinatedCommandWithoutOldRoutePartitionIsNotTreatedAsRouteMove() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void inboundRouteMoveIsStillDeferredUntilOldOwnerReleases() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void inboundRouteMovePrepareIsAcknowledgedWithoutBind() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n        final PlcEquipmentSpecReloadPort plcPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "\n    private GatewayUiRuntimeControlService newPlcAwareService(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentChannelRegistry channelRegistry,\n            final PlcEquipmentSpecReloadPort plcPort\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "     */\n    private GatewayUiRuntimeControlService newPartitionScopedService(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentChannelRegistry channelRegistry,\n            final PlcEquipmentSpecReloadPort plcPort,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldReconnectTransportWhenUpdateChangesEndpoint() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void createShouldDeriveDesiredStateFromSnapshotNotEnabled() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRebuildTransportWhenUpdateChangesRuntimeShape() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldResolveBindingSignatureChangeWhenPassiveGatewayJarKeyChanges() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldResolveReconnectRequiredWhenActiveGatewayJarKeyChanges() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectCreateWhenPassiveBindingConflicts() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectUpdateWhenPassiveBindingConflicts() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldApplyGatewayJarKeyFromRuntimeCatalogDuringUpdate() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldOrchestrateJarfileUpdateForStartedEquipment() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRecoverPreviousTransportWhenJarfileReloadFails() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldReconcileDesiredStateWhenTransportRestartFailsAfterReload() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldReloadJarfileWithoutTransportRestartWhenEquipmentIsNotStarted() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRestartOnlyTargetEquipmentWhenJarfileUpdateSucceeds() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectJarfileUpdateBeforeReloadWhenPassiveBindingConflicts() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectRuntimeRebuildWhenSocketHandlerIsMissing() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectStartWhenSocketHandlerIsMissing() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldCompleteStartWithoutTransportWhenActiveChannelAlreadyExists() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectStartWhenAlreadyStarted() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldTriggerTransportConnectOnStartWhenEndedAndNotConnected() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectEndWhenNotStarted() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectPassiveLifecycleCommands() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldRejectReconnectWhenSocketHandlerIsMissing() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldForwardSocketMessageNameAndRawMessage() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void shouldForwardHsmsSecs2Payload() {\n        final EquipmentContextRegistry contextRegistry = new EquipmentContextRegistry();\n        final EquipmentRuntimeCatalog runtimeCatalog = Mockito.mock(EquipmentRuntimeCatalog.class);\n        final EquipmentChannelRegistry channelRegistry = Mockito.mock(EquipmentChannelRegistry.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "\n    private GatewayUiRuntimeControlService newService(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final EquipmentChannelRegistry channelRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "\n    private GatewayUiRuntimeControlService newService(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final EquipmentChannelRegistry channelRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimeControlServiceTest.java",
+      "ref": "main",
+      "text": "\n    private GatewayUiRuntimeControlSupport newControlSupport(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final EquipmentChannelRegistry channelRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcConnectionSlotTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.EquipmentStatePersistencePort;\nimport com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.core.kafka.KafkaShardOwnership;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcConnectionSlotTest.java",
+      "ref": "main",
+      "text": "\n    private final class Fixture {\n        final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n        final EquipmentStatePersistencePort statePersistencePort = Mockito.mock(EquipmentStatePersistencePort.class);\n        final GatewayUiTaskProcessorRegistry registry;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcGroupCommandTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.EquipmentStatePersistencePort;\nimport com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcGroupCommandTest.java",
+      "ref": "main",
+      "text": "        Mockito.when(lifecycleProperties.getDefaultTimeoutMs()).thenReturn(5_000L);\n        return new GatewayUiRuntimeControlService(\n                Mockito.mock(EquipmentContextRegistry.class),\n                Mockito.mock(EquipmentRuntimeCatalog.class),\n                stateProvider,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcSpecReloadFailTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.EquipmentStatePersistencePort;\nimport com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.kafka.KafkaShardOwnership;\nimport com.nori.tc.gateway.core.lifecycle.service.EquipmentLifecycleStateMachine;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-kafka-adapter/src/test/java/com/nori/tc/gateway/adapters/kafka/ui/GatewayUiRuntimePlcSpecReloadFailTest.java",
+      "ref": "main",
+      "text": "     */\n    private final class Fixture {\n        final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n        final EquipmentStatePersistencePort statePersistencePort = Mockito.mock(EquipmentStatePersistencePort.class);\n        final PlcEquipmentSpecReloadPort plcEquipmentSpecReloadPort = Mockito.mock(PlcEquipmentSpecReloadPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrap.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentDesiredState;\nimport com.nori.tc.gateway.core.config.props.GatewaySocketProperties;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrap.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(GatewayNettyBootstrap.class);\n\n    private final EquipmentContextRegistry equipmentContextRegistry;\n    private final GatewayNettyResourceLifecycle resourceLifecycle;\n    private final GatewayPassiveListenerRegistry passiveListenerRegistry;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrap.java",
+      "ref": "main",
+      "text": "\n    public GatewayNettyBootstrap(\n            final EquipmentContextRegistry equipmentContextRegistry,\n            final GatewayNettyResourceLifecycle resourceLifecycle,\n            final GatewayPassiveListenerRegistry passiveListenerRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrap.java",
+      "ref": "main",
+      "text": "            final KafkaShardOwnership shardOwnership\n    ) {\n        this.equipmentContextRegistry = Objects.requireNonNull(equipmentContextRegistry, \"equipmentContextRegistry is null\");\n        this.resourceLifecycle = Objects.requireNonNull(resourceLifecycle, \"resourceLifecycle is null\");\n        this.passiveListenerRegistry = Objects.requireNonNull(passiveListenerRegistry, \"passiveListenerRegistry is null\");\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrap.java",
+      "ref": "main",
+      "text": "        }\n\n        final List<EquipmentContext> contexts = List.copyOf(equipmentContextRegistry.snapshot());\n        int startedDesiredCount = 0;\n\n        log.info(\"Transport runtime bootstrap started from EquipmentContextRegistry. totalContexts={}\", contexts.size());\n        passiveListenerRegistry.validatePassiveBindingSignaturesOnBootstrap(contexts);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentDesiredState;\nimport com.nori.tc.gateway.core.context.port.EquipmentRuntimeCatalog;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "    private final GatewaySocketProperties socketProperties;\n    private final EquipmentRuntimeCatalog runtimeCatalog;\n    private final EquipmentContextRegistry equipmentContextRegistry;\n    private final GatewayChannelHandlerFactory handlerFactory;\n    private final KafkaShardOwnership shardOwnership;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "            final GatewaySocketProperties socketProperties,\n            final EquipmentRuntimeCatalog runtimeCatalog,\n            final EquipmentContextRegistry equipmentContextRegistry,\n            final GatewayChannelHandlerFactory handlerFactory,\n            final KafkaShardOwnership shardOwnership\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "        this.socketProperties = Objects.requireNonNull(socketProperties, \"socketProperties is null\");\n        this.runtimeCatalog = Objects.requireNonNull(runtimeCatalog, \"runtimeCatalog is null\");\n        this.equipmentContextRegistry = Objects.requireNonNull(\n                equipmentContextRegistry,\n                \"equipmentContextRegistry is null\"\n        );\n        this.handlerFactory = Objects.requireNonNull(handlerFactory, \"handlerFactory is null\");\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "        }\n\n        final EquipmentContext context = equipmentContextRegistry.find(eqpId).orElse(null);\n        if (context != null && context.profile() != null && context.profile().equipmentInfo() != null) {\n            final GatewayEquipmentInfo info = context.profile().equipmentInfo();\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/main/java/com/nori/tc/gateway/adapters/netty/GatewayPassiveListenerRegistry.java",
+      "ref": "main",
+      "text": "            return null;\n        }\n        return equipmentContextRegistry.find(eqpId)\n                .map(EquipmentContext::desiredState)\n                .orElse(null);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentRuntimeState;\nimport com.nori.tc.gateway.core.context.port.EquipmentRuntimeCatalog;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.domain.type.CommInterfaceType;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "     */\n    @Mock\n    private EquipmentContextRegistry equipmentContextRegistry;\n\n    /**\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        final int sharedPort = findAvailablePort();\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of());\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        final int sharedPort = findAvailablePort();\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of());\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        final int sharedPort = findAvailablePort();\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of());\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "    @Test\n    void activeRuntimeStartShouldAttemptOutboundConnection() throws Exception {\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of());\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        final int bindPort = findAvailablePort();\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of());\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        );\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of(contextFor(invalidBindEqp)));\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        );\n\n        when(equipmentContextRegistry.snapshot()).thenReturn(java.util.List.of(contextFor(invalidSocketEqp)));\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        );\n\n        when(equipmentContextRegistry.snapshot())\n                .thenReturn(java.util.List.of(contextFor(enabledEndedEqp, EquipmentDesiredState.ENDED)));\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        );\n\n        when(equipmentContextRegistry.snapshot())\n                .thenReturn(java.util.List.of(contextFor(disabledEqp, EquipmentDesiredState.ENDED)));\n        when(shardOwnership.isOwnedPartition(anyInt())).thenReturn(true);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "     * 테스트용 {@link GatewayNettyBootstrap} 인스턴스를 생성하고 시작합니다.\n     *\n     * <p>부팅 시 자동 런타임 기동 간섭을 막기 위해 EquipmentContextRegistry 는 빈 스냅샷을 반환하도록\n     * 각 테스트에서 사전에 스텁합니다.</p>\n     *\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "                socketProperties,\n                runtimeCatalog,\n                equipmentContextRegistry,\n                handlerFactory,\n                shardOwnership\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/adapter/tc-gateway-netty-adapter/src/test/java/com/nori/tc/gateway/adapters/netty/GatewayNettyBootstrapTest.java",
+      "ref": "main",
+      "text": "        );\n        final GatewayNettyBootstrap bootstrap = new GatewayNettyBootstrap(\n                equipmentContextRegistry,\n                resourceLifecycle,\n                passiveListenerRegistry,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/autoconfigure/GatewayCoreModuleConfiguration.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.application.processing.EquipmentProcessingCoordinator;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextBootstrap;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.context.service.EquipmentRuntimeCatalogService;\nimport com.nori.tc.gateway.core.lifecycle.service.GatewayLifecycleModuleConfiguration;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/autoconfigure/GatewayCoreModuleConfiguration.java",
+      "ref": "main",
+      "text": "        EquipmentProcessingCoordinator.class,\n        EquipmentContextBootstrap.class,\n        EquipmentContextRegistry.class,\n        EquipmentRuntimeCatalogService.class,\n        GatewayLifecycleModuleConfiguration.class,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/hsms/GatewayHsmsRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.config.props.GatewayHsmsProperties;\nimport com.nori.tc.gateway.core.config.props.GatewayRuntimeProperties;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.observability.metrics.GatewayMetrics;\nimport com.nori.tc.gateway.core.runtime.mailbox.EquipmentMailboxRegistry;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/hsms/GatewayHsmsRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "    @Bean\n    public EquipmentConnectionListener hsmsSessionOpener(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentMailboxRegistry mailboxRegistry,\n            final HsmsSessionTimerScheduler timerScheduler,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/hsms/HsmsSessionOpener.java",
+      "ref": "main",
+      "text": "\nimport com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/hsms/HsmsSessionOpener.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(HsmsSessionOpener.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final EquipmentMailboxRegistry mailboxRegistry;\n    private final HsmsSessionTimerScheduler timerScheduler;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/hsms/HsmsSessionOpener.java",
+      "ref": "main",
+      "text": "\n    HsmsSessionOpener(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentMailboxRegistry mailboxRegistry,\n            final HsmsSessionTimerScheduler timerScheduler,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.port.PlcSpecConversionValidationPort;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextBootstrap;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.kafka.KafkaShardOwnership;\nimport com.nori.tc.gateway.core.lifecycle.service.EquipmentLifecycleStateMachine;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "    public PlcPollOwnershipGate plcPollOwnershipGate(\n            final KafkaShardOwnership shardOwnership,\n            final EquipmentContextRegistry contextRegistry\n    ) {\n        return eqpId -> contextRegistry.find(eqpId)\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "    @Bean\n    public EquipmentConnectionListener plcConnectionRestorer(\n            final EquipmentContextRegistry contextRegistry,\n            final PlcPollGroupRegistry groupRegistry,\n            final PlcEnabledPollGroupsQueryPort enabledPollGroupsPort,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "    public PlcSpecBootstrap plcSpecBootstrap(\n            final EquipmentContextBootstrap equipmentContextBootstrap,\n            final EquipmentContextRegistry contextRegistry,\n            final PlcEquipmentSpecCatalog catalog,\n            final PlcPollGroupRegistry groupRegistry\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfiguration.java",
+      "ref": "main",
+      "text": "    @Bean\n    public PlcEquipmentSpecReloadPort plcEquipmentSpecReloadPort(\n            final EquipmentContextRegistry contextRegistry,\n            final PlcPollGroupRegistry groupRegistry,\n            final PlcChangeOnDeltaCache changeCache\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcConnectionRestorer.java",
+      "ref": "main",
+      "text": "\nimport com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.coordination.GatewayPlcPollGroupOverlayPort;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcConnectionRestorer.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(PlcConnectionRestorer.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final PlcPollGroupRegistry groupRegistry;\n    private final PlcEnabledPollGroupsQueryPort enabledPollGroupsPort;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcConnectionRestorer.java",
+      "ref": "main",
+      "text": "\n    PlcConnectionRestorer(\n            final EquipmentContextRegistry contextRegistry,\n            final PlcPollGroupRegistry groupRegistry,\n            final PlcEnabledPollGroupsQueryPort enabledPollGroupsPort,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcEquipmentSpecReloader.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.domain.type.CommInterfaceType;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcEquipmentSpecReloader.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(PlcEquipmentSpecReloader.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final PlcPollGroupRegistry groupRegistry;\n    private final PlcChangeOnDeltaCache changeCache;\n\n    PlcEquipmentSpecReloader(\n            final EquipmentContextRegistry contextRegistry,\n            final PlcPollGroupRegistry groupRegistry,\n            final PlcChangeOnDeltaCache changeCache\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcSpecBootstrap.java",
+      "ref": "main",
+      "text": "\nimport com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.domain.type.CommInterfaceType;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcSpecBootstrap.java",
+      "ref": "main",
+      "text": " * PLC 디코드 스펙 부팅 seeding(business {@code BusinessModelParamCache.reloadAll} 동형) — DB read 는 부팅에만 허용.\n *\n * <p>{@link EquipmentContextRegistry} 의 PLC 설비를 순회해 기존 {@link PlcEquipmentSpecCatalog#load} 로 {@code tc_model_plc_*}\n * 디코드 스펙을 <b>model 단위 dedup</b> 으로 적재하고(같은 모델 여러 설비는 1벌만) 전 eqp 바인딩을 구성해\n * {@link PlcPollGroupRegistry#seedAll}(원자 swap)로 메모리에 seeding 한다(C5 — catalog 쿼리 재사용).\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/main/java/com/nori/tc/gateway/starter/runtime/plc/PlcSpecBootstrap.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(PlcSpecBootstrap.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final PlcEquipmentSpecCatalog catalog;\n    private final PlcPollGroupRegistry groupRegistry;\n\n    PlcSpecBootstrap(\n            final EquipmentContextRegistry contextRegistry,\n            final PlcEquipmentSpecCatalog catalog,\n            final PlcPollGroupRegistry groupRegistry\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/hsms/HsmsSessionOpenerTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/hsms/HsmsSessionOpenerTest.java",
+      "ref": "main",
+      "text": "    private static final int DEVICE_ID = 3;\n\n    private final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n    private final EquipmentMailboxRegistry mailboxRegistry = Mockito.mock(EquipmentMailboxRegistry.class);\n    private final List<OutboundRawFrame> sent = new ArrayList<>();\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfigurationContextTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.config.props.GatewayRuntimeProperties;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextBootstrap;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.kafka.KafkaShardOwnership;\nimport com.nori.tc.gateway.core.lifecycle.service.EquipmentLifecycleStateMachine;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/GatewayPlcRuntimeConfigurationContextTest.java",
+      "ref": "main",
+      "text": "\n        @Bean\n        EquipmentContextRegistry equipmentContextRegistry() {\n            final EquipmentContextRegistry registry = mock(EquipmentContextRegistry.class);\n            // PlcSpecBootstrap.@PostConstruct 가 snapshot() 을 순회하므로 빈 목록을 돌려준다(NPE 방지).\n            when(registry.snapshot()).thenReturn(List.of());\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcConnectionRestorerTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.coordination.GatewayPlcPollGroupOverlayPort;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcConnectionRestorerTest.java",
+      "ref": "main",
+      "text": "    private final PlcPollScheduler scheduler =\n            new PlcPollScheduler(1, eqpId -> false, (eqpId, group) -> { }, () -> 0L);\n    private final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n    private final PlcEnabledPollGroupsQueryPort enabledPollGroupsPort =\n            Mockito.mock(PlcEnabledPollGroupsQueryPort.class);\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcEquipmentSpecReloaderTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcEquipmentSpecReloaderTest.java",
+      "ref": "main",
+      "text": "    private static final String EQP = \"PLC-1\";\n\n    private final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n    private final PlcPollGroupRegistry groupRegistry = new PlcPollGroupRegistry();\n    private final PlcChangeOnDeltaCache changeCache = new PlcChangeOnDeltaCache();\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcSpecBootstrapTest.java",
+      "ref": "main",
+      "text": "import com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.model.EquipmentContextProfile;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.ConnectionMode;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/starter/tc-gateway-starter/src/test/java/com/nori/tc/gateway/starter/runtime/plc/PlcSpecBootstrapTest.java",
+      "ref": "main",
+      "text": "class PlcSpecBootstrapTest {\n\n    private final EquipmentContextRegistry contextRegistry = Mockito.mock(EquipmentContextRegistry.class);\n    private final PlcEquipmentSpecCatalog catalog = Mockito.mock(PlcEquipmentSpecCatalog.class);\n    private final PlcPollGroupRegistry groupRegistry = new PlcPollGroupRegistry();\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/model/EquipmentContextProfile.java",
+      "ref": "main",
+      "text": "\n/**\n * EquipmentContextRegistry에 적재되는 설비 프로파일 스냅샷입니다.\n *\n * <p>설계 확정사항에 맞춰 tc_eqp 계열 테이블 정보를 하나의 타입으로 묶었습니다.</p>\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/port/EquipmentRuntimeCatalog.java",
+      "ref": "main",
+      "text": " *\n * <p>이 포트의 목적은 바인딩/명령 디스패치/런타임 제어 경로에서\n * DB 직접 조회 대신 인메모리 EQP bean(EquipmentContextRegistry)을 단일 조회 기준으로 사용하도록\n * 호출부를 표준화하는 것입니다.</p>\n *\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentContextBootstrap.java",
+      "ref": "main",
+      "text": "\n/**\n * Gateway 부팅 시 EquipmentContextRegistry를 초기 적재하는 부트스트랩입니다.\n *\n * <p>3차 구조 분해 후 {@code context.service} 계층으로 이동했으며,\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentContextBootstrap.java",
+      "ref": "main",
+      "text": "\n    private final EquipmentContextProfileProvider profileProvider;\n    private final EquipmentContextRegistry contextRegistry;\n    private final ObjectProvider<GatewayBootstrapOverlayPolicy> overlayPolicyProvider;\n\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentContextBootstrap.java",
+      "ref": "main",
+      "text": "    public EquipmentContextBootstrap(\n            final EquipmentContextProfileProvider profileProvider,\n            final EquipmentContextRegistry contextRegistry,\n            final ObjectProvider<GatewayBootstrapOverlayPolicy> overlayPolicyProvider\n    ) {\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentContextRegistry.java",
+      "ref": "main",
+      "text": " */\n@Component\npublic class EquipmentContextRegistry {\n\n    private static final Logger log = LoggerFactory.getLogger(EquipmentContextRegistry.class);\n\n    private final Map<String, EquipmentContext> contexts = new ConcurrentHashMap<>();\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentRuntimeCatalogService.java",
+      "ref": "main",
+      "text": " *\n * <p>핵심 정책:</p>\n * <p>1) 런타임 hot path에서는 DB fallback을 사용하지 않고 {@link EquipmentContextRegistry}만 조회합니다.</p>\n * <p>2) 실패 사유를 상태값으로 구분하여 호출부에서 운영 로그/오류코드를 일관되게 매핑할 수 있도록 합니다.</p>\n * <p>3) info 로그는 남기지 않고 debug 로그만 남겨 hot path 로그 노이즈를 억제합니다.</p>\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentRuntimeCatalogService.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(EquipmentRuntimeCatalogService.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n\n    /**\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/context/service/EquipmentRuntimeCatalogService.java",
+      "ref": "main",
+      "text": "     * @param contextRegistry 설비 컨텍스트 저장소(bean SSOT)\n     */\n    public EquipmentRuntimeCatalogService(final EquipmentContextRegistry contextRegistry) {\n        this.contextRegistry = Objects.requireNonNull(contextRegistry, \"contextRegistry is null\");\n    }\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/lifecycle/service/EquipmentLifecycleDecisionEngine.java",
+      "ref": "main",
+      "text": "\nimport com.nori.tc.gateway.core.context.model.EquipmentContext;\nimport com.nori.tc.gateway.core.context.service.EquipmentContextRegistry;\nimport com.nori.tc.gateway.core.db.GatewayEquipmentInfo;\nimport com.nori.tc.gateway.core.runtime.channel.EquipmentChannel;\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    },
+    {
+      "sourceRepo": "nori-tc-gateway",
+      "path": "gateway/tc-gateway-core/src/main/java/com/nori/tc/gateway/core/lifecycle/service/EquipmentLifecycleDecisionEngine.java",
+      "ref": "main",
+      "text": "    private static final Logger log = LoggerFactory.getLogger(EquipmentLifecycleDecisionEngine.class);\n\n    private final EquipmentContextRegistry contextRegistry;\n    private final EquipmentChannelRegistry channelRegistry;\n\n    EquipmentLifecycleDecisionEngine(\n            final EquipmentContextRegistry contextRegistry,\n            final EquipmentChannelRegistry channelRegistry\n    ) {\n",
+      "codeRefKind": "CURRENT_APPROVED_REF",
+      "deployedSourceCommit": "UNKNOWN",
+      "missingEvidence": [
+        "deployed source commit",
+        "plugin JAR digest",
+        "effectiveConfig"
+      ]
+    }
+  ]
+}

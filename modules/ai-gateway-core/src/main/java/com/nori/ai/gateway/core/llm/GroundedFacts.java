@@ -42,6 +42,8 @@ public final class GroundedFacts {
             var unit=units.get(i);var fact=facts.addObject().put("id","e"+(i+1)).put("sourceType",unit.sourceType()).put("status",unit.status()).put("observedAt",kst(unit.observedAt()));
             fact.set("missingFields",SchemaContracts.JSON.valueToTree(unit.missingFields()));
             if(unit.sourceType().equals("DOCUMENT"))fact.put("header",unit.header());
+            // 코드 검색 조각에는 소유 클래스 선언이 빠지는 일이 많아 파일 경로가 없으면 주석·역할의 주인을 알 수 없습니다.
+            if(unit.sourceType().equals("GIT")){fact.put("sourceRepo",unit.location().path("sourceRepo").asString());fact.put("path",unit.location().path("path").asString());}
             fact.put("text",kstText(unit.body()));
         }
         history.ifPresent(pair->user.set("history",SchemaContracts.JSON.valueToTree(List.of(pair))));

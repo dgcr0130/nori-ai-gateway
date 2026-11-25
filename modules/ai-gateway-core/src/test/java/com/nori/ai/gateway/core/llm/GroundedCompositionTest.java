@@ -71,6 +71,14 @@ class GroundedCompositionTest {
         compose(rows(),List.of(doc));var fact=SchemaContracts.JSON.readTree(sent.getFirst().getLast().content()).path("facts").get(0);
         assertThat(fact.path("header").asString()).isEqualTo("운영 안내");assertThat(fact.path("missingFields")).isEqualTo(SchemaContracts.JSON.valueToTree(List.of("section")));
     }
+    @Test void codeFactsCarryRepositoryAndFilePathSoSnippetOwnersAreKnown() {
+        var code=FactCheckTest.git("gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java"," * <p>- EquipmentContextProfileProvider: 설비 프로파일 조회</p>\n");
+        compose(rows(),List.of(code));var fact=SchemaContracts.JSON.readTree(sent.getFirst().getLast().content()).path("facts").get(0);
+        assertThat(fact.propertyNames()).containsExactlyInAnyOrder("id","sourceType","status","observedAt","missingFields","sourceRepo","path","text");
+        assertThat(fact.path("sourceRepo").asString()).isEqualTo("nori-tc-gateway");
+        assertThat(fact.path("path").asString()).isEqualTo("gateway/adapter/tc-gateway-db-adapter/src/main/java/com/nori/tc/gateway/adapters/db/GatewayEquipmentService.java");
+        assertThat(fact.path("text").asString()).isEqualTo(code.body());
+    }
     @Test void structuredOutputBoundsAndFactIdsEnumAreBoundToThisRequest() {
         compose(rows(),List.of(unit("CLN_001 OFFLINE","asset.snapshot","SUCCESS"),unit("CLN_001 DOWN","asset.snapshot","SUCCESS")));
         var output=constraints.getFirst();var array=SchemaContracts.JSON.readTree(output.schema()).path("properties").path("sentences");var item=array.path("items");

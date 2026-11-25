@@ -191,7 +191,7 @@ final class GoldenClassificationAdapter implements AutoCloseable {
     /** 분류 골든과 같은 실제 client·tokenizer·설정으로 작성 경로를 실행합니다. */
     Map<String,Object> compose(Path root,LlmGoldenCompositionTest.Case value) throws Exception {
         transport.responses.clear();transport.calls=0;
-        Path fixture=root.resolve("modules/apps/ai-gateway-app/src/test/resources/fixtures/business-grounding/"+value.fixture()+".json");
+        Path fixture=root.resolve("modules/apps/ai-gateway-app/src/test/resources/fixtures/"+value.fixture()+".json");
         byte[] bytes=java.nio.file.Files.readAllBytes(fixture);var data=SchemaContracts.JSON.readTree(bytes);
         Instant observed=Instant.parse(value.observedAt());
         var manifest=registry.find(OwnerSystem.TC,value.tool()).orElseThrow();
@@ -201,7 +201,11 @@ final class GoldenClassificationAdapter implements AutoCloseable {
             Map.of("taskType","LIVE_QUERY"),new JobRequestInput("message",1,value.question(),Map.of()));
         job.cancellation().deadline(Instant.now().plusSeconds(180),Clock.systemUTC());
         var definitionStep=new WorkflowDefinition.Step("business",value.tool(),null,List.of(),false,List.of());
-        var step=new PlanStep("business",value.tool(),List.of(),value.targets().stream().map(ref->new ResourceRef("EQP",ref)).toList(),SchemaContracts.JSON.createObjectNode().put("eqp",value.targets().getFirst()));
+        // 코드 사례는 운영 CODE_TERM 계획처럼 검색어 q만 넘기고 설비 대상을 만들지 않습니다.
+        var arguments=SchemaContracts.JSON.createObjectNode();List<ResourceRef> refs;
+        if(value.query()!=null){arguments.put("q",value.query());refs=List.of();}
+        else{arguments.put("eqp",value.targets().getFirst());refs=value.targets().stream().map(ref->new ResourceRef("EQP",ref)).toList();}
+        var step=new PlanStep("business",value.tool(),List.of(),refs,arguments);
         var definition=new WorkflowDefinition(OwnerSystem.TC,TaskType.LIVE_QUERY,List.of(definitionStep),WorkflowDefinition.AnswerSource.TOOL_RESULTS,null);
         var plan=new WorkflowExecutionPlan(definition,new PlanEnvelope(job.jobId(),job.conversationId(),value.question(),List.of(),TaskType.LIVE_QUERY,List.of(step)),List.of(new WorkflowExecutionPlan.ExecutionStep(definitionStep,step)));
         var items=SchemaContracts.JSON.convertValue(data.path("items"),new tools.jackson.core.type.TypeReference<List<Map<String,Object>>>(){});
@@ -215,7 +219,7 @@ final class GoldenClassificationAdapter implements AutoCloseable {
             com.nori.ai.gateway.core.knowledge.SearchSettings search=bean(core,"searchSettings",environment);
             var composer=GoldenClassificationAdapter.<ComposerService>bean(new WorkflowExecutionConfiguration(),"composerService",inference,
                 new com.nori.ai.gateway.core.budget.PromptReducer(counter,settings.policy()),settings.policy(),tokenizer,expiry,Optional.of(observer),(LlmCallAudit)a->{},language,environment,search,systems);
-            var inputs=new GroundingInputs(systems,registry,new ContentSanitizer());
+            var inputs=new GroundingInputs(systems,registry,new ContentSanitizer(),gitProjects(root));
             com.nori.ai.gateway.core.knowledge.DocumentSearch noSearch=(a,b,c,d)->{throw new AssertionError("업무 골든은 문서를 검색하지 않습니다");};
             var grounding=new WorkflowGrounding(noSearch,language,search,new EvidenceSelection(tokenizer::countText,settings.policy().evidenceTokens()),inputs,Clock.fixed(observed,ZoneOffset.UTC),expiry,composer::fitsGrounded);
             var prepared=grounding.prepare(job,plan,outcome,new ToolCallBudget());
@@ -234,6 +238,15 @@ final class GoldenClassificationAdapter implements AutoCloseable {
             record.put("inputCount",items.size());record.put("fitsSelected",composer.fitsGrounded(job,prepared.selected().units(),prepared.history()));record.put("selectedCount",prepared.selected().units().size());record.put("truncatedItems",prepared.selected().truncatedItems());record.put("selected",prepared.selected().units());
             return record;
         }
+    }
+
+    /** 운영 GroundingInputs와 같은 원천 선언의 sourceRepo→projectId 대응으로 GIT 근거 권한을 결속합니다. */
+    private static Map<String,String> gitProjects(Path root) throws IOException {
+        var declared=SchemaContracts.JSON.readTree(java.nio.file.Files.readAllBytes(root.resolve("modules/apps/ai-gateway-app/src/main/resources/config/sources/shared-v1.json")));
+        var projects=new HashMap<String,String>();
+        for(var repo:declared.path("gitlab").path("repositories"))projects.put(repo.path("sourceRepo").asString(),repo.path("projectId").asString());
+        if(projects.isEmpty())throw new IllegalStateException("GitLab 저장소 선언이 없습니다");
+        return projects;
     }
 
     private void history(LlmGoldenClassificationTest.GoldenCase value, VerifiedSystemScope scope, String conversation,

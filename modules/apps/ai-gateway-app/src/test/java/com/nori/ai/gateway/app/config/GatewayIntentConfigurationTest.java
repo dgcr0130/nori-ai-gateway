@@ -15,8 +15,8 @@ class GatewayIntentConfigurationTest {
         for(var source:new YamlPropertySourceLoader().load("intent-config",new FileSystemResource(Path.of(System.getProperty("aigw.rootDir")).resolve("config/ai-gateway.yaml"))))environment.getPropertySources().addLast(source);
         var tc=GatewaySystemsProperties.load(environment).systems().get("TC");
         assertThat(tc.intents()).extracting(i->i.id()).containsExactlyInAnyOrder("registration","status","model","dlq","communication","incident","document","help","unsupported","code");
-        assertThat(tc.intents().stream().filter(i->i.answerTable()).map(i->i.id()).toList()).containsExactly("registration");
-        assertThat(tc.intents().stream().filter(i->!i.id().equals("registration"))).allSatisfy(i->assertThat(i.answerTable()).isFalse());
+        // 본문은 대화체 문장만 두고 조회 원문은 참고 자료로 보이므로 TC는 서버 표를 붙이는 의도가 없습니다.
+        assertThat(tc.intents()).allSatisfy(i->assertThat(i.answerTable()).as(i.id()).isFalse());
         assertThat(tc.intents()).allSatisfy(intent->assertThat(intent.description()).isNotBlank());
         assertThat(tc.intents().stream().filter(i->i.id().equals("registration")).findFirst().orElseThrow().toolIds()).containsExactly("tc.eqp.readRegistration");
         assertThat(tc.intents().stream().filter(i->i.id().equals("incident")).findFirst().orElseThrow().toolIds()).containsExactly("logs.search","trace.search");
